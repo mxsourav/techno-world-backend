@@ -8,18 +8,26 @@ const prisma = new PrismaClient();
 async function main() {
   const hashedPassword = await bcrypt.hash('admin123', 10);
   
-  const adminUser = await prisma.user.upsert({
-    where: { email: 'admin' },
-    update: {},
-    create: {
-      email: 'admin',
-      name: 'Super Admin',
-      password: hashedPassword,
-      role: Role.SUPER_ADMIN,
-    },
-  });
-
-  console.log('Admin user seeded:', adminUser.email);
+  const adminEmails = ['admin', 'admin@technoworld.com', 'admin@example.com'];
+  for (const email of adminEmails) {
+    await prisma.user.upsert({
+      where: { email },
+      update: {
+        password: hashedPassword,
+        isActive: true,
+        failedLogins: 0,
+        lockedUntil: null,
+        role: Role.SUPER_ADMIN,
+      },
+      create: {
+        email,
+        name: 'Super Admin',
+        password: hashedPassword,
+        role: Role.SUPER_ADMIN,
+        isActive: true,
+      },
+    });
+  }
 
   const seedDataPath = path.resolve(process.cwd(), 'prisma/seedData.json');
   const seedData = JSON.parse(fs.readFileSync(seedDataPath, 'utf-8'));
@@ -51,7 +59,7 @@ async function main() {
         price: bookData.price || 0,
         mrp: bookData.mrp || 0,
         stock: bookData.stock || 0,
-        isbn: bookData.isbn,
+        isbn13: bookData.isbn,
         edition: bookData.edition,
         language: bookData.language || 'English',
       },
@@ -62,7 +70,7 @@ async function main() {
         price: bookData.price || 0,
         mrp: bookData.mrp || 0,
         stock: bookData.stock || 0,
-        isbn: bookData.isbn,
+        isbn13: bookData.isbn,
         edition: bookData.edition,
         language: bookData.language || 'English',
         status: 'PUBLISHED',
@@ -71,11 +79,11 @@ async function main() {
         isNewArrival: !!bookData.newRelease,
         isBestseller: !!bookData.bestseller,
         category: categoryId ? { connect: { id: categoryId } } : undefined,
-        author: bookData.author ? {
-          connectOrCreate: {
+        authors: bookData.author ? {
+          connectOrCreate: [{
             where: { slug: bookData.author.toLowerCase().replace(/\s+/g, '-') },
             create: { name: bookData.author, slug: bookData.author.toLowerCase().replace(/\s+/g, '-') }
-          }
+          }]
         } : undefined,
         publisher: bookData.publisher ? {
           connectOrCreate: {

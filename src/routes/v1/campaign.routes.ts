@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import * as campaignController from '../../controllers/campaign.controller';
-import { requireAuth, requireRole } from '../../middlewares/auth.middleware';
+import * as campaignController from '../../controllers/campaign.controller.js';
+import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
 
 const router = Router();
 const requireAdmin = requireRole(['ADMIN', 'SUPER_ADMIN']);

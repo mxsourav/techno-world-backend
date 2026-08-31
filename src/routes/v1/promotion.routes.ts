@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import * as promotionController from '../../controllers/promotion.controller';
-import { requireAuth, requireRole } from '../../middlewares/auth.middleware';
+import * as promotionController from '../../controllers/promotion.controller.js';
+import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
 
 const router = Router();
 

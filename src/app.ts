@@ -13,7 +13,12 @@ import routes from './routes/index.js';
 
 const app = express();
 
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
+
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
@@ -26,10 +31,24 @@ app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, origin);
+
+      // Wildcard or developer mode
+      if (env.CORS_ORIGIN === '*' || allowedOrigins.includes('*')) {
+        return callback(null, true);
       }
-      return callback(new Error(`CORS blocked for origin: ${origin}`));
+
+      // Explicit match or local / cloud domain patterns
+      const isAllowed =
+        allowedOrigins.includes(origin) ||
+        origin.startsWith('http://localhost:') ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.onrender.com');
+
+      if (isAllowed) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],

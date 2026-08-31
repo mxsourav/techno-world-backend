@@ -1,0 +1,2282 @@
+{
+  "categories": [
+    {
+      "slug": "competitive-exams",
+      "name": "Competitive Exam"
+    },
+    {
+      "slug": "medical",
+      "name": "Medical"
+    },
+    {
+      "slug": "engineering",
+      "name": "Engineering"
+    },
+    {
+      "slug": "school",
+      "name": "NCERT / ICSE"
+    },
+    {
+      "slug": "university",
+      "name": "University"
+    },
+    {
+      "slug": "fiction",
+      "name": "Fiction"
+    },
+    {
+      "slug": "non-fiction",
+      "name": "Non-Fiction"
+    },
+    {
+      "slug": "bengali",
+      "name": "Bengali Story"
+    },
+    {
+      "slug": "international",
+      "name": "International"
+    },
+    {
+      "slug": "rare",
+      "name": "Rare"
+    },
+    {
+      "slug": "techno-world",
+      "name": "Our Publications"
+    }
+  ],
+  "books": [
+    {
+      "id": "b01",
+      "slug": "rich-dad-poor-dad",
+      "title": "Rich Dad Poor Dad",
+      "author": "Robert T. Kiyosaki",
+      "publisher": "Plata Publishing",
+      "isbn": "9781612680194",
+      "edition": "2nd Edition",
+      "pubDate": "2017-04-11",
+      "language": "English",
+      "pages": 336,
+      "category": "non-fiction",
+      "tags": [
+        "finance",
+        "money",
+        "investing",
+        "bestseller"
+      ],
+      "price": 299,
+      "mrp": 499,
+      "rating": 4.6,
+      "ratingsCount": 48210,
+      "stock": 42,
+      "bestseller": true,
+      "trending": true,
+      "coverHue": 268,
+      "description": "Rich Dad Poor Dad is Robert Kiyosaki's story of growing up with two dads — his real father and the father of his best friend, his rich dad — and the ways in which both men shaped his thoughts about money and investing. The book explodes the myth that you need to earn a high income to be rich and explains the difference between working for money and having your money work for you.",
+      "toc": [
+        "The Rich Don't Work for Money",
+        "Why Teach Financial Literacy?",
+        "Mind Your Own Business",
+        "The History of Taxes",
+        "The Rich Invent Money",
+        "Work to Learn — Don't Work for Money"
+      ],
+      "reviews": [
+        {
+          "id": "ol5lpji",
+          "user": "Ankit Sharma",
+          "rating": 5,
+          "title": "Life changing",
+          "body": "Completely changed how I think about money and assets. A must read for every student.",
+          "date": "2025-11-02",
+          "verified": true
+        },
+        {
+          "id": "q719z2u",
+          "user": "Priya Menon",
+          "rating": 4,
+          "title": "Great primer",
+          "body": "Simple language, powerful ideas. Some parts feel repetitive but worth it.",
+          "date": "2025-09-18",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b02",
+      "slug": "atomic-habits",
+      "title": "Atomic Habits",
+      "author": "James Clear",
+      "publisher": "Penguin Random House",
+      "isbn": "9781847941831",
+      "edition": "1st Edition",
+      "pubDate": "2018-10-16",
+      "language": "English",
+      "pages": 320,
+      "category": "non-fiction",
+      "tags": [
+        "habits",
+        "self-help",
+        "productivity"
+      ],
+      "price": 449,
+      "mrp": 699,
+      "rating": 4.8,
+      "ratingsCount": 65432,
+      "stock": 61,
+      "bestseller": true,
+      "trending": true,
+      "coverHue": 20,
+      "description": "No matter your goals, Atomic Habits offers a proven framework for improving — every day. James Clear reveals practical strategies that will teach you exactly how to form good habits, break bad ones, and master the tiny behaviors that lead to remarkable results.",
+      "toc": [
+        "The Fundamentals",
+        "The 1st Law: Make It Obvious",
+        "The 2nd Law: Make It Attractive",
+        "The 3rd Law: Make It Easy",
+        "The 4th Law: Make It Satisfying",
+        "Advanced Tactics"
+      ],
+      "reviews": [
+        {
+          "id": "ls91vgl",
+          "user": "Rahul Verma",
+          "rating": 5,
+          "title": "Practical and actionable",
+          "body": "The habit stacking technique genuinely works. Finished it twice.",
+          "date": "2025-12-10",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b03",
+      "slug": "the-alchemist",
+      "title": "The Alchemist",
+      "author": "Paulo Coelho",
+      "publisher": "HarperOne",
+      "isbn": "9780062315007",
+      "edition": "25th Anniversary Edition",
+      "pubDate": "2014-04-15",
+      "language": "English",
+      "pages": 208,
+      "category": "fiction",
+      "tags": [
+        "classic",
+        "philosophical",
+        "journey"
+      ],
+      "price": 249,
+      "mrp": 399,
+      "rating": 4.5,
+      "ratingsCount": 38900,
+      "stock": 55,
+      "bestseller": true,
+      "coverHue": 42,
+      "description": "Paulo Coelho's masterpiece tells the mystical story of Santiago, an Andalusian shepherd boy who yearns to travel in search of a worldly treasure. His quest will lead him to riches far different — and far more satisfying — than he ever imagined.",
+      "toc": [
+        "Part One",
+        "Part Two",
+        "Epilogue"
+      ],
+      "reviews": [
+        {
+          "id": "t37a40k",
+          "user": "Sneha Iyer",
+          "rating": 5,
+          "title": "Beautiful",
+          "body": "A fable about following your dreams. Reads like poetry.",
+          "date": "2025-08-22",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b04",
+      "slug": "ncert-physics-class-12",
+      "title": "NCERT Physics Part I & II — Class 12",
+      "author": "NCERT",
+      "publisher": "NCERT",
+      "isbn": "9788174506313",
+      "edition": "2024 Edition",
+      "pubDate": "2024-03-01",
+      "language": "English",
+      "pages": 590,
+      "category": "school",
+      "tags": [
+        "ncert",
+        "cbse",
+        "class 12",
+        "physics",
+        "boards"
+      ],
+      "price": 320,
+      "mrp": 340,
+      "rating": 4.7,
+      "ratingsCount": 15230,
+      "stock": 120,
+      "exam": "CBSE Boards",
+      "course": "Class 12",
+      "semester": "Annual",
+      "coverHue": 200,
+      "description": "Official NCERT Physics textbook for Class 12 (Part I & II), the foundational book for CBSE board exams, JEE and NEET. Covers electrostatics, current electricity, magnetism, optics, modern physics and more.",
+      "toc": [
+        "Electric Charges and Fields",
+        "Electrostatic Potential",
+        "Current Electricity",
+        "Moving Charges and Magnetism",
+        "Ray Optics",
+        "Wave Optics",
+        "Dual Nature of Radiation",
+        "Atoms and Nuclei",
+        "Semiconductor Electronics"
+      ],
+      "reviews": [
+        {
+          "id": "vdjisje",
+          "user": "Aditya Kumar",
+          "rating": 5,
+          "title": "Genuine NCERT",
+          "body": "Original print, crisp pages, delivered in 2 days.",
+          "date": "2026-01-15",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b05",
+      "slug": "rd-sharma-mathematics-class-12",
+      "title": "Mathematics Class 12 (Volume 1 & 2)",
+      "author": "R.D. Sharma",
+      "publisher": "Dhanpat Rai Publications",
+      "isbn": "9789383182372",
+      "edition": "2025-26 Edition",
+      "pubDate": "2025-04-01",
+      "language": "English",
+      "pages": 1350,
+      "category": "school",
+      "tags": [
+        "mathematics",
+        "cbse",
+        "class 12",
+        "jee"
+      ],
+      "price": 745,
+      "mrp": 995,
+      "rating": 4.6,
+      "ratingsCount": 9840,
+      "stock": 34,
+      "bestseller": true,
+      "exam": "CBSE Boards",
+      "course": "Class 12",
+      "coverHue": 220,
+      "description": "The most trusted reference book for Class 12 Mathematics. Exhaustive theory with graded examples and practice problems — ideal for CBSE boards and JEE Main preparation.",
+      "toc": [
+        "Relations and Functions",
+        "Inverse Trigonometric Functions",
+        "Matrices",
+        "Determinants",
+        "Continuity and Differentiability",
+        "Integrals",
+        "Differential Equations",
+        "Vector Algebra",
+        "Probability"
+      ],
+      "reviews": [
+        {
+          "id": "ks3t890",
+          "user": "Ishita Roy",
+          "rating": 5,
+          "title": "Best for boards + JEE",
+          "body": "Huge question bank. Solved examples are gold.",
+          "date": "2025-10-05",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b06",
+      "slug": "concepts-of-physics-hc-verma",
+      "title": "Concepts of Physics Vol. 1 & 2",
+      "author": "H.C. Verma",
+      "publisher": "Bharati Bhawan",
+      "isbn": "9788177091878",
+      "edition": "Latest Edition",
+      "pubDate": "2023-01-10",
+      "language": "English",
+      "pages": 950,
+      "category": "engineering",
+      "tags": [
+        "physics",
+        "jee",
+        "neet",
+        "conceptual"
+      ],
+      "price": 599,
+      "mrp": 860,
+      "rating": 4.8,
+      "ratingsCount": 22100,
+      "stock": 48,
+      "bestseller": true,
+      "trending": true,
+      "exam": "JEE",
+      "course": "Physics",
+      "coverHue": 160,
+      "description": "H.C. Verma's Concepts of Physics is the bible for JEE and NEET aspirants. Crystal-clear theory paired with thought-provoking objective and subjective problems that build rock-solid fundamentals.",
+      "toc": [
+        "Kinematics",
+        "Newton's Laws of Motion",
+        "Work and Energy",
+        "Rotational Mechanics",
+        "Gravitation",
+        "Simple Harmonic Motion",
+        "Waves",
+        "Heat and Thermodynamics",
+        "Electrostatics",
+        "Magnetic Field"
+      ],
+      "reviews": [
+        {
+          "id": "4ca7pi5",
+          "user": "Karan Singh",
+          "rating": 5,
+          "title": "JEE essential",
+          "body": "If you can solve HCV, JEE physics becomes easy.",
+          "date": "2025-11-30",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b07",
+      "slug": "objective-mathematics-rd-sharma-jee",
+      "title": "Objective Mathematics for JEE Main & Advanced",
+      "author": "R.D. Sharma",
+      "publisher": "Dhanpat Rai",
+      "isbn": "9789386182047",
+      "edition": "2025 Edition",
+      "pubDate": "2025-05-01",
+      "language": "English",
+      "pages": 1420,
+      "category": "competitive-exams",
+      "tags": [
+        "jee",
+        "mathematics",
+        "objective"
+      ],
+      "price": 899,
+      "mrp": 1295,
+      "rating": 4.5,
+      "ratingsCount": 6120,
+      "stock": 25,
+      "exam": "JEE",
+      "trending": true,
+      "coverHue": 250,
+      "description": "Comprehensive objective-type question bank for JEE Main & Advanced with previous year questions, topic-wise MCQs and detailed solutions.",
+      "toc": [
+        "Algebra",
+        "Trigonometry",
+        "Coordinate Geometry",
+        "Calculus",
+        "Vectors & 3D",
+        "Probability & Statistics",
+        "Previous Year Papers"
+      ],
+      "reviews": [
+        {
+          "id": "mbjxsjh",
+          "user": "Mohit Agarwal",
+          "rating": 4,
+          "title": "Solid practice",
+          "body": "Massive collection of problems with good solutions.",
+          "date": "2025-12-01",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b08",
+      "slug": "neet-physics-chemistry-biology-40-years",
+      "title": "NEET 40 Years Chapterwise Solved Papers (PCB)",
+      "author": "Arihant Experts",
+      "publisher": "Arihant Publications",
+      "isbn": "9789325299161",
+      "edition": "2025 Edition",
+      "pubDate": "2025-06-01",
+      "language": "English",
+      "pages": 1680,
+      "category": "competitive-exams",
+      "tags": [
+        "neet",
+        "previous year",
+        "solved papers"
+      ],
+      "price": 950,
+      "mrp": 1490,
+      "rating": 4.6,
+      "ratingsCount": 8450,
+      "stock": 39,
+      "bestseller": true,
+      "exam": "NEET",
+      "newRelease": true,
+      "coverHue": 350,
+      "description": "Complete chapterwise and topicwise solved papers of 40 years of NEET/AIPMT for Physics, Chemistry and Biology with detailed explanations, NCERT references and trend analysis.",
+      "toc": [
+        "Physics: Mechanics to Modern Physics",
+        "Chemistry: Physical, Organic, Inorganic",
+        "Biology: Botany & Zoology",
+        "NEET 2025 Paper with Solutions",
+        "Trend Analysis Charts"
+      ],
+      "reviews": [
+        {
+          "id": "ehkakck",
+          "user": "Nandini Das",
+          "rating": 5,
+          "title": "Perfect for NEET prep",
+          "body": "Solutions map to NCERT lines. Extremely useful.",
+          "date": "2026-01-08",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b09",
+      "slug": "mtg-neet-guide-biology",
+      "title": "NEET Guide — Biology",
+      "author": "MTG Editorial Board",
+      "publisher": "MTG Learning Media",
+      "isbn": "9789395551197",
+      "edition": "2025-26",
+      "pubDate": "2025-07-01",
+      "language": "English",
+      "pages": 1220,
+      "category": "competitive-exams",
+      "tags": [
+        "neet",
+        "biology",
+        "ncert"
+      ],
+      "price": 825,
+      "mrp": 1100,
+      "rating": 4.5,
+      "ratingsCount": 5230,
+      "stock": 44,
+      "exam": "NEET",
+      "coverHue": 130,
+      "description": "Complete NEET Biology guide covering the entire NCERT syllabus with theory, NCERT-based MCQs, assertion-reason questions and previous year questions.",
+      "toc": [
+        "The Living World",
+        "Cell: The Unit of Life",
+        "Genetics and Evolution",
+        "Human Physiology",
+        "Plant Physiology",
+        "Biotechnology",
+        "Ecology"
+      ],
+      "reviews": [
+        {
+          "id": "kg02bed",
+          "user": "Farhan Ali",
+          "rating": 4,
+          "title": "Very NCERT aligned",
+          "body": "Great for last-mile revision.",
+          "date": "2025-11-19",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b10",
+      "slug": "upsc-indian-polity-laxmikanth",
+      "title": "Indian Polity",
+      "author": "M. Laxmikanth",
+      "publisher": "McGraw Hill",
+      "isbn": "9789354602586",
+      "edition": "7th Edition",
+      "pubDate": "2024-08-01",
+      "language": "English",
+      "pages": 1024,
+      "category": "competitive-exams",
+      "tags": [
+        "upsc",
+        "polity",
+        "civil services"
+      ],
+      "price": 695,
+      "mrp": 1050,
+      "rating": 4.8,
+      "ratingsCount": 31400,
+      "stock": 58,
+      "bestseller": true,
+      "exam": "UPSC",
+      "coverHue": 10,
+      "description": "The definitive book on Indian Polity for UPSC Civil Services and State PSC examinations. Covers the Constitution, governance, Parliament, judiciary and local government with unmatched clarity.",
+      "toc": [
+        "Constitutional Framework",
+        "Union Government",
+        "State Government",
+        "Local Government",
+        "Judiciary",
+        "Constitutional Bodies",
+        "Amendments & Schedules"
+      ],
+      "reviews": [
+        {
+          "id": "j7y44zk",
+          "user": "Deepika Nair",
+          "rating": 5,
+          "title": "UPSC bible",
+          "body": "One book to rule polity. The 7th edition is updated with latest amendments.",
+          "date": "2025-10-27",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b11",
+      "slug": "quantitative-aptitude-rs-aggarwal",
+      "title": "Quantitative Aptitude",
+      "author": "R.S. Aggarwal",
+      "publisher": "S. Chand",
+      "isbn": "9789352835860",
+      "edition": "Revised Edition",
+      "pubDate": "2023-01-01",
+      "language": "English",
+      "pages": 960,
+      "category": "competitive-exams",
+      "tags": [
+        "aptitude",
+        "banking",
+        "ssc",
+        "placement"
+      ],
+      "price": 540,
+      "mrp": 795,
+      "rating": 4.5,
+      "ratingsCount": 27600,
+      "stock": 73,
+      "bestseller": true,
+      "exam": "SSC / Banking",
+      "coverHue": 190,
+      "description": "The evergreen aptitude book for every competitive exam — SSC, banking, railways, campus placements. 6000+ questions with fully worked solutions.",
+      "toc": [
+        "Number System",
+        "Percentage",
+        "Profit and Loss",
+        "Time and Work",
+        "Time, Speed and Distance",
+        "Data Interpretation",
+        "Algebra",
+        "Geometry"
+      ],
+      "reviews": [
+        {
+          "id": "iheejzc",
+          "user": "Saurabh Yadav",
+          "rating": 5,
+          "title": "One-stop for quant",
+          "body": "Solved fully for my SBI PO prep. Highly recommended.",
+          "date": "2025-09-09",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b12",
+      "slug": "grays-anatomy-students",
+      "title": "Gray's Anatomy for Students",
+      "author": "Richard Drake, A. Wayne Vogl",
+      "publisher": "Elsevier",
+      "isbn": "9780323934237",
+      "edition": "5th Edition",
+      "pubDate": "2024-02-15",
+      "language": "English",
+      "pages": 1168,
+      "category": "medical",
+      "tags": [
+        "anatomy",
+        "mbbs",
+        "first year"
+      ],
+      "price": 4299,
+      "mrp": 6800,
+      "rating": 4.9,
+      "ratingsCount": 4820,
+      "stock": 15,
+      "bestseller": true,
+      "course": "MBBS",
+      "semester": "1st Year",
+      "university": "MCI/NMC Curriculum",
+      "coverHue": 5,
+      "description": "The most student-friendly anatomy textbook, fully revised with clinical case boxes, imaging correlations and surface anatomy — ideal for MBBS first year.",
+      "toc": [
+        "The Body",
+        "Back",
+        "Thorax",
+        "Abdomen",
+        "Pelvis and Perineum",
+        "Lower Limb",
+        "Upper Limb",
+        "Head and Neck"
+      ],
+      "reviews": [
+        {
+          "id": "p1lkmze",
+          "user": "Dr. Meera Krishnan",
+          "rating": 5,
+          "title": "Best anatomy text",
+          "body": "Clinical boxes make anatomy stick. Fast delivery, sealed pack.",
+          "date": "2025-12-19",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b13",
+      "slug": "robbins-basic-pathology",
+      "title": "Robbins Basic Pathology",
+      "author": "Vinay Kumar, Abul Abbas",
+      "publisher": "Elsevier",
+      "isbn": "9780323661178",
+      "edition": "11th Edition",
+      "pubDate": "2023-04-01",
+      "language": "English",
+      "pages": 928,
+      "category": "medical",
+      "tags": [
+        "pathology",
+        "mbbs",
+        "second year"
+      ],
+      "price": 3850,
+      "mrp": 5600,
+      "rating": 4.8,
+      "ratingsCount": 3910,
+      "stock": 12,
+      "course": "MBBS",
+      "semester": "2nd Year",
+      "trending": true,
+      "coverHue": 330,
+      "description": "The gold standard pathology text for medical students, covering general and systemic pathology with superb illustrations and clinical correlations.",
+      "toc": [
+        "Cell Injury and Death",
+        "Inflammation and Repair",
+        "Neoplasia",
+        "Hemodynamic Disorders",
+        "Diseases of Organ Systems",
+        "Infectious Diseases"
+      ],
+      "reviews": [
+        {
+          "id": "g9ovdfm",
+          "user": "Arjun Reddy",
+          "rating": 5,
+          "title": "Pathology simplified",
+          "body": "Papa Robbins never disappoints. Original edition confirmed.",
+          "date": "2025-11-11",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b14",
+      "slug": "harrisons-internal-medicine",
+      "title": "Harrison's Principles of Internal Medicine (2 Vols)",
+      "author": "Dennis Kasper et al.",
+      "publisher": "McGraw Hill",
+      "isbn": "9781264268504",
+      "edition": "21st Edition",
+      "pubDate": "2023-03-01",
+      "language": "English",
+      "pages": 4300,
+      "category": "medical",
+      "tags": [
+        "medicine",
+        "mbbs",
+        "pg",
+        "reference"
+      ],
+      "price": 14500,
+      "mrp": 21000,
+      "rating": 4.9,
+      "ratingsCount": 2340,
+      "stock": 6,
+      "course": "MBBS",
+      "semester": "Final Year",
+      "rare": true,
+      "coverHue": 280,
+      "description": "The most trusted textbook of internal medicine worldwide. Two-volume set with 4,300 pages of authoritative, evidence-based clinical content.",
+      "toc": [
+        "Cardinal Manifestations of Disease",
+        "Pharmacology",
+        "Oncology",
+        "Cardiology",
+        "Pulmonology",
+        "Gastroenterology",
+        "Nephrology",
+        "Neurology",
+        "Infectious Disease"
+      ],
+      "reviews": [
+        {
+          "id": "frhfg2q",
+          "user": "Dr. Vikram Sethi",
+          "rating": 5,
+          "title": "The reference",
+          "body": "Essential for final year and PG prep.",
+          "date": "2025-08-15",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b15",
+      "slug": "bd-chaurasia-human-anatomy",
+      "title": "B.D. Chaurasia's Human Anatomy (4 Vols)",
+      "author": "B.D. Chaurasia",
+      "publisher": "CBS Publishers",
+      "isbn": "9789354662177",
+      "edition": "9th Edition",
+      "pubDate": "2024-01-01",
+      "language": "English",
+      "pages": 1800,
+      "category": "medical",
+      "tags": [
+        "anatomy",
+        "mbbs",
+        "indian author"
+      ],
+      "price": 2399,
+      "mrp": 3400,
+      "rating": 4.7,
+      "ratingsCount": 7610,
+      "stock": 22,
+      "course": "MBBS",
+      "semester": "1st Year",
+      "bestseller": true,
+      "coverHue": 90,
+      "description": "India's most widely used anatomy textbook set for MBBS. Clear line diagrams, exam-oriented text, and clinical anatomy sections in every chapter.",
+      "toc": [
+        "Vol 1: Upper Limb & Thorax",
+        "Vol 2: Lower Limb, Abdomen & Pelvis",
+        "Vol 3: Head, Neck & Brain",
+        "Vol 4: General Anatomy & Embryology"
+      ],
+      "reviews": [
+        {
+          "id": "fhk7osz",
+          "user": "Tanvi Joshi",
+          "rating": 5,
+          "title": "Exam saviour",
+          "body": "Every anatomy viva answer is in here.",
+          "date": "2025-10-02",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b16",
+      "slug": "engineering-mathematics-bs-grewal",
+      "title": "Higher Engineering Mathematics",
+      "author": "B.S. Grewal",
+      "publisher": "Khanna Publishers",
+      "isbn": "9788174091955",
+      "edition": "44th Edition",
+      "pubDate": "2022-01-01",
+      "language": "English",
+      "pages": 1320,
+      "category": "engineering",
+      "tags": [
+        "mathematics",
+        "btech",
+        "gate"
+      ],
+      "price": 650,
+      "mrp": 925,
+      "rating": 4.6,
+      "ratingsCount": 12800,
+      "stock": 47,
+      "bestseller": true,
+      "course": "B.Tech",
+      "semester": "1st-2nd Year",
+      "exam": "GATE",
+      "coverHue": 210,
+      "description": "The standard engineering mathematics text used across Indian universities — calculus, linear algebra, differential equations, complex analysis, numerical methods and probability.",
+      "toc": [
+        "Differential Calculus",
+        "Integral Calculus",
+        "Linear Algebra",
+        "Differential Equations",
+        "Complex Analysis",
+        "Laplace Transforms",
+        "Numerical Methods",
+        "Probability & Statistics"
+      ],
+      "reviews": [
+        {
+          "id": "o3wddhg",
+          "user": "Nikhil Patil",
+          "rating": 4,
+          "title": "University essential",
+          "body": "Covers the entire B.Tech math syllabus.",
+          "date": "2025-09-25",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b17",
+      "slug": "data-structures-cormen-algorithms",
+      "title": "Introduction to Algorithms (CLRS)",
+      "author": "Thomas H. Cormen, et al.",
+      "publisher": "MIT Press",
+      "isbn": "9780262046305",
+      "edition": "4th Edition",
+      "pubDate": "2022-04-05",
+      "language": "English",
+      "pages": 1312,
+      "category": "engineering",
+      "tags": [
+        "algorithms",
+        "computer science",
+        "dsa"
+      ],
+      "price": 1250,
+      "mrp": 1895,
+      "rating": 4.7,
+      "ratingsCount": 8940,
+      "stock": 31,
+      "course": "B.Tech CSE",
+      "semester": "2nd-3rd Year",
+      "trending": true,
+      "coverHue": 0,
+      "description": "The definitive algorithms textbook covering sorting, data structures, graph algorithms, dynamic programming, NP-completeness and advanced topics. Essential for CS students and interview prep.",
+      "toc": [
+        "Foundations",
+        "Sorting and Order Statistics",
+        "Data Structures",
+        "Advanced Design Techniques",
+        "Graph Algorithms",
+        "NP-Completeness",
+        "Approximation Algorithms"
+      ],
+      "reviews": [
+        {
+          "id": "06uccsv",
+          "user": "Shreya Gupta",
+          "rating": 5,
+          "title": "The CLRS",
+          "body": "Dense but complete. My go-to for placement prep.",
+          "date": "2025-12-14",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b18",
+      "slug": "strength-of-materials-timoshenko",
+      "title": "Strength of Materials",
+      "author": "Timoshenko & Gere",
+      "publisher": "CBS Publishers",
+      "isbn": "9788123910980",
+      "edition": "3rd Edition",
+      "pubDate": "2021-01-01",
+      "language": "English",
+      "pages": 780,
+      "category": "engineering",
+      "tags": [
+        "mechanical",
+        "civil",
+        "som"
+      ],
+      "price": 575,
+      "mrp": 795,
+      "rating": 4.5,
+      "ratingsCount": 4210,
+      "stock": 28,
+      "course": "B.Tech Mech/Civil",
+      "coverHue": 35,
+      "description": "Classic treatment of mechanics of materials — stress, strain, bending, torsion, deflection and columns with rigorous derivations and engineering applications.",
+      "toc": [
+        "Tension and Compression",
+        "Shear and Bending",
+        "Torsion",
+        "Deflection of Beams",
+        "Columns",
+        "Energy Methods"
+      ],
+      "reviews": [
+        {
+          "id": "lz3vtsb",
+          "user": "Rohit Chauhan",
+          "rating": 4,
+          "title": "Solid theory",
+          "body": "The derivations are beautiful. Great for GATE too.",
+          "date": "2025-08-30",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b19",
+      "slug": "wings-of-fire-kalam",
+      "title": "Wings of Fire: An Autobiography",
+      "author": "A.P.J. Abdul Kalam",
+      "publisher": "Universities Press",
+      "isbn": "9788173711466",
+      "edition": "Reprint",
+      "pubDate": "1999-01-01",
+      "language": "English",
+      "pages": 196,
+      "category": "non-fiction",
+      "tags": [
+        "biography",
+        "inspiration",
+        "india"
+      ],
+      "price": 199,
+      "mrp": 350,
+      "rating": 4.7,
+      "ratingsCount": 29500,
+      "stock": 88,
+      "bestseller": true,
+      "coverHue": 25,
+      "description": "The autobiography of Dr. A.P.J. Abdul Kalam — from Rameswaram to Rashtrapati Bhavan. A story of perseverance, science and service to the nation.",
+      "toc": [
+        "Orientation",
+        "Creation",
+        "Propitiation",
+        "Contemplation",
+        "Epilogue"
+      ],
+      "reviews": [
+        {
+          "id": "lg15wm5",
+          "user": "Ananya Bose",
+          "rating": 5,
+          "title": "Inspiring",
+          "body": "Every Indian student should read this.",
+          "date": "2025-11-05",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b20",
+      "slug": "sapiens-yuval-noah-harari",
+      "title": "Sapiens: A Brief History of Humankind",
+      "author": "Yuval Noah Harari",
+      "publisher": "Harper",
+      "isbn": "9780062316097",
+      "edition": "1st Edition",
+      "pubDate": "2015-02-10",
+      "language": "English",
+      "pages": 464,
+      "category": "non-fiction",
+      "tags": [
+        "history",
+        "anthropology",
+        "science"
+      ],
+      "price": 425,
+      "mrp": 699,
+      "rating": 4.6,
+      "ratingsCount": 34100,
+      "stock": 39,
+      "trending": true,
+      "coverHue": 45,
+      "description": "How did Homo sapiens come to dominate the world? Harari explores the Cognitive, Agricultural and Scientific Revolutions that shaped humanity — provocative, sweeping and unputdownable.",
+      "toc": [
+        "The Cognitive Revolution",
+        "The Agricultural Revolution",
+        "The Unification of Humankind",
+        "The Scientific Revolution",
+        "The End of Homo Sapiens"
+      ],
+      "reviews": [
+        {
+          "id": "wu53r78",
+          "user": "Kabir Malhotra",
+          "rating": 5,
+          "title": "Mind-expanding",
+          "body": "Changed how I see money, nations and religion.",
+          "date": "2025-10-19",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b21",
+      "slug": "the-psychology-of-money",
+      "title": "The Psychology of Money",
+      "author": "Morgan Housel",
+      "publisher": "Jaico Publishing",
+      "isbn": "9789390166268",
+      "edition": "1st Edition",
+      "pubDate": "2020-09-08",
+      "language": "English",
+      "pages": 256,
+      "category": "non-fiction",
+      "tags": [
+        "finance",
+        "behavior",
+        "investing"
+      ],
+      "price": 289,
+      "mrp": 399,
+      "rating": 4.7,
+      "ratingsCount": 41200,
+      "stock": 67,
+      "bestseller": true,
+      "trending": true,
+      "coverHue": 150,
+      "description": "Doing well with money has surprisingly little to do with how smart you are and a lot to do with how you behave. Through 19 short stories, Housel explores the strange ways people think about wealth, greed and happiness.",
+      "toc": [
+        "No One's Crazy",
+        "Luck & Risk",
+        "Never Enough",
+        "Confounding Compounding",
+        "Getting Wealthy vs. Staying Wealthy",
+        "Save, Just Save",
+        "Freedom"
+      ],
+      "reviews": [
+        {
+          "id": "3j7btgn",
+          "user": "Divya Rathi",
+          "rating": 5,
+          "title": "Best finance book",
+          "body": "Short chapters, deep lessons. Bought copies for friends.",
+          "date": "2025-12-22",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b22",
+      "slug": "one-indian-girl-chetan-bhagat",
+      "title": "One Indian Girl",
+      "author": "Chetan Bhagat",
+      "publisher": "Rupa Publications",
+      "isbn": "9788129142146",
+      "edition": "1st Edition",
+      "pubDate": "2016-10-01",
+      "language": "English",
+      "pages": 280,
+      "category": "fiction",
+      "tags": [
+        "romance",
+        "indian fiction",
+        "contemporary"
+      ],
+      "price": 185,
+      "mrp": 299,
+      "rating": 4.1,
+      "ratingsCount": 18900,
+      "stock": 52,
+      "coverHue": 320,
+      "description": "Meet Radhika Mehta — a high-flying investment banker who is about to get married, but two ex-boyfriends show up at her destination wedding. A witty take on love, ambition and modern Indian relationships.",
+      "toc": [
+        "Prologue: The Wedding",
+        "The Banker",
+        "The Ex Files",
+        "The Choice",
+        "Epilogue"
+      ],
+      "reviews": [
+        {
+          "id": "e9sbqf4",
+          "user": "Pooja Hegde",
+          "rating": 4,
+          "title": "Fun read",
+          "body": "Finished on one train journey. Classic Chetan Bhagat.",
+          "date": "2025-07-12",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b23",
+      "slug": "half-girlfriend-chetan-bhagat",
+      "title": "Half Girlfriend",
+      "author": "Chetan Bhagat",
+      "publisher": "Rupa Publications",
+      "isbn": "9788129135728",
+      "edition": "1st Edition",
+      "pubDate": "2014-10-01",
+      "language": "English",
+      "pages": 260,
+      "category": "fiction",
+      "tags": [
+        "romance",
+        "indian fiction"
+      ],
+      "price": 175,
+      "mrp": 250,
+      "rating": 4,
+      "ratingsCount": 21400,
+      "stock": 44,
+      "coverHue": 300,
+      "description": "Madhav Jha, a boy from Bihar, falls for Riya Somani, a rich Delhi girl, at St. Stephen's College. She agrees to be his \"half girlfriend\". A rural-urban love story that became a Bollywood film.",
+      "toc": [
+        "Patna",
+        "Delhi",
+        "The Half Girlfriend",
+        "New York",
+        "The Journal"
+      ],
+      "reviews": [
+        {
+          "id": "22jy2fk",
+          "user": "Amit Kumar",
+          "rating": 4,
+          "title": "Easy read",
+          "body": "Simple English, good for beginners.",
+          "date": "2025-06-18",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b24",
+      "slug": "the-guide-rk-narayan",
+      "title": "The Guide",
+      "author": "R.K. Narayan",
+      "publisher": "Indian Thought Publications",
+      "isbn": "9788185986074",
+      "edition": "Reprint",
+      "pubDate": "1958-01-01",
+      "language": "English",
+      "pages": 248,
+      "category": "fiction",
+      "tags": [
+        "classic",
+        "indian literature",
+        "malgudi"
+      ],
+      "price": 225,
+      "mrp": 325,
+      "rating": 4.6,
+      "ratingsCount": 9800,
+      "stock": 26,
+      "coverHue": 55,
+      "description": "Raju the tourist guide becomes an unwilling holy man in this Sahitya Akademi Award-winning novel from the creator of Malgudi. A masterpiece of irony and transformation.",
+      "toc": [
+        "Raju the Guide",
+        "Rosie",
+        "Marco",
+        "The Cave",
+        "The Famine"
+      ],
+      "reviews": [
+        {
+          "id": "pdt1pmm",
+          "user": "Sunita Rao",
+          "rating": 5,
+          "title": "Timeless",
+          "body": "The ending still gives me chills.",
+          "date": "2025-09-14",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b25",
+      "slug": "feluda-samagra-satyajit-ray",
+      "title": "Feluda Samagra (Vol 1 & 2)",
+      "author": "Satyajit Ray",
+      "publisher": "Ananda Publishers",
+      "isbn": "9788177565033",
+      "edition": "Collected Edition",
+      "pubDate": "2015-01-01",
+      "language": "Bengali",
+      "pages": 1500,
+      "category": "bengali",
+      "tags": [
+        "feluda",
+        "detective",
+        "satyajit ray",
+        "bengali"
+      ],
+      "price": 1100,
+      "mrp": 1500,
+      "rating": 4.9,
+      "ratingsCount": 12700,
+      "stock": 18,
+      "bestseller": true,
+      "coverHue": 75,
+      "description": "সত্যজিৎ রায়ের সকল ৩৫টি ফেলুদা গল্পের সম্পূর্ণ সংকলন — The complete collection of all 35 Feluda detective stories by Satyajit Ray. A treasure for every Bengali reader.",
+      "toc": [
+        "বদশাহি অংটি",
+        "লন্ডনে ফেলুদা",
+        "সোনার কেল্লা",
+        "জয় বাবা ফেলুনাথ",
+        "গোরস্থানে সাবধান",
+        "রবার্টসনের রুবি"
+      ],
+      "reviews": [
+        {
+          "id": "2z25113",
+          "user": "Anirban Chatterjee",
+          "rating": 5,
+          "title": "অসাধারণ সংকলন",
+          "body": "ছেলেবেলার স্মৃতি। ছাপার মান চমৎকার।",
+          "date": "2025-11-28",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b26",
+      "slug": "srikanta-sarat-chandra",
+      "title": "Srikanta",
+      "author": "Sarat Chandra Chattopadhyay",
+      "publisher": "Sarat Samity",
+      "isbn": "9788170665463",
+      "edition": "Classic Reprint",
+      "pubDate": "2018-01-01",
+      "language": "Bengali",
+      "pages": 620,
+      "category": "bengali",
+      "tags": [
+        "classic",
+        "bengali literature",
+        "sarat chandra"
+      ],
+      "price": 350,
+      "mrp": 500,
+      "rating": 4.8,
+      "ratingsCount": 5600,
+      "stock": 14,
+      "rare": true,
+      "coverHue": 65,
+      "description": "শরৎচন্দ্রের কালজয়ী উপন্যাস শ্রীকান্ত — Sarat Chandra's timeless novel of a wanderer's encounters with unforgettable women like Rajlakshmi and Abhaya. A cornerstone of Bengali literature.",
+      "toc": [
+        "প্রথম পর্ব",
+        "দ্বিতীয় পর্ব",
+        "তৃতীয় পর্ব",
+        "চতুর্থ পর্ব"
+      ],
+      "reviews": [
+        {
+          "id": "b8ghsl7",
+          "user": "Madhumita Sen",
+          "rating": 5,
+          "title": "জীবনের বই",
+          "body": "একাধিকবার পড়েছি, প্রতিবার নতুন লাগে।",
+          "date": "2025-08-20",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b27",
+      "slug": "professor-shonku-samagra",
+      "title": "Professor Shonku Samagra",
+      "author": "Satyajit Ray",
+      "publisher": "Ananda Publishers",
+      "isbn": "9788170667740",
+      "edition": "Collected Edition",
+      "pubDate": "2019-01-01",
+      "language": "Bengali",
+      "pages": 1100,
+      "category": "bengali",
+      "tags": [
+        "science fiction",
+        "satyajit ray",
+        "shonku"
+      ],
+      "price": 850,
+      "mrp": 1200,
+      "rating": 4.9,
+      "ratingsCount": 8900,
+      "stock": 21,
+      "trending": true,
+      "coverHue": 85,
+      "description": "অবিশ্বাস্য বিজ্ঞানী প্রফেসর শঙ্কুর সকল অভিযান — All Professor Shonku science fiction adventures in one collector's volume.",
+      "toc": [
+        "ব্যোমচাকা",
+        "শঙ্কুর সোনার কাঠি",
+        "করভাস",
+        "মহাকাশের দেশে",
+        "উন"
+      ],
+      "reviews": [
+        {
+          "id": "fm3mhas",
+          "user": "Sourav Ganguly",
+          "rating": 5,
+          "title": "Sci-fi before its time",
+          "body": "Ray imagined AI in the 60s. Genius.",
+          "date": "2025-10-10",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b28",
+      "slug": "harry-potter-philosophers-stone",
+      "title": "Harry Potter and the Philosopher's Stone",
+      "author": "J.K. Rowling",
+      "publisher": "Bloomsbury",
+      "isbn": "9781408855652",
+      "edition": "Illustrated Paperback",
+      "pubDate": "2014-09-01",
+      "language": "English",
+      "pages": 352,
+      "category": "international",
+      "tags": [
+        "fantasy",
+        "young adult",
+        "magic"
+      ],
+      "price": 399,
+      "mrp": 599,
+      "rating": 4.9,
+      "ratingsCount": 89100,
+      "stock": 76,
+      "bestseller": true,
+      "coverHue": 355,
+      "description": "The book that started it all. Harry Potter discovers he is a wizard and begins his first year at Hogwarts School of Witchcraft and Wizardry.",
+      "toc": [
+        "The Boy Who Lived",
+        "Diagon Alley",
+        "The Journey from Platform Nine and Three-Quarters",
+        "The Sorting Hat",
+        "The Mirror of Erised"
+      ],
+      "reviews": [
+        {
+          "id": "n8abbti",
+          "user": "Zara Khan",
+          "rating": 5,
+          "title": "Magical",
+          "body": "Bought for my daughter, ended up re-reading myself.",
+          "date": "2025-12-05",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b29",
+      "slug": "the-lord-of-the-rings-tolkien",
+      "title": "The Lord of the Rings (One Volume Edition)",
+      "author": "J.R.R. Tolkien",
+      "publisher": "HarperCollins",
+      "isbn": "9780261103252",
+      "edition": "50th Anniversary",
+      "pubDate": "2005-06-01",
+      "language": "English",
+      "pages": 1216,
+      "category": "international",
+      "tags": [
+        "fantasy",
+        "epic",
+        "classic"
+      ],
+      "price": 799,
+      "mrp": 1299,
+      "rating": 4.8,
+      "ratingsCount": 52300,
+      "stock": 33,
+      "coverHue": 95,
+      "description": "Tolkien's epic masterpiece in a single volume — the Fellowship's quest to destroy the One Ring and defeat Sauron. The defining fantasy novel of the 20th century.",
+      "toc": [
+        "The Fellowship of the Ring",
+        "The Two Towers",
+        "The Return of the King",
+        "Appendices"
+      ],
+      "reviews": [
+        {
+          "id": "xn229kf",
+          "user": "Aditya Pillai",
+          "rating": 5,
+          "title": "Epic",
+          "body": "The worldbuilding is unmatched. Stunning edition.",
+          "date": "2025-09-01",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b30",
+      "slug": "1984-george-orwell",
+      "title": "1984",
+      "author": "George Orwell",
+      "publisher": "Penguin Classics",
+      "isbn": "9780141439518",
+      "edition": "Penguin Classics",
+      "pubDate": "2003-01-01",
+      "language": "English",
+      "pages": 336,
+      "category": "international",
+      "tags": [
+        "dystopia",
+        "classic",
+        "political"
+      ],
+      "price": 235,
+      "mrp": 350,
+      "rating": 4.7,
+      "ratingsCount": 47800,
+      "stock": 59,
+      "bestseller": true,
+      "coverHue": 240,
+      "description": "Orwell's chilling vision of a totalitarian future where Big Brother watches everything. More relevant today than ever — a warning about surveillance, propaganda and the manipulation of truth.",
+      "toc": [
+        "Part One",
+        "Part Two",
+        "Part Three",
+        "Appendix: The Principles of Newspeak"
+      ],
+      "reviews": [
+        {
+          "id": "rkvfmdz",
+          "user": "Ritika Sharma",
+          "rating": 5,
+          "title": "Terrifyingly relevant",
+          "body": "Read it once a year. Never gets old.",
+          "date": "2025-11-15",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b31",
+      "slug": "the-kite-runner-khaled-hosseini",
+      "title": "The Kite Runner",
+      "author": "Khaled Hosseini",
+      "publisher": "Bloomsbury",
+      "isbn": "9781408824856",
+      "edition": "Paperback",
+      "pubDate": "2004-01-01",
+      "language": "English",
+      "pages": 384,
+      "category": "international",
+      "tags": [
+        "literary fiction",
+        "afghanistan"
+      ],
+      "price": 350,
+      "mrp": 550,
+      "rating": 4.7,
+      "ratingsCount": 36200,
+      "stock": 41,
+      "trending": true,
+      "coverHue": 15,
+      "description": "Amir and Hassan's friendship in 1970s Kabul is shattered by one act of betrayal. A devastating, unforgettable novel about guilt, redemption and the power of fathers and sons.",
+      "toc": [
+        "Kabul",
+        "The Kite Tournament",
+        "America",
+        "Return",
+        "Redemption"
+      ],
+      "reviews": [
+        {
+          "id": "a6wu04d",
+          "user": "Neha Kulkarni",
+          "rating": 5,
+          "title": "Heartbreaking",
+          "body": "Cried multiple times. For you, a thousand times over.",
+          "date": "2025-10-08",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b32",
+      "slug": "to-kill-a-mockingbird-first-edition",
+      "title": "To Kill a Mockingbird — 1960 First Edition Facsimile",
+      "author": "Harper Lee",
+      "publisher": "J.B. Lippincott (Facsimile)",
+      "isbn": "9780060935467",
+      "edition": "Facsimile Collector's Edition",
+      "pubDate": "1960-07-11",
+      "language": "English",
+      "pages": 324,
+      "category": "rare",
+      "tags": [
+        "classic",
+        "collectible",
+        "first edition facsimile"
+      ],
+      "price": 2999,
+      "mrp": 4999,
+      "rating": 4.9,
+      "ratingsCount": 1240,
+      "stock": 3,
+      "rare": true,
+      "coverHue": 30,
+      "description": "A faithful facsimile of the 1960 first edition of Harper Lee's Pulitzer Prize-winning novel, with original dust jacket artwork. A collector's item for serious bibliophiles.",
+      "toc": [
+        "Part One",
+        "Part Two"
+      ],
+      "reviews": [
+        {
+          "id": "5kucifo",
+          "user": "Vikram Mehta",
+          "rating": 5,
+          "title": "Collector grade",
+          "body": "Arrived in pristine condition with archival wrapping.",
+          "date": "2025-09-27",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b33",
+      "slug": "sherlock-holmes-complete-leatherbound",
+      "title": "The Complete Sherlock Holmes — Leatherbound Collector's Edition",
+      "author": "Arthur Conan Doyle",
+      "publisher": "Canterbury Classics",
+      "isbn": "9781607102113",
+      "edition": "Leatherbound",
+      "pubDate": "2011-10-01",
+      "language": "English",
+      "pages": 1096,
+      "category": "rare",
+      "tags": [
+        "detective",
+        "collectible",
+        "leatherbound"
+      ],
+      "price": 1899,
+      "mrp": 2899,
+      "rating": 4.8,
+      "ratingsCount": 3120,
+      "stock": 7,
+      "rare": true,
+      "trending": true,
+      "coverHue": 260,
+      "description": "All four novels and 56 short stories of Sherlock Holmes in a bonded-leather collector's edition with gilded edges and ribbon marker.",
+      "toc": [
+        "A Study in Scarlet",
+        "The Sign of the Four",
+        "The Adventures",
+        "The Memoirs",
+        "The Hound of the Baskervilles",
+        "The Return",
+        "The Valley of Fear"
+      ],
+      "reviews": [
+        {
+          "id": "1kzhkqw",
+          "user": "Arundhati Das",
+          "rating": 5,
+          "title": "Gorgeous binding",
+          "body": "Feels like an heirloom. Gift-wrapped beautifully.",
+          "date": "2025-12-16",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b34",
+      "slug": "ncert-chemistry-class-11",
+      "title": "NCERT Chemistry Part I & II — Class 11",
+      "author": "NCERT",
+      "publisher": "NCERT",
+      "isbn": "9788174504944",
+      "edition": "2024 Edition",
+      "pubDate": "2024-03-01",
+      "language": "English",
+      "pages": 610,
+      "category": "school",
+      "tags": [
+        "ncert",
+        "cbse",
+        "class 11",
+        "chemistry"
+      ],
+      "price": 330,
+      "mrp": 360,
+      "rating": 4.6,
+      "ratingsCount": 11200,
+      "stock": 95,
+      "exam": "CBSE Boards",
+      "course": "Class 11",
+      "coverHue": 175,
+      "description": "Official NCERT Chemistry textbook for Class 11, essential for boards, JEE and NEET. Covers physical, inorganic and organic chemistry fundamentals.",
+      "toc": [
+        "Some Basic Concepts of Chemistry",
+        "Structure of Atom",
+        "Periodic Table",
+        "Chemical Bonding",
+        "Thermodynamics",
+        "Equilibrium",
+        "Organic Chemistry Basics",
+        "Hydrocarbons"
+      ],
+      "reviews": [
+        {
+          "id": "x3qp5pd",
+          "user": "Harsh Vardhan",
+          "rating": 5,
+          "title": "Genuine book",
+          "body": "Original NCERT print at a discount.",
+          "date": "2025-08-11",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b35",
+      "slug": "icse-total-english-class-10",
+      "title": "ICSE Total English — Class 10",
+      "author": "Xavier Pinto, Selina",
+      "publisher": "Selina Publishers",
+      "isbn": "9788177662368",
+      "edition": "2025 Edition",
+      "pubDate": "2025-01-01",
+      "language": "English",
+      "pages": 480,
+      "category": "school",
+      "tags": [
+        "icse",
+        "english",
+        "class 10"
+      ],
+      "price": 385,
+      "mrp": 475,
+      "rating": 4.5,
+      "ratingsCount": 4670,
+      "stock": 38,
+      "exam": "ICSE Boards",
+      "course": "Class 10",
+      "newRelease": true,
+      "coverHue": 205,
+      "description": "Complete English language and literature guide for ICSE Class 10 with grammar, composition, comprehension and specimen papers as per the latest CISCE syllabus.",
+      "toc": [
+        "Grammar",
+        "Composition",
+        "Comprehension",
+        "Letter Writing",
+        "Specimen Papers"
+      ],
+      "reviews": [
+        {
+          "id": "8hi4xov",
+          "user": "Ira Chawla",
+          "rating": 4,
+          "title": "ICSE aligned",
+          "body": "Matches the latest paper pattern.",
+          "date": "2026-01-05",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b36",
+      "slug": "indian-economy-ramesh-singh",
+      "title": "Indian Economy",
+      "author": "Ramesh Singh",
+      "publisher": "McGraw Hill",
+      "isbn": "9789390185535",
+      "edition": "15th Edition",
+      "pubDate": "2024-06-01",
+      "language": "English",
+      "pages": 960,
+      "category": "competitive-exams",
+      "tags": [
+        "upsc",
+        "economy",
+        "civil services"
+      ],
+      "price": 640,
+      "mrp": 995,
+      "rating": 4.6,
+      "ratingsCount": 14800,
+      "stock": 36,
+      "exam": "UPSC",
+      "bestseller": true,
+      "coverHue": 140,
+      "description": "The go-to book for Indian Economy for UPSC Prelims and Mains, updated with the latest budget, economic survey and policy developments.",
+      "toc": [
+        "Introduction to Economics",
+        "National Income",
+        "Banking & Finance",
+        "Inflation",
+        "External Sector",
+        "Agriculture",
+        "Industry",
+        "Budget & Fiscal Policy"
+      ],
+      "reviews": [
+        {
+          "id": "a50xw5v",
+          "user": "Prashant Jha",
+          "rating": 5,
+          "title": "Updated edition",
+          "body": "Latest budget data included. UPSC-ready.",
+          "date": "2025-11-21",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b37",
+      "slug": "modern-abc-physics-class-12",
+      "title": "Modern's ABC of Physics — Class 12",
+      "author": "S.P. Jauhar",
+      "publisher": "Modern Publishers",
+      "isbn": "9788178813368",
+      "edition": "2025 Edition",
+      "pubDate": "2025-03-01",
+      "language": "English",
+      "pages": 1240,
+      "category": "university",
+      "tags": [
+        "physics",
+        "reference",
+        "plus two"
+      ],
+      "price": 890,
+      "mrp": 1250,
+      "rating": 4.4,
+      "ratingsCount": 3890,
+      "stock": 24,
+      "course": "B.Sc Physics",
+      "semester": "1st Year",
+      "newRelease": true,
+      "coverHue": 185,
+      "description": "Detailed physics reference bridging Class 12 and first-year B.Sc, with exhaustive theory, derivations and solved numericals.",
+      "toc": [
+        "Electrostatics",
+        "Current Electricity",
+        "Magnetism",
+        "EMI & AC",
+        "Optics",
+        "Modern Physics"
+      ],
+      "reviews": [
+        {
+          "id": "1rsiqos",
+          "user": "Shubham Tiwari",
+          "rating": 4,
+          "title": "Detailed",
+          "body": "Good alternative when NCERT feels too brief.",
+          "date": "2025-12-28",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b38",
+      "slug": "principles-of-economics-mankiw",
+      "title": "Principles of Economics",
+      "author": "N. Gregory Mankiw",
+      "publisher": "Cengage Learning",
+      "isbn": "9780357722718",
+      "edition": "9th Edition",
+      "pubDate": "2023-01-01",
+      "language": "English",
+      "pages": 880,
+      "category": "university",
+      "tags": [
+        "economics",
+        "bcom",
+        "ba economics"
+      ],
+      "price": 925,
+      "mrp": 1395,
+      "rating": 4.6,
+      "ratingsCount": 5670,
+      "stock": 29,
+      "course": "B.A./B.Com Economics",
+      "semester": "1st Year",
+      "university": "Delhi University",
+      "trending": true,
+      "coverHue": 115,
+      "description": "The world's most popular economics textbook. Mankiw's ten principles and clear exposition make it the standard text for undergraduate economics courses across Indian universities.",
+      "toc": [
+        "Ten Principles of Economics",
+        "Supply and Demand",
+        "Elasticity",
+        "Consumer & Producer Theory",
+        "Market Structures",
+        "Macroeconomic Data",
+        "Growth",
+        "Money & Inflation",
+        "Open Economy"
+      ],
+      "reviews": [
+        {
+          "id": "6h8mez8",
+          "user": "Sanjana Kapoor",
+          "rating": 5,
+          "title": "Best intro to econ",
+          "body": "DU syllabus covered completely.",
+          "date": "2025-10-16",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b39",
+      "slug": "let-us-c-yashavant-kanetkar",
+      "title": "Let Us C",
+      "author": "Yashavant Kanetkar",
+      "publisher": "BPB Publications",
+      "isbn": "9788183331630",
+      "edition": "19th Edition",
+      "pubDate": "2023-06-01",
+      "language": "English",
+      "pages": 560,
+      "category": "university",
+      "tags": [
+        "c programming",
+        "btech",
+        "bca"
+      ],
+      "price": 340,
+      "mrp": 495,
+      "rating": 4.5,
+      "ratingsCount": 19300,
+      "stock": 64,
+      "course": "BCA/B.Tech",
+      "semester": "1st Year",
+      "bestseller": true,
+      "coverHue": 230,
+      "description": "India's bestselling C programming book for over two decades. Learn C from scratch with hundreds of examples and exercises — the first programming book for lakhs of students.",
+      "toc": [
+        "Getting Started",
+        "Decision Control",
+        "Loops",
+        "Functions",
+        "Pointers",
+        "Arrays & Strings",
+        "Structures",
+        "File I/O"
+      ],
+      "reviews": [
+        {
+          "id": "o7oqvqn",
+          "user": "Gaurav Singh",
+          "rating": 5,
+          "title": "Nostalgia + value",
+          "body": "Learned C from this 10 years ago, bought for my nephew.",
+          "date": "2025-09-05",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b40",
+      "slug": "ikigai-hector-garcia",
+      "title": "Ikigai: The Japanese Secret to a Long and Happy Life",
+      "author": "Héctor García, Francesc Miralles",
+      "publisher": "Penguin",
+      "isbn": "9780143130727",
+      "edition": "International Edition",
+      "pubDate": "2017-08-01",
+      "language": "English",
+      "pages": 208,
+      "category": "non-fiction",
+      "tags": [
+        "philosophy",
+        "japan",
+        "wellbeing"
+      ],
+      "price": 329,
+      "mrp": 499,
+      "rating": 4.4,
+      "ratingsCount": 45600,
+      "stock": 71,
+      "bestseller": true,
+      "newRelease": false,
+      "coverHue": 200,
+      "description": "The international bestseller that reveals the Japanese concept of ikigai — your reason for being — through the lives of the world's longest-living people in Okinawa.",
+      "toc": [
+        "Ikigai",
+        "Anti-Aging Secrets",
+        "From Logotherapy to Ikigai",
+        "Find Flow in Everything You Do",
+        "Lessons from Okinawa",
+        "Gentle Movements",
+        "Eat a Little Less"
+      ],
+      "reviews": [
+        {
+          "id": "muabzh9",
+          "user": "Lakshmi Prasad",
+          "rating": 4,
+          "title": "Calming read",
+          "body": "Gentle wisdom. Beautiful cover too.",
+          "date": "2025-11-25",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b41",
+      "slug": "atomic-habits-hindi",
+      "title": "Atomic Habits (Hindi Edition)",
+      "author": "James Clear (Hindi Translation)",
+      "publisher": "Manjul Publishing",
+      "isbn": "9789390085638",
+      "edition": "Hindi Edition",
+      "pubDate": "2021-01-01",
+      "language": "Hindi",
+      "pages": 352,
+      "category": "non-fiction",
+      "tags": [
+        "habits",
+        "hindi",
+        "self-help"
+      ],
+      "price": 275,
+      "mrp": 399,
+      "rating": 4.5,
+      "ratingsCount": 12300,
+      "stock": 46,
+      "newRelease": true,
+      "coverHue": 50,
+      "description": "Atomic Habits का आधिकारिक हिंदी अनुवाद — छोटी आदतें, असाधारण परिणाम। James Clear's classic, now in Hindi.",
+      "toc": [
+        "मूल सिद्धांत",
+        "पहला नियम",
+        "दूसरा नियम",
+        "तीसरा नियम",
+        "चौथा नियम"
+      ],
+      "reviews": [
+        {
+          "id": "j4vlgg8",
+          "user": "Ramesh Gupta",
+          "rating": 5,
+          "title": "बेहतरीन अनुवाद",
+          "body": "हिंदी में पढ़कर और भी अच्छा लगा।",
+          "date": "2025-12-08",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b42",
+      "slug": "gate-computer-science-papers",
+      "title": "GATE 2026 Computer Science — 39 Years Solved Papers",
+      "author": "GK Publications",
+      "publisher": "GKP",
+      "isbn": "9789391520578",
+      "edition": "2026 Edition",
+      "pubDate": "2025-09-01",
+      "language": "English",
+      "pages": 1140,
+      "category": "competitive-exams",
+      "tags": [
+        "gate",
+        "computer science",
+        "solved papers"
+      ],
+      "price": 720,
+      "mrp": 1095,
+      "rating": 4.4,
+      "ratingsCount": 3450,
+      "stock": 33,
+      "exam": "GATE",
+      "newRelease": true,
+      "coverHue": 255,
+      "description": "Chapter-wise solved GATE CS papers from 1987–2025 with detailed solutions, topic weightage analysis and free online mock tests.",
+      "toc": [
+        "Digital Logic",
+        "Computer Organization",
+        "Programming & DS",
+        "Algorithms",
+        "Theory of Computation",
+        "Compiler Design",
+        "Operating Systems",
+        "Databases",
+        "Networks",
+        "General Aptitude"
+      ],
+      "reviews": [
+        {
+          "id": "9smrc8i",
+          "user": "Vivek Anand",
+          "rating": 4,
+          "title": "GATE-ready",
+          "body": "Solutions are crisp. The weightage charts help plan.",
+          "date": "2025-12-20",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b43",
+      "slug": "pharmacology-kd-tripathi",
+      "title": "Essentials of Medical Pharmacology",
+      "author": "K.D. Tripathi",
+      "publisher": "Jaypee Brothers",
+      "isbn": "9789352704996",
+      "edition": "8th Edition",
+      "pubDate": "2023-01-01",
+      "language": "English",
+      "pages": 1032,
+      "category": "medical",
+      "tags": [
+        "pharmacology",
+        "mbbs",
+        "second year"
+      ],
+      "price": 1150,
+      "mrp": 1695,
+      "rating": 4.7,
+      "ratingsCount": 6890,
+      "stock": 19,
+      "course": "MBBS",
+      "semester": "2nd Year",
+      "bestseller": true,
+      "coverHue": 175,
+      "description": "India's most trusted pharmacology textbook — rational drug therapy, classification tables and exam-focused presentation for MBBS second professional.",
+      "toc": [
+        "General Pharmacology",
+        "Autonomic Nervous System",
+        "CNS Drugs",
+        "Cardiovascular Drugs",
+        "Antimicrobials",
+        "Endocrine Pharmacology",
+        "Chemotherapy"
+      ],
+      "reviews": [
+        {
+          "id": "9chq67z",
+          "user": "Dr. Nisha Rao",
+          "rating": 5,
+          "title": "MBBS standard",
+          "body": "Tables make revision so fast. Jaypee original.",
+          "date": "2025-11-08",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b44",
+      "slug": "panchatantra-classic-tales",
+      "title": "Panchatantra: The Complete Classic Tales",
+      "author": "Vishnu Sharma (Retold)",
+      "publisher": "Om Books",
+      "isbn": "9789380069893",
+      "edition": "Illustrated Edition",
+      "pubDate": "2019-01-01",
+      "language": "English",
+      "pages": 240,
+      "category": "school",
+      "tags": [
+        "children",
+        "stories",
+        "moral tales"
+      ],
+      "price": 195,
+      "mrp": 299,
+      "rating": 4.6,
+      "ratingsCount": 7210,
+      "stock": 83,
+      "coverHue": 60,
+      "description": "The complete Panchatantra with beautiful illustrations — timeless animal fables of wisdom, friendship and cleverness that have taught children for 2,000 years.",
+      "toc": [
+        "Mitra Bheda",
+        "Mitra Samprapti",
+        "Kakolukiyam",
+        "Labdhapranasham",
+        "Aparikshitakarakam"
+      ],
+      "reviews": [
+        {
+          "id": "8m7swcb",
+          "user": "Geeta Nair",
+          "rating": 5,
+          "title": "Kids loved it",
+          "body": "My 7-year-old asks for one story every night.",
+          "date": "2025-10-30",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b45",
+      "slug": "ghotoner-bhitor-ghoton-byomkesh",
+      "title": "Byomkesh Bakshi Samagra",
+      "author": "Sharadindu Bandyopadhyay",
+      "publisher": "Ananda Publishers",
+      "isbn": "9788170662257",
+      "edition": "Collected Edition",
+      "pubDate": "2016-01-01",
+      "language": "Bengali",
+      "pages": 1300,
+      "category": "bengali",
+      "tags": [
+        "detective",
+        "byomkesh",
+        "bengali"
+      ],
+      "price": 950,
+      "mrp": 1400,
+      "rating": 4.8,
+      "ratingsCount": 6300,
+      "stock": 16,
+      "rare": true,
+      "coverHue": 15,
+      "description": "ব্যোমকেশ বক্সীর সমস্ত গোয়েন্দা কাহিনীর সংকলন — The complete Byomkesh Bakshi detective stories by Sharadindu Bandyopadhyay in one handsome volume.",
+      "toc": [
+        "সত্যান্বেষী",
+        "পৈতৃক সূত্র",
+        "রক্তমুখী নীলা",
+        "চিত্রচোর",
+        "অগ্নিবাণ"
+      ],
+      "reviews": [
+        {
+          "id": "pcernkb",
+          "user": "Koushik Dutta",
+          "rating": 5,
+          "title": "সত্যিকারের রত্ন",
+          "body": "আনন্দের ছাপা সবসময় ভালো। দ্রুত ডেলিভারি।",
+          "date": "2025-09-19",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b46",
+      "slug": "thinking-fast-and-slow",
+      "title": "Thinking, Fast and Slow",
+      "author": "Daniel Kahneman",
+      "publisher": "Penguin",
+      "isbn": "9780141033570",
+      "edition": "International Edition",
+      "pubDate": "2012-04-01",
+      "language": "English",
+      "pages": 512,
+      "category": "non-fiction",
+      "tags": [
+        "psychology",
+        "decision making",
+        "nobel laureate"
+      ],
+      "price": 499,
+      "mrp": 799,
+      "rating": 4.5,
+      "ratingsCount": 28700,
+      "stock": 37,
+      "coverHue": 215,
+      "description": "Nobel laureate Daniel Kahneman takes us on a tour of the mind — the fast, intuitive System 1 and the slow, logical System 2 — and reveals how our choices are shaped by biases we never notice.",
+      "toc": [
+        "Two Systems",
+        "Heuristics and Biases",
+        "Overconfidence",
+        "Choices",
+        "Two Selves"
+      ],
+      "reviews": [
+        {
+          "id": "0ftu1mu",
+          "user": "Aditya Menon",
+          "rating": 5,
+          "title": "Dense but rewarding",
+          "body": "Took me two months. Worth every page.",
+          "date": "2025-08-27",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b47",
+      "slug": "operating-system-concepts-galvin",
+      "title": "Operating System Concepts",
+      "author": "Silberschatz, Galvin, Gagne",
+      "publisher": "Wiley",
+      "isbn": "9781119800361",
+      "edition": "10th Edition",
+      "pubDate": "2022-01-01",
+      "language": "English",
+      "pages": 976,
+      "category": "engineering",
+      "tags": [
+        "operating systems",
+        "computer science",
+        "btech"
+      ],
+      "price": 795,
+      "mrp": 1195,
+      "rating": 4.6,
+      "ratingsCount": 5980,
+      "stock": 26,
+      "course": "B.Tech CSE",
+      "semester": "3rd Year",
+      "university": "Anna University",
+      "newRelease": true,
+      "coverHue": 275,
+      "description": "The \"dinosaur book\" — the standard OS text covering processes, threads, scheduling, synchronization, deadlocks, memory management and file systems.",
+      "toc": [
+        "Introduction",
+        "Processes",
+        "Threads & Concurrency",
+        "CPU Scheduling",
+        "Deadlocks",
+        "Memory Management",
+        "Virtual Memory",
+        "File Systems",
+        "Security"
+      ],
+      "reviews": [
+        {
+          "id": "ifn33qq",
+          "user": "Priyanka Das",
+          "rating": 4,
+          "title": "University standard",
+          "body": "Matches our syllabus exactly. Wiley India print.",
+          "date": "2025-12-12",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "id": "b48",
+      "slug": "the-almanack-of-naval-ravikant",
+      "title": "The Almanack of Naval Ravikant",
+      "author": "Eric Jorgenson",
+      "publisher": "Harper Business",
+      "isbn": "9780063312707",
+      "edition": "Paperback",
+      "pubDate": "2020-09-15",
+      "language": "English",
+      "pages": 288,
+      "category": "non-fiction",
+      "tags": [
+        "wealth",
+        "happiness",
+        "startups"
+      ],
+      "price": 399,
+      "mrp": 599,
+      "rating": 4.7,
+      "ratingsCount": 19800,
+      "stock": 49,
+      "trending": true,
+      "newRelease": true,
+      "coverHue": 235,
+      "description": "A curated collection of Naval Ravikant's wisdom on building wealth and finding happiness — drawn from his tweets, podcasts and essays. Specific knowledge, leverage and judgment, distilled.",
+      "toc": [
+        "Building Wealth",
+        "Building Judgment",
+        "Learning Happiness",
+        "Saving Yourself",
+        "Philosophy"
+      ],
+      "reviews": [
+        {
+          "id": "easjo08",
+          "user": "Ishaan Malhotra",
+          "rating": 5,
+          "title": "Re-read monthly",
+          "body": "Every page is quotable.",
+          "date": "2026-01-10",
+          "verified": true
+        }
+      ]
+    }
+  ]
+}

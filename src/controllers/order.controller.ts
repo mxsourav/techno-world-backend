@@ -127,7 +127,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       // Update order with razorpayOrderId in db
       await prisma.order.update({
         where: { id: order.id },
-        data: { razorpayOrderId: razorpayOrder.id }
+        data: { paymentId: razorpayOrder.id }
       });
     }
 

@@ -222,9 +222,50 @@ export const updateBook = async (req: Request, res: Response, next: NextFunction
     if (body.stock !== undefined) data.stock = Number(body.stock);
     if (body.pages !== undefined) data.pages = Number(body.pages);
     if (body.isbn13 !== undefined) data.isbn13 = body.isbn13;
+    if (body.isbn10 !== undefined) data.isbn10 = body.isbn10;
     if (body.sku !== undefined) data.sku = body.sku;
     if (body.bookCode !== undefined) data.bookCode = body.bookCode;
     if (body.description !== undefined) data.description = body.description;
+    if (body.shortDescription !== undefined) data.shortDescription = body.shortDescription;
+    if (body.edition !== undefined) data.edition = body.edition;
+    if (body.language !== undefined) data.language = body.language;
+    if (body.bindingType !== undefined) data.bindingType = body.bindingType;
+    if (body.publicationDate !== undefined) {
+      data.publicationDate = body.publicationDate ? new Date(body.publicationDate) : null;
+    }
+
+    // Handle Category upsert / update
+    if (body.category !== undefined && typeof body.category === 'string' && body.category.trim() !== '') {
+      const catSlug = body.category.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const cat = await prisma.category.upsert({
+        where: { slug: catSlug },
+        update: {},
+        create: { name: body.category, slug: catSlug }
+      });
+      data.categoryId = cat.id;
+    }
+
+    // Handle Publisher upsert / update
+    if (body.publisher !== undefined && typeof body.publisher === 'string' && body.publisher.trim() !== '') {
+      const pubSlug = body.publisher.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const pub = await prisma.publisher.upsert({
+        where: { slug: pubSlug },
+        update: {},
+        create: { name: body.publisher, slug: pubSlug }
+      });
+      data.publisherId = pub.id;
+    }
+
+    // Handle BookType upsert / update
+    if (body.bookType !== undefined && typeof body.bookType === 'string' && body.bookType.trim() !== '') {
+      const typeSlug = body.bookType.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const btype = await prisma.bookType.upsert({
+        where: { slug: typeSlug },
+        update: {},
+        create: { name: body.bookType, slug: typeSlug }
+      });
+      data.bookTypeId = btype.id;
+    }
 
     const diffs: string[] = [];
     for (const key of Object.keys(data)) {
@@ -259,17 +300,63 @@ export const createBook = async (req: Request, res: Response, next: NextFunction
     const body = req.body;
     const userId = (req as any).user?.id || 'system';
 
+    const slug = body.title
+      ? body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.floor(1000 + Math.random() * 9000)
+      : 'book-' + Date.now();
+
+    let categoryId = undefined;
+    if (body.category && typeof body.category === 'string' && body.category.trim() !== '') {
+      const catSlug = body.category.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const cat = await prisma.category.upsert({
+        where: { slug: catSlug },
+        update: {},
+        create: { name: body.category, slug: catSlug }
+      });
+      categoryId = cat.id;
+    }
+
+    let publisherId = undefined;
+    if (body.publisher && typeof body.publisher === 'string' && body.publisher.trim() !== '') {
+      const pubSlug = body.publisher.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const pub = await prisma.publisher.upsert({
+        where: { slug: pubSlug },
+        update: {},
+        create: { name: body.publisher, slug: pubSlug }
+      });
+      publisherId = pub.id;
+    }
+
+    let bookTypeId = undefined;
+    if (body.bookType && typeof body.bookType === 'string' && body.bookType.trim() !== '') {
+      const typeSlug = body.bookType.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const btype = await prisma.bookType.upsert({
+        where: { slug: typeSlug },
+        update: {},
+        create: { name: body.bookType, slug: typeSlug }
+      });
+      bookTypeId = btype.id;
+    }
+
     const data: any = {
-      title: body.title || 'Untitled',
-      slug: body.title ? body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now() : 'book-' + Date.now(),
+      title: body.title || 'Untitled Book',
+      slug,
       price: Number(body.price) || 0,
-      mrp: Number(body.mrp) || 0,
+      mrp: Number(body.mrp) || Number(body.price) || 0,
       stock: Number(body.stock) || 0,
       pages: Number(body.pages) || 0,
-      isbn13: body.isbn13,
-      sku: body.sku,
-      bookCode: body.bookCode,
-      description: body.description,
+      isbn13: body.isbn13 || null,
+      isbn10: body.isbn10 || null,
+      sku: body.sku || null,
+      bookCode: body.bookCode || null,
+      description: body.description || 'No description provided.',
+      shortDescription: body.shortDescription || null,
+      edition: body.edition || '1st Edition',
+      language: body.language || 'English',
+      bindingType: body.bindingType || 'Paperback',
+      publicationDate: body.publicationDate ? new Date(body.publicationDate) : null,
+      categoryId,
+      publisherId,
+      bookTypeId,
       status: 'PUBLISHED'
     };
     const book = await prisma.book.create({ data });

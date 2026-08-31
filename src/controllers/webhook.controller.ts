@@ -51,7 +51,7 @@ export const handleRazorpayWebhook = async (req: Request, res: Response): Promis
       // Find the order and update status to PAID
       try {
         await prisma.order.updateMany({
-          where: { razorpayOrderId },
+          where: { paymentId: razorpayOrderId },
           data: { paymentStatus: 'PAID' }
         });
         console.log(`Order ${razorpayOrderId} marked as PAID via webhook`);

@@ -134,3 +134,28 @@ export const indiaPostWebhookPayloadSchema = z.object({
   cod_amount: z.coerce.number().optional(),
   bulk_customer_id: z.string().or(z.number()).optional(),
 });
+
+export type TariffResponse = {
+  success: boolean;
+  message?: string;
+  data?: any;
+};
+
+export type PostOfficeDetail = {
+  pincode: number;
+  office_name: string;
+  office_id?: string;
+  office_type_code?: string;
+  state_name: string;
+  delivery_office_flag?: boolean;
+  city_name?: string;
+  taluk_name?: string;
+  village_name?: string;
+  is_rolled_out?: boolean;
+};
+
+export type ArticleTrackingResult = {
+  article_number: string;
+  status: string;
+  tracking?: any;
+};

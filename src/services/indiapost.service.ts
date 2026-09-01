@@ -318,23 +318,50 @@ class IndiaPostService {
   }
 
   private mockPincodeLookup(pincode: string): PostOfficeDetail[] {
-    const stateMap: Record<string, { state: string; city: string; taluk: string }> = {
-      '1': { state: 'Delhi', city: 'NEW DELHI', taluk: 'New Delhi' },
-      '2': { state: 'Uttar Pradesh', city: 'LUCKNOW', taluk: 'Lucknow' },
-      '3': { state: 'Rajasthan', city: 'JAIPUR', taluk: 'Jaipur' },
-      '4': { state: 'Maharashtra', city: 'MUMBAI', taluk: 'Mumbai City' },
-      '5': { state: 'Karnataka', city: 'BENGALURU', taluk: 'Bengaluru Urban' },
-      '6': { state: 'Tamil Nadu', city: 'CHENNAI', taluk: 'Chennai' },
-      '7': { state: 'West Bengal', city: 'KOLKATA', taluk: 'Kolkata' },
-      '8': { state: 'Bihar', city: 'PATNA', taluk: 'Patna' },
-    };
-    const firstDigit = pincode.charAt(0);
-    const region = stateMap[firstDigit] || { state: 'India', city: 'Central Post', taluk: 'HQ' };
+    const cleanPin = String(pincode).trim();
+    if (!/^[1-8]\d{5}$/.test(cleanPin)) {
+      return [];
+    }
+
+    const invalidPins = ['000000', '111111', '222222', '333333', '444444', '555555', '666666', '777777', '888888', '999999', '123456', '654321', '000001'];
+    if (invalidPins.includes(cleanPin)) {
+      return [];
+    }
+
+    const prefix2 = parseInt(cleanPin.substring(0, 2), 10);
+    let region: { state: string; city: string; taluk: string } | null = null;
+
+    if (prefix2 === 11) region = { state: 'Delhi', city: 'NEW DELHI', taluk: 'New Delhi' };
+    else if (prefix2 >= 12 && prefix2 <= 13) region = { state: 'Haryana', city: 'GURUGRAM', taluk: 'Gurugram' };
+    else if (prefix2 >= 14 && prefix2 <= 15) region = { state: 'Punjab', city: 'LUDHIANA', taluk: 'Ludhiana' };
+    else if (prefix2 === 16) region = { state: 'Chandigarh', city: 'CHANDIGARH', taluk: 'Chandigarh' };
+    else if (prefix2 === 17) region = { state: 'Himachal Pradesh', city: 'SHIMLA', taluk: 'Shimla' };
+    else if (prefix2 >= 18 && prefix2 <= 19) region = { state: 'Jammu & Kashmir', city: 'SRINAGAR', taluk: 'Srinagar' };
+    else if (prefix2 >= 20 && prefix2 <= 28) region = { state: 'Uttar Pradesh', city: 'LUCKNOW', taluk: 'Lucknow' };
+    else if (prefix2 >= 30 && prefix2 <= 34) region = { state: 'Rajasthan', city: 'JAIPUR', taluk: 'Jaipur' };
+    else if (prefix2 >= 36 && prefix2 <= 39) region = { state: 'Gujarat', city: 'AHMEDABAD', taluk: 'Ahmedabad' };
+    else if (prefix2 >= 40 && prefix2 <= 44) region = { state: 'Maharashtra', city: 'MUMBAI', taluk: 'Mumbai City' };
+    else if (prefix2 >= 45 && prefix2 <= 48) region = { state: 'Madhya Pradesh', city: 'BHOPAL', taluk: 'Bhopal' };
+    else if (prefix2 === 49) region = { state: 'Chhattisgarh', city: 'RAIPUR', taluk: 'Raipur' };
+    else if (prefix2 >= 50 && prefix2 <= 53) region = { state: 'Telangana', city: 'HYDERABAD', taluk: 'Hyderabad' };
+    else if (prefix2 >= 56 && prefix2 <= 59) region = { state: 'Karnataka', city: 'BENGALURU', taluk: 'Bengaluru Urban' };
+    else if (prefix2 >= 60 && prefix2 <= 64) region = { state: 'Tamil Nadu', city: 'CHENNAI', taluk: 'Chennai' };
+    else if (prefix2 >= 67 && prefix2 <= 69) region = { state: 'Kerala', city: 'KOCHI', taluk: 'Ernakulam' };
+    else if (prefix2 >= 70 && prefix2 <= 74) region = { state: 'West Bengal', city: 'KOLKATA', taluk: 'Kolkata' };
+    else if (prefix2 >= 75 && prefix2 <= 77) region = { state: 'Odisha', city: 'BHUBANESWAR', taluk: 'Khurda' };
+    else if (prefix2 === 78) region = { state: 'Assam', city: 'GUWAHATI', taluk: 'Kamrup' };
+    else if (prefix2 === 79) region = { state: 'Meghalaya', city: 'SHILLONG', taluk: 'East Khasi Hills' };
+    else if (prefix2 >= 80 && prefix2 <= 85) region = { state: 'Bihar', city: 'PATNA', taluk: 'Patna' };
+
+    if (!region) {
+      return [];
+    }
+
     return [
       {
-        pincode: Number(pincode),
+        pincode: Number(cleanPin),
         office_name: region.city + ' Head Post Office (H.O)',
-        office_id: '21' + pincode.substring(0, 4) + '01',
+        office_id: '21' + cleanPin.substring(0, 4) + '01',
         office_type_code: 'HPO',
         state_name: region.state,
         delivery_office_flag: true,
@@ -344,9 +371,9 @@ class IndiaPostService {
         is_rolled_out: true,
       },
       {
-        pincode: Number(pincode),
-        office_name: region.city + ' Sub Post Office (S.O)',
-        office_id: '21' + pincode.substring(0, 4) + '02',
+        pincode: Number(cleanPin),
+        office_name: region.city + ' Delivery Sub Post Office (S.O)',
+        office_id: '21' + cleanPin.substring(0, 4) + '02',
         office_type_code: 'SPO',
         state_name: region.state,
         delivery_office_flag: true,

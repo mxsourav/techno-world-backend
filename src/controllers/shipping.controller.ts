@@ -17,6 +17,13 @@ export const searchPincode = async (req: Request, res: Response, next: NextFunct
   try {
     const { pincode } = req.params;
     const offices = await indiaPostService.searchPincode(pincode);
+    if (!offices || offices.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: `Invalid or non-existent Indian postal PIN code: ${pincode}`,
+      });
+      return;
+    }
     res.json({
       success: true,
       count: offices.length,

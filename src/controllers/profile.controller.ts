@@ -437,3 +437,77 @@ export const getPointTransactions = async (req: Request, res: Response, next: Ne
     next(error);
   }
 };
+
+// GET /api/v1/profile/orders
+export const getUserOrders = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = (req as any).user?.userId || (req as any).user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+
+    const orders = await prisma.order.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: {
+          include: {
+            book: {
+              select: {
+                id: true,
+                title: true,
+                slug: true,
+                coverUrl: true,
+                price: true,
+                mrp: true,
+                authors: true,
+              },
+            },
+          },
+        },
+        address: true,
+      },
+    });
+
+    res.status(200).json({ success: true, count: orders.length, data: orders });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/v1/profile/notifications
+export const getUserNotifications = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = (req as any).user?.userId || (req as any).user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+
+    const notifications = await prisma.notification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    res.status(200).json({ success: true, count: notifications.length, data: notifications });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PATCH /api/v1/profile/notifications/:id/read
+export const markNotificationRead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.userId || (req as any).user?.id;
+    await prisma.notification.updateMany({
+      where: { id, userId },
+      data: { isRead: true },
+    });
+    res.status(200).json({ success: true, message: 'Notification marked as read' });
+  } catch (error) {
+    next(error);
+  }
+};

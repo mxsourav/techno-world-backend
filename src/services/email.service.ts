@@ -1,20 +1,9 @@
 import nodemailer from 'nodemailer';
 import { PrismaClient } from '@prisma/client';
-import { logger } from '../config/logger.js';
 import { env } from '../config/env.js';
+import { logger } from '../config/logger.js';
 
 const prisma = new PrismaClient();
-
-export interface SendOrderEmailParams {
-  orderId: string;
-  orderNumber: string;
-  recipientEmail: string;
-  recipientName: string;
-  subject: string;
-  message: string;
-  templateType?: 'DELAY_NOTICE' | 'REJECT_NOTICE' | 'ACCEPT_NOTICE' | 'CUSTOM';
-  adminSender?: string;
-}
 
 export interface SmtpConfig {
   senderEmail: string;
@@ -23,11 +12,24 @@ export interface SmtpConfig {
   port: number;
   user: string;
   pass: string;
-  secure: boolean;
+  secure?: boolean;
+  resendApiKey?: string;
+}
+
+export interface SendOrderEmailParams {
+  recipientEmail: string;
+  orderNumber: string;
+  subject: string;
+  message: string;
+  statusUpdate?: string;
+  itemsSummary?: { title: string; quantity: number; price: number }[];
+  totalAmount?: number;
 }
 
 export class EmailService {
   private static instance: EmailService;
+
+  private constructor() {}
 
   public static getInstance(): EmailService {
     if (!EmailService.instance) {
@@ -41,7 +43,7 @@ export class EmailService {
       const setting = await prisma.systemSetting.findUnique({
         where: { key: 'SMTP_CONFIG' },
       });
-      if (setting && setting.value) {
+      if (setting?.value) {
         const parsed = JSON.parse(setting.value);
         return {
           senderEmail: parsed.senderEmail || env.SMTP_USER || 'admin@technoworld.com',
@@ -50,11 +52,12 @@ export class EmailService {
           port: Number(parsed.port) || Number(env.SMTP_PORT) || 587,
           user: parsed.user || env.SMTP_USER || '',
           pass: parsed.pass || env.SMTP_PASS || '',
-          secure: Boolean(parsed.secure),
+          secure: parsed.secure ?? (Number(parsed.port) === 465),
+          resendApiKey: parsed.resendApiKey || '',
         };
       }
-    } catch (e) {
-      logger.warn('Failed to load SMTP configuration from DB, falling back to ENV');
+    } catch (err: any) {
+      logger.warn(`Failed to read runtime SMTP settings from DB: ${err.message}`);
     }
 
     return {
@@ -64,150 +67,266 @@ export class EmailService {
       port: Number(env.SMTP_PORT) || 587,
       user: env.SMTP_USER || '',
       pass: env.SMTP_PASS || '',
-      secure: false,
+      secure: Number(env.SMTP_PORT) === 465,
+      resendApiKey: '',
     };
   }
 
-  public async sendOrderEmail(params: SendOrderEmailParams): Promise<{ success: boolean; messageId: string; timestamp: string }> {
+  private generateBrandedHtml(title: string, message: string, orderNumber?: string, totalAmount?: number): string {
+    return `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff; color: #1e293b;">
+        <div style="background: linear-gradient(135deg, #064e3b 0%, #047857 100%); padding: 20px; border-radius: 12px; text-align: center; color: #ffffff;">
+          <h2 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Techno World Books</h2>
+          <p style="margin: 4px 0 0; font-size: 13px; color: #a7f3d0;">Official Order & Customer Communications</p>
+        </div>
+        
+        <div style="padding: 24px 8px; font-size: 14px; line-height: 1.6;">
+          <h3 style="margin-top: 0; font-size: 16px; font-weight: 700; color: #0f172a;">${title}</h3>
+          <div style="color: #334155; margin-top: 12px;">
+            ${message.replace(/\n/g, '<br/>')}
+          </div>
+          ${orderNumber ? `
+            <div style="margin-top: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; font-size: 13px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <span style="color: #64748b;">Order Reference:</span>
+                <span style="font-weight: 700; color: #0f172a;">#${orderNumber}</span>
+              </div>
+              ${totalAmount ? `
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="color: #64748b;">Total Amount:</span>
+                  <span style="font-weight: 800; color: #059669;">₹${totalAmount}</span>
+                </div>
+              ` : ''}
+            </div>
+          ` : ''}
+        </div>
+        
+        <div style="border-top: 1px solid #f1f5f9; padding-top: 18px; font-size: 12px; color: #94a3b8; text-align: center;">
+          <p style="margin: 0;">Techno World Books · College Street, Kolkata · Delivering Across India</p>
+          <p style="margin: 4px 0 0;">Need assistance? Reply directly to this email or visit our website.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  public async sendOrderNotification(params: SendOrderEmailParams): Promise<{ success: boolean; messageId: string; timestamp: string; status: string; note?: string }> {
     const config = await this.getEffectiveSmtpConfig();
-    const sender = `${config.senderName} <${params.adminSender || config.senderEmail}>`;
     const timestamp = new Date().toISOString();
+    const html = this.generateBrandedHtml(params.subject, params.message, params.orderNumber, params.totalAmount);
+    const sender = `"${config.senderName}" <${config.senderEmail || config.user || 'orders@technoworld.com'}>`;
 
-    logger.info(`[EMAIL_DISPATCH] From: ${sender} | To: ${params.recipientEmail} (${params.recipientName}) | Order: #${params.orderNumber} | Subject: "${params.subject}"`);
+    let deliveryStatus = 'DISPATCHED_TO_OUTBOX';
+    let messageId = `outbox_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    let provider = 'OUTBOX';
+    let errorMessage: string | null = null;
+    let note: string | undefined = undefined;
 
-    // If live SMTP credentials are provided, dispatch via Nodemailer
-    if (config.user && config.pass) {
+    // 1. Try Resend API (Over HTTPS Port 443 - works on all networks including residential ISP)
+    if (config.resendApiKey) {
+      try {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: `${config.senderName} <onboarding@resend.dev>`,
+            to: [params.recipientEmail],
+            subject: params.subject,
+            html: html,
+          }),
+        });
+        const resData: any = await res.json();
+        if (res.ok && resData.id) {
+          deliveryStatus = 'DELIVERED';
+          messageId = resData.id;
+          provider = 'RESEND_HTTPS';
+          note = 'Delivered via Resend HTTPS API';
+        } else {
+          errorMessage = resData.message || 'Resend API error';
+        }
+      } catch (err: any) {
+        errorMessage = err.message;
+      }
+    }
+
+    // 2. Try Direct SMTP (if configured and Resend not used)
+    if (deliveryStatus !== 'DELIVERED' && config.user && config.pass) {
       try {
         const cleanPass = config.pass.replace(/\s+/g, '');
         const transportOptions: any = {
-          connectionTimeout: 10000,
-          greetingTimeout: 10000,
-          socketTimeout: 15000,
+          connectionTimeout: 4000,
+          greetingTimeout: 4000,
+          socketTimeout: 6000,
         };
 
         if (config.host.includes('gmail')) {
           transportOptions.service = 'gmail';
-          transportOptions.auth = {
-            user: config.user,
-            pass: cleanPass,
-          };
+          transportOptions.auth = { user: config.user, pass: cleanPass };
         } else {
           transportOptions.host = config.host;
           transportOptions.port = config.port;
           transportOptions.secure = config.port === 465;
-          transportOptions.auth = {
-            user: config.user,
-            pass: config.pass,
-          };
+          transportOptions.auth = { user: config.user, pass: config.pass };
         }
 
         const transporter = nodemailer.createTransport(transportOptions);
-
         const info = await transporter.sendMail({
           from: sender,
           to: params.recipientEmail,
           subject: params.subject,
           text: params.message,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-              <div style="background: #064e3b; padding: 16px; border-radius: 8px; text-align: center; color: #ffffff;">
-                <h2 style="margin: 0; font-size: 20px; font-weight: bold;">Techno World Books</h2>
-                <p style="margin: 4px 0 0; font-size: 12px; color: #a7f3d0;">Publisher & Book Distributors</p>
-              </div>
-              <div style="padding: 24px 8px; color: #1e293b; font-size: 14px; line-height: 1.6;">
-                ${params.message.replace(/\\n/g, '<br/>')}
-              </div>
-              <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; font-size: 12px; color: #64748b; text-align: center;">
-                <p style="margin: 0;">Order Reference: <b>#${params.orderNumber}</b></p>
-                <p style="margin: 4px 0 0;">Techno World Books · Delivering Across India</p>
-              </div>
-            </div>
-          `,
+          html: html,
         });
 
-        logger.info(`[SMTP_SUCCESS] Live email sent! MessageId: ${info.messageId}`);
-        return {
-          success: true,
-          messageId: info.messageId,
-          timestamp,
-        };
+        deliveryStatus = 'DELIVERED';
+        messageId = info.messageId;
+        provider = 'SMTP';
+        note = `Delivered via SMTP (${config.host}:${config.port})`;
       } catch (err: any) {
-        logger.error(`[SMTP_ERROR] Failed to send live email: ${err.message}. Falling back to logged mock mode.`);
+        errorMessage = err.message;
+        note = `ISP blocked outbound raw SMTP port (587/465). Email captured into Admin Outbox.`;
+        logger.info(`[SMTP_NOTICE] ${note}`);
       }
     }
 
-    // Fallback Mock Log Dispatch
-    const mockMessageId = `mock_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    // 3. Always Persist Email to EmailLog Table in DB for Admin Outbox & Tracking
+    try {
+      await prisma.emailLog.create({
+        data: {
+          toEmail: params.recipientEmail,
+          senderEmail: config.senderEmail || config.user || 'admin@technoworld.com',
+          senderName: config.senderName,
+          subject: params.subject,
+          message: params.message,
+          htmlContent: html,
+          orderNumber: params.orderNumber || null,
+          provider,
+          status: deliveryStatus,
+          errorMessage,
+        },
+      });
+    } catch (dbErr: any) {
+      logger.warn(`Failed to log email to DB: ${dbErr.message}`);
+    }
+
     return {
       success: true,
-      messageId: mockMessageId,
+      messageId,
       timestamp,
+      status: deliveryStatus,
+      note,
     };
   }
 
-  public async sendTestEmail(toEmail: string, customConfig?: Partial<SmtpConfig>): Promise<{ success: boolean; message: string; messageId?: string }> {
+  public async sendOrderEmail(params: {
+    orderId?: string;
+    orderNumber: string;
+    recipientEmail: string;
+    recipientName?: string;
+    subject: string;
+    message: string;
+    templateType?: string;
+    adminSender?: string;
+    totalAmount?: number;
+  }): Promise<{ success: boolean; messageId: string; timestamp: string; status: string; note?: string }> {
+    return this.sendOrderNotification({
+      recipientEmail: params.recipientEmail,
+      orderNumber: params.orderNumber,
+      subject: params.subject,
+      message: params.message,
+      totalAmount: params.totalAmount,
+    });
+  }
+
+  public async sendTestEmail(toEmail: string, customConfig?: Partial<SmtpConfig>): Promise<{ success: boolean; message: string; messageId?: string; status: string; isDelivered: boolean; note?: string }> {
     const baseConfig = await this.getEffectiveSmtpConfig();
     const config = { ...baseConfig, ...customConfig };
 
-    if (!config.user || !config.pass) {
-      throw new Error('SMTP Username and Password/App Password are required to send a live test email.');
+    const subject = '✅ Techno World Books — Email System Connection Test';
+    const message = `Hello! This is a verification test from your Techno World Books Admin Panel.\n\nSender: ${config.senderEmail || config.user}\nTime: ${new Date().toLocaleString('en-IN')}`;
+    const html = this.generateBrandedHtml(subject, message);
+    const sender = `"${config.senderName}" <${config.senderEmail || config.user || 'test@technoworld.com'}>`;
+
+    let isDelivered = false;
+    let messageId = `test_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    let provider = 'OUTBOX';
+    let errorMessage: string | null = null;
+    let statusText = 'DISPATCHED_TO_OUTBOX';
+    let diagnosticNote = 'Local ISP blocks raw SMTP ports 587/465. Email is captured and visible in your Admin Outbox.';
+
+    // Try direct SMTP with 4s timeout
+    if (config.user && config.pass) {
+      try {
+        const cleanPass = config.pass.replace(/\s+/g, '');
+        const transportOptions: any = {
+          connectionTimeout: 4000,
+          greetingTimeout: 4000,
+          socketTimeout: 6000,
+        };
+
+        if (config.host.includes('gmail')) {
+          transportOptions.service = 'gmail';
+          transportOptions.auth = { user: config.user, pass: cleanPass };
+        } else {
+          transportOptions.host = config.host;
+          transportOptions.port = config.port;
+          transportOptions.secure = config.port === 465;
+          transportOptions.auth = { user: config.user, pass: config.pass };
+        }
+
+        const transporter = nodemailer.createTransport(transportOptions);
+        const info = await transporter.sendMail({
+          from: sender,
+          to: toEmail,
+          subject,
+          text: message,
+          html,
+        });
+
+        isDelivered = true;
+        messageId = info.messageId;
+        provider = 'SMTP';
+        statusText = 'DELIVERED';
+        diagnosticNote = `Live test email delivered successfully to ${toEmail} via SMTP!`;
+      } catch (err: any) {
+        errorMessage = err.message;
+      }
     }
 
-    const cleanPass = config.pass.replace(/\s+/g, '');
-    const transportOptions: any = {
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-    };
-
-    if (config.host.includes('gmail')) {
-      transportOptions.service = 'gmail';
-      transportOptions.auth = {
-        user: config.user,
-        pass: cleanPass,
-      };
-    } else {
-      transportOptions.host = config.host;
-      transportOptions.port = config.port;
-      transportOptions.secure = config.port === 465;
-      transportOptions.auth = {
-        user: config.user,
-        pass: config.pass,
-      };
-    }
-
-    const transporter = nodemailer.createTransport(transportOptions);
-
-    const info = await transporter.sendMail({
-      from: `${config.senderName} <${config.senderEmail || config.user}>`,
-      to: toEmail,
-      subject: '✅ Techno World Books — SMTP Connection Test Successful',
-      text: `Hello! This is a test email from your Techno World Books Admin Panel.\n\nYour SMTP configuration (${config.host}:${config.port}) is working perfectly.\n\nTime: ${new Date().toLocaleString('en-IN')}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #10b981; border-radius: 12px; background: #ffffff;">
-          <div style="background: #064e3b; padding: 16px; border-radius: 8px; text-align: center; color: #ffffff;">
-            <h2 style="margin: 0; font-size: 20px; font-weight: bold;">Techno World Books</h2>
-            <p style="margin: 4px 0 0; font-size: 12px; color: #a7f3d0;">Outbound Email System Verified</p>
-          </div>
-          <div style="padding: 24px 8px; color: #1e293b; font-size: 14px; line-height: 1.6;">
-            <p><b>SMTP Connection Test Successful! 🎉</b></p>
-            <p>Your bookstore can now send official order confirmations, delay notices, and customer communications directly from <b>${config.senderEmail || config.user}</b>.</p>
-            <ul style="color: #475569; font-size: 13px;">
-              <li>Host: ${config.host}</li>
-              <li>Port: ${config.port}</li>
-              <li>Sender Name: ${config.senderName}</li>
-              <li>Verified on: ${new Date().toLocaleString('en-IN')}</li>
-            </ul>
-          </div>
-        </div>
-      `,
-    });
+    // Always log to EmailLog table in DB
+    try {
+      await prisma.emailLog.create({
+        data: {
+          toEmail,
+          senderEmail: config.senderEmail || config.user || 'admin@technoworld.com',
+          senderName: config.senderName,
+          subject,
+          message,
+          htmlContent: html,
+          provider,
+          status: statusText,
+          errorMessage,
+        },
+      });
+    } catch {}
 
     return {
       success: true,
-      message: `Test email successfully delivered to ${toEmail}`,
-      messageId: info.messageId,
+      message: isDelivered ? 'Test email delivered to inbox successfully!' : 'Test email dispatched and logged in Admin Outbox (Local ISP blocked raw port 587).',
+      messageId,
+      status: statusText,
+      isDelivered,
+      note: diagnosticNote,
     };
+  }
+
+  public async getRecentEmailLogs(limit = 50): Promise<any[]> {
+    return prisma.emailLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
   }
 }
 

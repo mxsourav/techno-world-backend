@@ -546,3 +546,21 @@ model SystemSetting {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+model EmailLog {
+  id           String   @id @default(uuid())
+  toEmail      String
+  senderEmail  String
+  senderName   String?
+  subject      String
+  message      String
+  htmlContent  String?
+  orderNumber  String?
+  provider     String   @default("SMTP")
+  status       String   @default("SENT")
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([toEmail])
+  @@index([orderNumber])
+}

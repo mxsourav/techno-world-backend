@@ -560,3 +560,15 @@ export const testSmtpSettings = async (req: Request, res: Response, next: NextFu
     res.status(400).json({ success: false, message: error.message || 'SMTP Test failed' });
   }
 };
+
+// GET /api/v1/admin/emails
+export const getEmailLogs = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const limit = Number(req.query.limit) || 50;
+    const { emailService } = await import('../services/email.service.js');
+    const logs = await emailService.getRecentEmailLogs(limit);
+    res.status(200).json({ success: true, count: logs.length, data: logs });
+  } catch (error) {
+    next(error);
+  }
+};

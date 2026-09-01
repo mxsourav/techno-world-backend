@@ -6,6 +6,7 @@ import {
   updateAdminProfile,
   updateSmtpSettings,
   testSmtpSettings,
+  getEmailLogs,
   analyzeImportBookCatalog, 
   executeImportBookCatalog,
   getBookPreview,
@@ -31,6 +32,7 @@ router.get('/settings', getAdminSettings);
 router.patch('/profile', updateAdminProfile);
 router.put('/smtp', updateSmtpSettings);
 router.post('/smtp/test', testSmtpSettings);
+router.get('/emails', getEmailLogs);
 
 // Logs
 router.get('/books/:id/logs', getActivityLogs);

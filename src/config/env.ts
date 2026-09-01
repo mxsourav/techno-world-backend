@@ -22,6 +22,15 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  // India Post Integration Configuration
+  INDIAPOST_BASE_URL: z.string().default('https://test.cept.gov.in'),
+  INDIAPOST_CUSTOMER_ID: z.string().default('3000064781'),
+  INDIAPOST_CONTRACT_ID: z.string().default('41585456'),
+  INDIAPOST_USERNAME: z.string().default('9999999999'),
+  INDIAPOST_PASSWORD: z.string().default('Dop@1234'),
+  INDIAPOST_WEBHOOK_SECRET: z.string().optional(),
+  INDIAPOST_ALLOWED_IPS: z.string().default('127.0.0.1,::1'),
+  INDIAPOST_USE_SANDBOX_FALLBACK: z.string().default('true'),
 });
 
 const parsed = envSchema.safeParse(process.env);

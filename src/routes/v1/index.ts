@@ -11,6 +11,7 @@ import promotionRoutes from './promotion.routes.js';
 import campaignRoutes from './campaign.routes.js';
 import pricingRoutes from './pricing.routes.js';
 import webhookRoutes from './webhook.routes.js';
+import shippingRoutes from './shipping.routes.js';
 
 const router = Router();
 
@@ -35,5 +36,6 @@ router.use('/promotions', promotionRoutes);
 router.use('/campaigns', campaignRoutes);
 router.use('/pricing', pricingRoutes);
 router.use('/webhook', webhookRoutes);
+router.use('/shipping', shippingRoutes);
 
 export default router;

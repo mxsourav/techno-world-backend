@@ -59,6 +59,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
+    // Atomic Transaction: Stock decrement + Order Creation + Address Deduplication + Loyalty Points Increment
     const order = await prisma.$transaction(async (tx) => {
       const orderItems: any[] = [];
       
@@ -85,31 +86,55 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         }
       }
 
-      // Safe address handling without FK violations
+      // Address Deduplication: Search for identical address before creating
       let finalAddressId: string | null = null;
       if (addressId) {
-        const existingAddr = await tx.address.findUnique({ where: { id: addressId } });
+        const existingAddr = await tx.address.findFirst({ where: { id: addressId, userId } });
         if (existingAddr) {
           finalAddressId = existingAddr.id;
         }
       }
 
       if (!finalAddressId && address) {
-        const createdAddr = await tx.address.create({
-          data: {
-            userId: userId,
-            fullName: address.fullName || address.name || 'Valued Customer',
-            phone: address.phone || '9876543210',
-            addressLine1: address.addressLine1 || address.line1 || 'Address Line 1',
-            addressLine2: address.addressLine2 || address.line2 || null,
-            city: address.city || 'Kolkata',
-            state: address.state || 'West Bengal',
-            pincode: address.pincode || '700001',
-            country: 'India',
-            isDefault: true,
-          }
+        const line1 = (address.addressLine1 || address.line1 || '').trim();
+        const pin = (address.pincode || '').trim();
+
+        // Check if an identical address already exists for this user
+        const dedupeAddr = await tx.address.findFirst({
+          where: {
+            userId,
+            addressLine1: line1,
+            pincode: pin,
+          },
         });
-        finalAddressId = createdAddr.id;
+
+        if (dedupeAddr) {
+          finalAddressId = dedupeAddr.id;
+          await tx.address.update({
+            where: { id: dedupeAddr.id },
+            data: {
+              fullName: address.fullName || address.name || dedupeAddr.fullName,
+              phone: address.phone || dedupeAddr.phone,
+            },
+          });
+        } else {
+          const createdAddr = await tx.address.create({
+            data: {
+              userId,
+              fullName: address.fullName || address.name || 'Valued Customer',
+              phone: address.phone || '9876543210',
+              addressLine1: line1 || 'Delivery Address',
+              addressLine2: (address.addressLine2 || address.line2 || null)?.trim(),
+              city: (address.city || 'Kolkata').trim(),
+              state: (address.state || 'West Bengal').trim(),
+              pincode: pin || '700001',
+              type: address.type || 'HOME',
+              country: 'India',
+              isDefault: true,
+            },
+          });
+          finalAddressId = createdAddr.id;
+        }
       }
 
       const created = await tx.order.create({
@@ -143,6 +168,30 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
             userId: userId,
             orderId: created.id
           }
+        });
+      }
+
+      // Techno Points Loyalty Engine: 1 point/coin for every ₹100 spent
+      const pointsEarned = Math.floor(pricingResult.totalAmount / 100);
+      if (pointsEarned > 0 && userId) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { technoPoints: { increment: pointsEarned } },
+        });
+
+        const oneYearExpiry = new Date();
+        oneYearExpiry.setFullYear(oneYearExpiry.getFullYear() + 1);
+
+        await tx.pointTransaction.create({
+          data: {
+            userId,
+            orderId: created.id,
+            points: pointsEarned,
+            type: 'EARNED',
+            status: 'CREDITED',
+            description: `Earned ${pointsEarned} Techno Points on Order #${created.orderNumber} (1 Year Validity)`,
+            expiresAt: oneYearExpiry,
+          },
         });
       }
 
@@ -312,10 +361,19 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
       include: { items: { include: { book: true } }, user: true, address: true },
     });
 
-    // If order was cancelled / rejected, send notification email
+    // If order was cancelled / rejected, revoke points if previously credited
     if (status === 'CANCELLED') {
       const recipientEmail = order.user?.email || 'customer@example.com';
       const recipientName = order.address?.fullName || order.user?.name || 'Valued Customer';
+      
+      const pointsToRevoke = Math.floor(order.totalAmount / 100);
+      if (pointsToRevoke > 0 && order.userId) {
+        await prisma.user.update({
+          where: { id: order.userId },
+          data: { technoPoints: { decrement: Math.min(pointsToRevoke, order.user?.technoPoints || 0) } }
+        });
+      }
+
       await emailService.sendOrderEmail({
         orderId: order.id,
         orderNumber: order.orderNumber,

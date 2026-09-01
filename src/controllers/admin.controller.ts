@@ -29,9 +29,9 @@ export const getAdminStats = async (req: Request, res: Response, next: NextFunct
       prisma.category.count(),
       prisma.publisher.count(),
       prisma.author.count(),
-      prisma.order.count(),
+      prisma.order.count({ where: { status: { notIn: ['CANCELLED', 'REFUNDED'] } } }),
       prisma.user.count(),
-      prisma.order.aggregate({ _sum: { totalAmount: true } }),
+      prisma.order.aggregate({ where: { status: { notIn: ['CANCELLED', 'REFUNDED'] } }, _sum: { totalAmount: true } }),
       prisma.book.count({ where: { stock: { gt: 0, lte: 10 } } }),
       prisma.order.findMany({
         include: {

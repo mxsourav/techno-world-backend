@@ -2,6 +2,10 @@ import { Router } from 'express';
 import { secureUpload as upload, secureDataUpload } from '../../middlewares/upload.middleware.js';
 import { 
   getAdminStats, 
+  getAdminSettings,
+  updateAdminProfile,
+  updateSmtpSettings,
+  testSmtpSettings,
   analyzeImportBookCatalog, 
   executeImportBookCatalog,
   getBookPreview,
@@ -14,10 +18,19 @@ import {
   getActivityLogs
 } from '../../controllers/admin.controller.js';
 
+import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
+
 const router = Router();
 
-// Stats
+// Protect all admin endpoints with requireAuth and requireRole
+router.use(requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']));
+
+// Stats & Settings
 router.get('/stats', getAdminStats);
+router.get('/settings', getAdminSettings);
+router.patch('/profile', updateAdminProfile);
+router.put('/smtp', updateSmtpSettings);
+router.post('/smtp/test', testSmtpSettings);
 
 // Logs
 router.get('/books/:id/logs', getActivityLogs);

@@ -392,3 +392,171 @@ export const getActivityLogs = async (req: Request, res: Response, next: NextFun
     next(error);
   }
 };
+
+// GET /api/v1/admin/settings
+export const getAdminSettings = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const adminId = (req as any).user?.userId || (req as any).user?.id;
+    let adminUser = null;
+    if (adminId) {
+      adminUser = await prisma.user.findUnique({
+        where: { id: adminId },
+        select: { id: true, name: true, email: true, phone: true, role: true, avatarUrl: true },
+      });
+    }
+    if (!adminUser) {
+      adminUser = await prisma.user.findFirst({
+        where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } },
+        select: { id: true, name: true, email: true, phone: true, role: true, avatarUrl: true },
+      });
+    }
+
+    const smtpSetting = await prisma.systemSetting.findUnique({
+      where: { key: 'SMTP_CONFIG' },
+    });
+
+    let smtpConfig = {
+      senderEmail: 'admin@technoworld.com',
+      senderName: 'Techno World Books',
+      host: 'smtp.gmail.com',
+      port: 587,
+      user: '',
+      pass: '',
+      secure: false,
+    };
+
+    if (smtpSetting?.value) {
+      try {
+        const parsed = JSON.parse(smtpSetting.value);
+        smtpConfig = {
+          ...smtpConfig,
+          ...parsed,
+          pass: parsed.pass ? '••••••••••••••••' : '',
+        };
+      } catch {}
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        admin: adminUser,
+        smtp: smtpConfig,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PATCH /api/v1/admin/profile
+export const updateAdminProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    let adminId = (req as any).user?.userId || (req as any).user?.id;
+    if (!adminId) {
+      const fallback = await prisma.user.findFirst({
+        where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } },
+      });
+      adminId = fallback?.id;
+    }
+    const { name, email, phone, password } = req.body;
+
+    const data: any = {};
+    if (name) data.name = name.trim();
+    if (email) data.email = email.trim().toLowerCase();
+    if (phone !== undefined) data.phone = phone ? phone.trim() : null;
+    
+    if (password && password.trim().length >= 6) {
+      const argon2 = await import('argon2');
+      data.password = await argon2.default.hash(password.trim());
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: adminId },
+      data,
+      select: { id: true, name: true, email: true, phone: true, role: true, updatedAt: true },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Admin profile updated successfully',
+      data: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PUT /api/v1/admin/smtp
+export const updateSmtpSettings = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { senderEmail, senderName, host, port, user, pass, secure } = req.body;
+
+    let existingPass = '';
+    const existing = await prisma.systemSetting.findUnique({ where: { key: 'SMTP_CONFIG' } });
+    if (existing?.value) {
+      try {
+        existingPass = JSON.parse(existing.value).pass || '';
+      } catch {}
+    }
+
+    const finalPass = (pass && pass !== '••••••••••••••••') ? pass.trim() : existingPass;
+
+    const configToSave = {
+      senderEmail: (senderEmail || '').trim(),
+      senderName: (senderName || 'Techno World Books').trim(),
+      host: (host || 'smtp.gmail.com').trim(),
+      port: Number(port) || 587,
+      user: (user || '').trim(),
+      pass: finalPass,
+      secure: Boolean(secure),
+    };
+
+    await prisma.systemSetting.upsert({
+      where: { key: 'SMTP_CONFIG' },
+      update: { value: JSON.stringify(configToSave) },
+      create: { key: 'SMTP_CONFIG', value: JSON.stringify(configToSave) },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Outbound email & SMTP settings saved successfully',
+      data: { ...configToSave, pass: configToSave.pass ? '••••••••••••••••' : '' },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/v1/admin/smtp/test
+export const testSmtpSettings = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { toEmail, host, port, user, pass, senderEmail, senderName } = req.body;
+    if (!toEmail) {
+      res.status(400).json({ success: false, message: 'Recipient email address is required for testing' });
+      return;
+    }
+
+    const { emailService } = await import('../services/email.service.js');
+    
+    let effectivePass = pass;
+    if (!pass || pass === '••••••••••••••••') {
+      const existing = await prisma.systemSetting.findUnique({ where: { key: 'SMTP_CONFIG' } });
+      if (existing?.value) {
+        effectivePass = JSON.parse(existing.value).pass || '';
+      }
+    }
+
+    const result = await emailService.sendTestEmail(toEmail, {
+      host,
+      port: port ? Number(port) : undefined,
+      user,
+      pass: effectivePass,
+      senderEmail,
+      senderName,
+    });
+
+    res.status(200).json(result);
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message || 'SMTP Test failed' });
+  }
+};

@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -30,17 +30,17 @@ model User {
   cartItems           CartItem[]
   notifications       Notification[]
   orders              Order[]
+  pointTransactions   PointTransaction[]
   reviews             Review[]
+  savedPaymentMethods SavedPaymentMethod[]
   sessions            Session[]
   wishlistItems       WishlistItem[]
-  savedPaymentMethods SavedPaymentMethod[]
-  pointTransactions   PointTransaction[]
 }
 
 model Session {
   id           String   @id @default(uuid())
   userId       String
-  refreshToken String   @unique
+  refreshToken String   @unique @db.VarChar(512)
   userAgent    String?
   ipAddress    String?
   expiresAt    DateTime
@@ -60,8 +60,8 @@ model Book {
   isbn13           String?            @unique
   edition          String?
   language         String             @default("English")
-  description      String
-  shortDescription String?
+  description      String             @db.Text
+  shortDescription String?            @db.Text
   price            Float
   mrp              Float
   costPrice        Float?
@@ -108,9 +108,9 @@ model Book {
   publisherId      String?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
-  publisher        Publisher?         @relation(fields: [publisherId], references: [id])
   bookType         BookType?          @relation(fields: [bookTypeId], references: [id])
   category         Category?          @relation(fields: [categoryId], references: [id])
+  publisher        Publisher?         @relation(fields: [publisherId], references: [id])
   cartItems        CartItem[]
   inventoryHistory InventoryHistory[]
   orderItems       OrderItem[]
@@ -179,12 +179,12 @@ model Author {
   id          String   @id @default(uuid())
   name        String
   slug        String   @unique
-  bio         String?
+  bio         String?  @db.Text
   imageUrl    String?
   socialLinks String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  biography   String?
+  biography   String?  @db.Text
   books       Book[]   @relation("AuthorToBook")
 
   @@index([slug])
@@ -194,12 +194,12 @@ model Publisher {
   id           String   @id @default(uuid())
   name         String
   slug         String   @unique
-  description  String?
+  description  String?  @db.Text
   logoUrl      String?
   contactEmail String?
   contactPhone String?
   website      String?
-  address      String?
+  address      String?  @db.Text
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   books        Book[]
@@ -235,7 +235,6 @@ model Order {
   id              String        @id @default(uuid())
   orderNumber     String        @unique
   userId          String
-  customerEmail   String?
   addressId       String?
   status          OrderStatus   @default(PENDING)
   paymentStatus   PaymentStatus @default(PENDING)
@@ -250,23 +249,26 @@ model Order {
   trackingNumber  String?
   shippingCarrier String?
   shippingMethod  String?
+  customerEmail   String?
   pickupName      String?
   pickupPhone     String?
   pickupEmail     String?
-  pickupSlots     String?
+  pickupSlots     String?       @db.Text
   selectedPickupSlot String?
   pickupStatus    String?       @default("NONE")
-  notes           String?
+  notes           String?       @db.Text
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
-  promotion       Promotion?    @relation(fields: [promotionId], references: [id])
   address         Address?      @relation(fields: [addressId], references: [id])
+  promotion       Promotion?    @relation(fields: [promotionId], references: [id])
   user            User          @relation(fields: [userId], references: [id])
   items           OrderItem[]
 
   @@index([userId])
   @@index([status])
   @@index([orderNumber])
+  @@index([addressId], map: "Order_addressId_fkey")
+  @@index([promotionId], map: "Order_promotionId_fkey")
 }
 
 model OrderItem {
@@ -289,7 +291,7 @@ model Review {
   bookId     String
   rating     Int
   title      String?
-  content    String?
+  content    String?  @db.Text
   isApproved Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -309,6 +311,7 @@ model WishlistItem {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, bookId])
+  @@index([bookId], map: "WishlistItem_bookId_fkey")
 }
 
 model CartItem {
@@ -322,6 +325,7 @@ model CartItem {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, bookId])
+  @@index([bookId], map: "CartItem_bookId_fkey")
 }
 
 model HomepageCMS {
@@ -330,7 +334,7 @@ model HomepageCMS {
   title      String?
   isEnabled  Boolean  @default(true)
   sortOrder  Int      @default(0)
-  configData String
+  configData String   @db.Text
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -355,7 +359,7 @@ model Media {
 model Settings {
   id        String   @id @default(uuid())
   key       String   @unique
-  value     String
+  value     String   @db.Text
   group     String   @default("general")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -370,7 +374,7 @@ model ActivityLog {
   action    ActivityAction
   entity    String
   entityId  String?
-  details   String?
+  details   String?        @db.Text
   ipAddress String?
   userAgent String?
   createdAt DateTime       @default(now())
@@ -386,7 +390,7 @@ model Notification {
   id        String   @id @default(uuid())
   userId    String
   title     String
-  message   String
+  message   String   @db.Text
   isRead    Boolean  @default(false)
   type      String   @default("info")
   link      String?
@@ -417,7 +421,7 @@ model Promotion {
   campaignId        String?
   name              String
   code              String?          @unique
-  description       String?
+  description       String?          @db.Text
   promotionType     String           @default("UNIVERSAL")
   discountType      String           @default("PERCENTAGE")
   discountValue     Float            @default(0)
@@ -428,7 +432,7 @@ model Promotion {
   priority          Int              @default(0)
   allowCombination  Boolean          @default(false)
   autoApply         Boolean          @default(false)
-  rules             String           @default("{}")
+  rules             String           @default("{}") @db.Text
   usageLimit        Int?
   usageLimitPerUser Int              @default(1)
   usedCount         Int              @default(0)
@@ -436,12 +440,13 @@ model Promotion {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
   orders            Order[]
-  category          Category?        @relation(fields: [categoryId], references: [id])
   campaign          Campaign?        @relation(fields: [campaignId], references: [id])
+  category          Category?        @relation(fields: [categoryId], references: [id])
   usages            PromotionUsage[]
 
   @@index([code])
   @@index([categoryId])
+  @@index([campaignId], map: "Promotion_campaignId_fkey")
 }
 
 model PromotionUsage {
@@ -468,6 +473,61 @@ model InventoryHistory {
 
   @@index([bookId])
   @@index([createdAt])
+}
+
+model SavedPaymentMethod {
+  id         String   @id @default(uuid())
+  userId     String
+  type       String
+  provider   String?
+  maskedData String?
+  holderName String?
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model PointTransaction {
+  id          String   @id @default(uuid())
+  userId      String
+  orderId     String?
+  points      Int
+  type        String
+  status      String   @default("CREDITED")
+  description String?  @db.Text
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model SystemSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}
+
+model EmailLog {
+  id           String   @id @default(uuid())
+  toEmail      String
+  senderEmail  String
+  senderName   String?
+  subject      String
+  message      String   @db.Text
+  htmlContent  String?  @db.LongText
+  orderNumber  String?
+  provider     String   @default("SMTP")
+  status       String   @default("SENT")
+  errorMessage String?  @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([toEmail])
+  @@index([orderNumber])
 }
 
 enum Role {
@@ -519,70 +579,13 @@ enum ActivityAction {
   SETTINGS_CHANGE
 }
 
-
-model SavedPaymentMethod {
-  id         String   @id @default(uuid())
-  userId     String
-  type       String   // UPI, CARD, NETBANKING
-  provider   String?  // Google Pay, PhonePe, Paytm, HDFC, Visa, etc.
-  maskedData String?  // e.g. "rodd***@okhdfcbank" or "•••• 4242"
-  holderName String?
-  isDefault  Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model PointTransaction {
-  id          String   @id @default(uuid())
-  userId      String
-  orderId     String?
-  points      Int
-  type        String   // EARNED, REDEEMED, EXPIRED, REVOKED
-  status      String   @default("CREDITED") // PENDING_RETURN_PERIOD, CREDITED, REVOKED
-  description String?
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-
-model SystemSetting {
-  id        String   @id @default(uuid())
-  key       String   @unique
-  value     String
-  updatedAt DateTime @updatedAt
-}
-
-model EmailLog {
-  id           String   @id @default(uuid())
-  toEmail      String
-  senderEmail  String
-  senderName   String?
-  subject      String
-  message      String
-  htmlContent  String?
-  orderNumber  String?
-  provider     String   @default("SMTP")
-  status       String   @default("SENT")
-  errorMessage String?
-  createdAt    DateTime @default(now())
-
-  @@index([toEmail])
-  @@index([orderNumber])
-}
-
 model SearchLog {
   id             String   @id @default(uuid())
   query          String
   userId         String?
   resultsCount   Int      @default(0)
   source         String?  @default("instant")
-  matchedBookIds String?
+  matchedBookIds String?  @db.Text
   createdAt      DateTime @default(now())
 
   @@index([query])

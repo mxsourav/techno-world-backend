@@ -2,7 +2,7 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import { ExcelRow } from '../import.service.js';
 import { Normalizer } from './normalizer.js';
 
-export type DuplicateStrategy = 'SKIP' | 'UPDATE' | 'REPLACE';
+export type DuplicateStrategy = 'SKIP' | 'UPDATE' | 'ADD_STOCK' | 'REPLACE';
 
 export class Writer {
   static async executeImport(
@@ -100,7 +100,7 @@ export class Writer {
       if (strategy === 'SKIP') {
         recordsSkipped += toUpdate.length;
       } 
-      else if (strategy === 'UPDATE' || strategy === 'REPLACE') {
+      else if (strategy === 'UPDATE' || strategy === 'ADD_STOCK' || strategy === 'REPLACE') {
         for (const row of toUpdate) {
           try {
             const data = mapToBookInput(row);
@@ -146,6 +146,12 @@ export class Writer {
                 if (data.authors.connect.length > 0) mergeData.authors = { set: data.authors.connect };
                 if (data.subjects.connect.length > 0) mergeData.subjects = { set: data.subjects.connect };
                 
+                if (strategy === 'ADD_STOCK') {
+                  mergeData.stock = (existing.stock || 0) + (row.stock || 0);
+                } else if (strategy === 'UPDATE') {
+                  mergeData.stock = row.stock !== undefined ? row.stock : existing.stock;
+                }
+
                 await prisma.book.update({
                   where: { id: existing.id },
                   data: mergeData

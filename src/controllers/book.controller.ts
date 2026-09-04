@@ -57,19 +57,32 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
     }
 
     if (search) {
-      const searchStr = search as string;
+      const searchStr = (search as string).trim();
+      const words = searchStr.split(/\s+/).filter(w => w.length >= 2);
       // SQLite Prisma doesn't support full-text search out of the box, so we use OR with contains
-      // Advanced search: Title, Author, ISBN, Code, Publisher, Subject, Tags
-      where.OR = [
+      // Advanced search: Title, Author, ISBN, Code, SKU, Publisher, Subject, Tags, SEO Keywords
+      const orList: any[] = [
         { title: { contains: searchStr } },
         { isbn13: { contains: searchStr } },
         { isbn10: { contains: searchStr } },
         { bookCode: { contains: searchStr } },
-        { tags: { contains: searchStr } }, // if stored as JSON string
+        { sku: { contains: searchStr } },
+        { seoKeywords: { contains: searchStr } },
+        { tags: { contains: searchStr } },
         { authors: { some: { name: { contains: searchStr } } } },
         { publisher: { name: { contains: searchStr } } },
         { subjects: { some: { name: { contains: searchStr } } } }
       ];
+
+      if (words.length > 1) {
+        words.forEach(w => {
+          orList.push({ seoKeywords: { contains: w } });
+          orList.push({ tags: { contains: w } });
+          orList.push({ title: { contains: w } });
+        });
+      }
+
+      where.OR = orList;
     }
     if (category) {
       where.category = { slug: category as string };
@@ -140,6 +153,20 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
     const total = await prisma.book.count({ where });
 
     const totalPages = Math.ceil(total / limit);
+
+    if (search && typeof search === 'string' && search.trim().length >= 2) {
+      const topBookIds = books.map((b: any) => b.id).slice(0, 10).join(',');
+      const userId = (req as any).user?.userId || (req as any).user?.id || null;
+      prisma.searchLog.create({
+        data: {
+          query: (search as string).trim().toLowerCase(),
+          resultsCount: total,
+          source: 'catalog',
+          userId,
+          matchedBookIds: topBookIds || null,
+        }
+      }).catch(err => console.error('Failed to log catalog search:', err));
+    }
 
     res.status(200).json({
       success: true,

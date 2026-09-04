@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { secureUpload as upload, secureDataUpload } from '../../middlewares/upload.middleware.js';
-import { 
-  getAdminStats, 
+import {
+  getAdminStats,
+  getAdminCustomers,
   getAdminSettings,
   updateAdminProfile,
   updateSmtpSettings,
@@ -16,7 +17,8 @@ import {
   deleteAllBooks,
   updateBook,
   createBook,
-  getActivityLogs
+  getActivityLogs,
+  getSearchAndSalesAnalytics
 } from '../../controllers/admin.controller.js';
 
 import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
@@ -26,8 +28,10 @@ const router = Router();
 // Protect all admin endpoints with requireAuth and requireRole
 router.use(requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']));
 
-// Stats & Settings
+// Stats, Analytics & Settings
 router.get('/stats', getAdminStats);
+router.get('/analytics/search-trends', getSearchAndSalesAnalytics);
+router.get('/customers', getAdminCustomers);
 router.get('/settings', getAdminSettings);
 router.patch('/profile', updateAdminProfile);
 router.put('/smtp', updateSmtpSettings);

@@ -201,8 +201,12 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
 // TODO: [OAUTH_REAL_KEYS_INJECTED] Remove Developer OAuth Bypass once client provides live Google Client ID & Secret
 export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise<void> => {
   try {
-    const devGoogleEmail = (req.body.email || 'google.dev.reader@technoworld.com').trim().toLowerCase();
-    const devGoogleName = req.body.name || 'Google Dev Reader';
+    const devGoogleEmail = (req.body.email || '').trim().toLowerCase();
+    if (!devGoogleEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(devGoogleEmail)) {
+      res.status(400).json({ success: false, message: 'Valid email address is required to sign in' });
+      return;
+    }
+    const devGoogleName = req.body.name || devGoogleEmail.split('@')[0];
     const devGoogleId = req.body.googleId || 'google_dev_test_98765';
     const devAvatar = req.body.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80';
 

@@ -212,8 +212,11 @@ model Address {
   userId       String
   fullName     String
   phone        String
+  email        String?
   addressLine1 String
   addressLine2 String?
+  postOffice   String?
+  landmark     String?
   city         String
   state        String
   pincode      String
@@ -232,6 +235,7 @@ model Order {
   id              String        @id @default(uuid())
   orderNumber     String        @unique
   userId          String
+  customerEmail   String?
   addressId       String?
   status          OrderStatus   @default(PENDING)
   paymentStatus   PaymentStatus @default(PENDING)
@@ -245,6 +249,13 @@ model Order {
   promotionId     String?
   trackingNumber  String?
   shippingCarrier String?
+  shippingMethod  String?
+  pickupName      String?
+  pickupPhone     String?
+  pickupEmail     String?
+  pickupSlots     String?
+  selectedPickupSlot String?
+  pickupStatus    String?       @default("NONE")
   notes           String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -563,4 +574,17 @@ model EmailLog {
 
   @@index([toEmail])
   @@index([orderNumber])
+}
+
+model SearchLog {
+  id             String   @id @default(uuid())
+  query          String
+  userId         String?
+  resultsCount   Int      @default(0)
+  source         String?  @default("instant")
+  matchedBookIds String?
+  createdAt      DateTime @default(now())
+
+  @@index([query])
+  @@index([createdAt])
 }

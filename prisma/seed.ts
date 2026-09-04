@@ -29,7 +29,7 @@ async function main() {
     });
   }
 
-  const seedDataPath = path.resolve(process.cwd(), 'prisma/seedData.json');
+  const seedDataPath = path.resolve(process.cwd(), 'seedData.json');
   const seedData = JSON.parse(fs.readFileSync(seedDataPath, 'utf-8'));
 
   // Seed Categories

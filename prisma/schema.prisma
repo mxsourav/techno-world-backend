@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -40,7 +40,7 @@ model User {
 model Session {
   id           String   @id @default(uuid())
   userId       String
-  refreshToken String   @unique
+  refreshToken String   @unique @db.VarChar(512)
   userAgent    String?
   ipAddress    String?
   expiresAt    DateTime
@@ -60,8 +60,8 @@ model Book {
   isbn13           String?            @unique
   edition          String?
   language         String             @default("English")
-  description      String
-  shortDescription String?
+  description      String             @db.Text
+  shortDescription String?            @db.Text
   price            Float
   mrp              Float
   costPrice        Float?
@@ -179,12 +179,12 @@ model Author {
   id          String   @id @default(uuid())
   name        String
   slug        String   @unique
-  bio         String?
+  bio         String?  @db.Text
   imageUrl    String?
   socialLinks String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  biography   String?
+  biography   String?  @db.Text
   books       Book[]   @relation("AuthorToBook")
 
   @@index([slug])
@@ -194,12 +194,12 @@ model Publisher {
   id           String   @id @default(uuid())
   name         String
   slug         String   @unique
-  description  String?
+  description  String?  @db.Text
   logoUrl      String?
   contactEmail String?
   contactPhone String?
   website      String?
-  address      String?
+  address      String?  @db.Text
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   books        Book[]
@@ -245,7 +245,7 @@ model Order {
   promotionId     String?
   trackingNumber  String?
   shippingCarrier String?
-  notes           String?
+  notes           String?       @db.Text
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   promotion       Promotion?    @relation(fields: [promotionId], references: [id])
@@ -278,7 +278,7 @@ model Review {
   bookId     String
   rating     Int
   title      String?
-  content    String?
+  content    String?  @db.Text
   isApproved Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -319,7 +319,7 @@ model HomepageCMS {
   title      String?
   isEnabled  Boolean  @default(true)
   sortOrder  Int      @default(0)
-  configData String
+  configData String   @db.Text
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -344,7 +344,7 @@ model Media {
 model Settings {
   id        String   @id @default(uuid())
   key       String   @unique
-  value     String
+  value     String   @db.Text
   group     String   @default("general")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -359,7 +359,7 @@ model ActivityLog {
   action    ActivityAction
   entity    String
   entityId  String?
-  details   String?
+  details   String?        @db.Text
   ipAddress String?
   userAgent String?
   createdAt DateTime       @default(now())
@@ -375,7 +375,7 @@ model Notification {
   id        String   @id @default(uuid())
   userId    String
   title     String
-  message   String
+  message   String   @db.Text
   isRead    Boolean  @default(false)
   type      String   @default("info")
   link      String?
@@ -406,7 +406,7 @@ model Promotion {
   campaignId        String?
   name              String
   code              String?          @unique
-  description       String?
+  description       String?          @db.Text
   promotionType     String           @default("UNIVERSAL")
   discountType      String           @default("PERCENTAGE")
   discountValue     Float            @default(0)
@@ -417,7 +417,7 @@ model Promotion {
   priority          Int              @default(0)
   allowCombination  Boolean          @default(false)
   autoApply         Boolean          @default(false)
-  rules             String           @default("{}")
+  rules             String           @default("{}") @db.Text
   usageLimit        Int?
   usageLimitPerUser Int              @default(1)
   usedCount         Int              @default(0)
@@ -531,7 +531,7 @@ model PointTransaction {
   points      Int
   type        String   // EARNED, REDEEMED, EXPIRED, REVOKED
   status      String   @default("CREDITED") // PENDING_RETURN_PERIOD, CREDITED, REVOKED
-  description String?
+  description String?  @db.Text
   expiresAt   DateTime
   createdAt   DateTime @default(now())
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -543,7 +543,7 @@ model PointTransaction {
 model SystemSetting {
   id        String   @id @default(uuid())
   key       String   @unique
-  value     String
+  value     String   @db.Text
   updatedAt DateTime @updatedAt
 }
 
@@ -553,12 +553,12 @@ model EmailLog {
   senderEmail  String
   senderName   String?
   subject      String
-  message      String
-  htmlContent  String?
+  message      String   @db.Text
+  htmlContent  String?  @db.LongText
   orderNumber  String?
   provider     String   @default("SMTP")
   status       String   @default("SENT")
-  errorMessage String?
+  errorMessage String?  @db.Text
   createdAt    DateTime @default(now())
 
   @@index([toEmail])

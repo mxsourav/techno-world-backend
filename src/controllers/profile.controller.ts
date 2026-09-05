@@ -136,7 +136,7 @@ export const createAddress = async (req: Request, res: Response, next: NextFunct
       return;
     }
 
-    const { fullName, phone, addressLine1, addressLine2, city, state, pincode, type = 'HOME', isDefault = false } = req.body;
+    const { fullName, phone, addressLine1, addressLine2, postOffice, landmark, city, state, pincode, type = 'HOME', isDefault = false } = req.body;
 
     // Deduplication check: does an identical address already exist for this user?
     const existing = await prisma.address.findFirst({
@@ -191,6 +191,8 @@ export const createAddress = async (req: Request, res: Response, next: NextFunct
         phone,
         addressLine1: addressLine1.trim(),
         addressLine2: addressLine2?.trim() || null,
+        postOffice: (postOffice || '').trim(),
+        landmark: landmark?.trim() || null,
         city: city.trim(),
         state: state.trim(),
         pincode: pincode.trim(),
@@ -232,7 +234,7 @@ export const updateAddress = async (req: Request, res: Response, next: NextFunct
       return;
     }
 
-    const { fullName, phone, addressLine1, addressLine2, city, state, pincode, type, isDefault } = req.body;
+    const { fullName, phone, addressLine1, addressLine2, postOffice, landmark, city, state, pincode, type, isDefault } = req.body;
 
     if (isDefault) {
       await prisma.address.updateMany({
@@ -248,6 +250,8 @@ export const updateAddress = async (req: Request, res: Response, next: NextFunct
         ...(phone ? { phone } : {}),
         ...(addressLine1 ? { addressLine1: addressLine1.trim() } : {}),
         ...(addressLine2 !== undefined ? { addressLine2: addressLine2?.trim() || null } : {}),
+        ...(postOffice ? { postOffice: postOffice.trim() } : {}),
+        ...(landmark !== undefined ? { landmark: landmark?.trim() || null } : {}),
         ...(city ? { city: city.trim() } : {}),
         ...(state ? { state: state.trim() } : {}),
         ...(pincode ? { pincode: pincode.trim() } : {}),

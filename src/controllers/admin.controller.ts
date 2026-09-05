@@ -233,6 +233,20 @@ export const updateBook = async (req: Request, res: Response, next: NextFunction
     if (body.publicationDate !== undefined) {
       data.publicationDate = body.publicationDate ? new Date(body.publicationDate) : null;
     }
+    if (body.seoKeywords !== undefined) {
+      if (Array.isArray(body.seoKeywords)) {
+        data.seoKeywords = body.seoKeywords.join(', ');
+      } else {
+        data.seoKeywords = String(body.seoKeywords || '');
+      }
+    }
+    if (body.tags !== undefined) {
+      if (Array.isArray(body.tags)) {
+        data.tags = body.tags.join(', ');
+      } else {
+        data.tags = String(body.tags || '');
+      }
+    }
 
     // Handle Category upsert / update
     if (body.category !== undefined && typeof body.category === 'string' && body.category.trim() !== '') {
@@ -357,6 +371,8 @@ export const createBook = async (req: Request, res: Response, next: NextFunction
       categoryId,
       publisherId,
       bookTypeId,
+      seoKeywords: Array.isArray(body.seoKeywords) ? body.seoKeywords.join(', ') : (body.seoKeywords || ''),
+      tags: Array.isArray(body.tags) ? body.tags.join(', ') : (body.tags || ''),
       status: 'PUBLISHED'
     };
     const book = await prisma.book.create({ data });
@@ -568,6 +584,341 @@ export const getEmailLogs = async (req: Request, res: Response, next: NextFuncti
     const { emailService } = await import('../services/email.service.js');
     const logs = await emailService.getRecentEmailLogs(limit);
     res.status(200).json({ success: true, count: logs.length, data: logs });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAdminCustomers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { search, page = 1, limit = 50 } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const where: any = {};
+    if (search && typeof search === 'string' && search.trim()) {
+      const q = search.trim();
+      where.OR = [
+        { name: { contains: q } },
+        { email: { contains: q } },
+        { phone: { contains: q } },
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          role: true,
+          technoPoints: true,
+          createdAt: true,
+          addresses: {
+            orderBy: { isDefault: 'desc' },
+            take: 3,
+          },
+          orders: {
+            select: {
+              id: true,
+              orderNumber: true,
+              totalAmount: true,
+              status: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: Number(limit),
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    const formattedUsers = users.map((u: any) => {
+      const totalOrders = u.orders.length;
+      const totalSpent = u.orders
+        .filter((o: any) => o.status !== 'CANCELLED' && o.status !== 'REFUNDED')
+        .reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0);
+
+      return {
+        ...u,
+        totalOrders,
+        totalSpent,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Customers fetched successfully',
+      data: {
+        customers: formattedUsers,
+        total,
+        page: Number(page),
+        limit: Number(limit),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/v1/admin/analytics/search-trends
+export const getSearchAndSalesAnalytics = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { period = '30d', startDate, endDate } = req.query;
+
+    let start = new Date();
+    let end = new Date();
+
+    if (period === 'today') {
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+    } else if (period === '7d') {
+      start = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    } else if (period === '30d') {
+      start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    } else if (period === '90d') {
+      start = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    } else if (period === 'year') {
+      start = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+    } else if (period === 'custom' && startDate) {
+      start = new Date(startDate as string);
+      if (endDate) {
+        end = new Date(endDate as string);
+        end.setHours(23, 59, 59, 999);
+      }
+    } else {
+      // Default 30 days
+      start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    // 1. Fetch Search Logs in selected time period
+    const searchLogs = await prisma.searchLog.findMany({
+      where: {
+        createdAt: {
+          gte: start,
+          lte: end,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const totalSearches = searchLogs.length;
+
+    // Helper to categorize exam seasons based on keyword content
+    const getExamCategory = (query: string) => {
+      const q = query.toLowerCase();
+      if (/neet|medical|biology|bio|aiims|mbbs|dermatology|anatomy|ncert biology/.test(q)) {
+        return 'NEET / Medical';
+      }
+      if (/jee|iit|engineering|wbjee|gate|maths|physics mcq|hc verma|irodov/.test(q)) {
+        return 'JEE / Engineering';
+      }
+      if (/upsc|wbcs|ssc|cgl|civil service|cracker|general studies|gk|current affairs|police|railway/.test(q)) {
+        return 'UPSC / Govt Exams';
+      }
+      if (/class 10|class 11|class 12|cbse|icse|madhyamik|wbchse|board|semester/.test(q)) {
+        return 'School & Boards';
+      }
+      return 'General & Academic';
+    };
+
+    // Aggregate queries
+    const queryMap = new Map<string, { query: string; count: number; category: string; totalResults: number; lastSearched: Date }>();
+    const examSeasonCounts: Record<string, number> = {
+      'NEET / Medical': 0,
+      'JEE / Engineering': 0,
+      'UPSC / Govt Exams': 0,
+      'School & Boards': 0,
+      'General & Academic': 0,
+    };
+
+    // Track search exposure per book ID
+    const bookSearchCounts: Record<string, number> = {};
+
+    for (const log of searchLogs) {
+      const q = log.query.trim().toLowerCase();
+      if (!q) continue;
+      const cat = getExamCategory(q);
+      examSeasonCounts[cat] = (examSeasonCounts[cat] || 0) + 1;
+
+      if (!queryMap.has(q)) {
+        queryMap.set(q, {
+          query: q,
+          count: 1,
+          category: cat,
+          totalResults: log.resultsCount,
+          lastSearched: log.createdAt,
+        });
+      } else {
+        const item = queryMap.get(q)!;
+        item.count += 1;
+        item.totalResults += log.resultsCount;
+        if (log.createdAt > item.lastSearched) item.lastSearched = log.createdAt;
+      }
+
+      if (log.matchedBookIds) {
+        const ids = log.matchedBookIds.split(',').map(id => id.trim()).filter(Boolean);
+        for (const bid of ids) {
+          bookSearchCounts[bid] = (bookSearchCounts[bid] || 0) + 1;
+        }
+      }
+    }
+
+    // Top Searched Keywords List
+    const topKeywords = Array.from(queryMap.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 30)
+      .map(k => ({
+        ...k,
+        avgResults: k.count > 0 ? Math.round(k.totalResults / k.count) : 0,
+      }));
+
+    // Top Searched Books details
+    const topSearchedBookIds = Object.entries(bookSearchCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([id]) => id);
+
+    let mostSearchedBooks: any[] = [];
+    if (topSearchedBookIds.length > 0) {
+      const booksData = await prisma.book.findMany({
+        where: { id: { in: topSearchedBookIds } },
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          coverUrl: true,
+          price: true,
+          stock: true,
+          sku: true,
+          category: { select: { name: true } },
+          authors: { select: { name: true } },
+        },
+      });
+      mostSearchedBooks = booksData.map(b => ({
+        id: b.id,
+        title: b.title,
+        slug: b.slug,
+        coverUrl: b.coverUrl,
+        price: b.price,
+        stock: b.stock,
+        sku: b.sku,
+        category: b.category?.name || 'General',
+        author: b.authors.map(a => a.name).join(', ') || 'Techno World',
+        searchCount: bookSearchCounts[b.id] || 0,
+      })).sort((a, b) => b.searchCount - a.searchCount);
+    }
+
+    // 2. Fetch Most Bought Books from OrderItem in the date range
+    const orderItems = await prisma.orderItem.findMany({
+      where: {
+        order: {
+          createdAt: {
+            gte: start,
+            lte: end,
+          },
+          status: { not: 'CANCELLED' },
+        },
+      },
+      include: {
+        book: {
+          select: {
+            id: true,
+            title: true,
+            slug: true,
+            coverUrl: true,
+            price: true,
+            stock: true,
+            sku: true,
+            category: { select: { name: true } },
+            authors: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    const bookSalesMap = new Map<string, {
+      book: any;
+      unitsSold: number;
+      revenue: number;
+      orderCount: number;
+    }>();
+
+    let totalUnitsSold = 0;
+    let totalRevenue = 0;
+
+    for (const item of orderItems) {
+      totalUnitsSold += item.quantity;
+      const itemRev = item.quantity * item.priceAtPurchase;
+      totalRevenue += itemRev;
+
+      if (!bookSalesMap.has(item.bookId)) {
+        bookSalesMap.set(item.bookId, {
+          book: item.book,
+          unitsSold: item.quantity,
+          revenue: itemRev,
+          orderCount: 1,
+        });
+      } else {
+        const data = bookSalesMap.get(item.bookId)!;
+        data.unitsSold += item.quantity;
+        data.revenue += itemRev;
+        data.orderCount += 1;
+      }
+    }
+
+    const mostBoughtBooks = Array.from(bookSalesMap.values())
+      .sort((a, b) => b.unitsSold - a.unitsSold)
+      .slice(0, 15)
+      .map(entry => ({
+        id: entry.book?.id,
+        title: entry.book?.title || 'Unknown Book',
+        slug: entry.book?.slug,
+        coverUrl: entry.book?.coverUrl,
+        sku: entry.book?.sku,
+        price: entry.book?.price,
+        stock: entry.book?.stock,
+        category: entry.book?.category?.name || 'General',
+        author: entry.book?.authors?.map((a: any) => a.name).join(', ') || 'Techno World',
+        unitsSold: entry.unitsSold,
+        revenue: entry.revenue,
+        orderCount: entry.orderCount,
+      }));
+
+    // Find dominant exam season
+    let dominantSeason = 'General & Academic';
+    let maxSeasonCount = -1;
+    for (const [season, count] of Object.entries(examSeasonCounts)) {
+      if (count > maxSeasonCount && count > 0) {
+        maxSeasonCount = count;
+        dominantSeason = season;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        period,
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+        summary: {
+          totalSearches,
+          totalUnitsSold,
+          totalRevenue,
+          uniqueKeywords: queryMap.size,
+          dominantSeason,
+          dominantSeasonCount: maxSeasonCount > 0 ? maxSeasonCount : 0,
+        },
+        examSeasonBreakdown: examSeasonCounts,
+        topKeywords,
+        mostSearchedBooks,
+        mostBoughtBooks,
+      },
+    });
   } catch (error) {
     next(error);
   }

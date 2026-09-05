@@ -84,12 +84,54 @@ export const bookOrderShipment = async (req: Request, res: Response, next: NextF
       return;
     }
 
+    const orderShippingMethod = order.shippingMethod || serviceType || 'SPEED_POST';
+
+    // ── EXPRESS_LOCAL: Manual local courier (Porter/Rapido) — no India Post API ──
+    if (orderShippingMethod === 'EXPRESS_LOCAL') {
+      const { deliveryPartner, agentPhone } = req.body;
+      const updatedOrder = await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          shippingCarrier: deliveryPartner || 'Local Courier',
+          status: 'SHIPPED',
+          notes: (order.notes ? order.notes + ' | ' : '') +
+            `Express Local dispatch via ${deliveryPartner || 'Local Courier'}${agentPhone ? ` (${agentPhone})` : ''} at ${new Date().toISOString()}`,
+        },
+      });
+
+      res.json({
+        success: true,
+        message: `Express delivery assigned to ${deliveryPartner || 'Local Courier'}`,
+        data: {
+          orderId: updatedOrder.id,
+          orderNumber: updatedOrder.orderNumber,
+          carrier: deliveryPartner || 'Local Courier',
+          method: 'EXPRESS_LOCAL',
+        },
+      });
+      return;
+    }
+
+    // ── NORMAL_POST / SPEED_POST: India Post API booking ──
     const barcode = order.trackingNumber || indiaPostService.generateBarcode('EB', 'IN');
     const totalWeight = Number(weightGrams) || Math.max(250, order.items.length * 350);
 
+    // Determine article type based on shipping method
+    let articleType = serviceType;
+    let carrierLabel = 'India Post Speed Post';
+    if (!articleType) {
+      if (orderShippingMethod === 'NORMAL_POST') {
+        articleType = totalWeight <= 500 ? 'BP_INLAND_DOC' : 'BP_INLAND_PARCEL';
+        carrierLabel = 'India Post Book Post';
+      } else {
+        articleType = totalWeight <= 500 ? 'SP_INLAND_DOC' : 'SP_INLAND_PARCEL';
+        carrierLabel = 'India Post Speed Post';
+      }
+    }
+
     const articlePayload = {
       barcode_no: barcode,
-      article_type: serviceType || (totalWeight <= 500 ? 'SP_INLAND_DOC' : 'SP_INLAND_PARCEL'),
+      article_type: articleType,
       physical_weight: totalWeight,
       length: Number(length) || 20,
       breadth_diameter: Number(width) || 15,
@@ -120,20 +162,21 @@ export const bookOrderShipment = async (req: Request, res: Response, next: NextF
       where: { id: order.id },
       data: {
         trackingNumber: barcode,
-        shippingCarrier: 'India Post Speed Post',
+        shippingCarrier: carrierLabel,
         status: order.status === 'PENDING' ? 'PROCESSING' : order.status,
-        notes: (order.notes ? order.notes + ' | ' : '') + 'India Post Batch: ' + bookingResult.batch_id,
+        notes: (order.notes ? order.notes + ' | ' : '') + `${carrierLabel} Batch: ` + bookingResult.batch_id,
       },
     });
 
     res.json({
       success: true,
-      message: 'Shipment booked successfully with India Post',
+      message: `Shipment booked successfully via ${carrierLabel}`,
       data: {
         orderId: updatedOrder.id,
         orderNumber: updatedOrder.orderNumber,
         barcode,
-        carrier: 'India Post Speed Post',
+        carrier: carrierLabel,
+        method: orderShippingMethod,
         bookingDetails: bookingResult,
       },
     });

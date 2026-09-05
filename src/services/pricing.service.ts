@@ -2,12 +2,50 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+export function getDispatchBatchCutoff(date: Date): Date {
+  const d = new Date(date);
+  const cutoff = new Date(d);
+  cutoff.setHours(14, 0, 0, 0); // 2:00 PM daily cutoff
+  if (d.getTime() >= cutoff.getTime()) {
+    cutoff.setDate(cutoff.getDate() + 1);
+  }
+  return cutoff;
+}
+
+export function getDispatchBatchKey(date: Date): string {
+  const cutoff = getDispatchBatchCutoff(date);
+  return `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}_14:00`;
+}
+
+
 export interface PricingInput {
   items: { bookId: string; quantity: number }[];
   promotionCode?: string | null;
   userId?: string | null;
   pincode?: string | null;
   addressId?: string | null;
+  shippingMethod?: string | null; // 'NORMAL_POST' | 'SPEED_POST' | 'EXPRESS_LOCAL'
+  paymentMethod?: string | null;  // 'COD' | 'upi' | 'card' etc.
+  address?: {
+    fullName?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    addressLine1?: string | null;
+    line1?: string | null;
+    pincode?: string | null;
+    city?: string | null;
+    state?: string | null;
+  } | null;
+}
+
+export interface DeliveryOption {
+  method: string;         // 'NORMAL_POST' | 'SPEED_POST' | 'EXPRESS_LOCAL'
+  label: string;          // Customer-facing label
+  description: string;    // Short description
+  price: number;          // Charge amount
+  priceLabel: string;     // e.g. 'FREE', '₹199'
+  estimatedDays: string;  // e.g. '5–7 Business Days'
+  eligible: boolean;      // Whether this option is available
 }
 
 export interface PricingResult {
@@ -35,10 +73,16 @@ export interface PricingResult {
   couponCode?: string | null;
   couponError?: string;
   shippingCharge: number;
+  codFee?: number;
   isShippingCalculated: boolean;
   shippingZone?: string;
   shippingMessage?: string;
   estimatedTransitDays?: string;
+  isAddonBundle?: boolean;
+  bundledWithOrderNumber?: string;
+  selectedShippingMethod?: string;
+  isExpressEligible?: boolean;
+  deliveryOptions?: DeliveryOption[];
   taxAmount: number;
   totalSavings: number;
   totalAmount: number;
@@ -210,7 +254,7 @@ export class PricingEngine {
       }
     }
 
-    // 3. Dynamic India Post Delivery Calculation
+    // 3. Three-Tier Delivery Calculation
     // Resolve effective pincode from input.pincode or input.addressId
     let effectivePincode: string | null = input.pincode ? String(input.pincode).trim() : null;
     if (!effectivePincode && input.addressId && !input.addressId.startsWith('addr_')) {
@@ -226,43 +270,182 @@ export class PricingEngine {
     let shippingZone = 'Pending Address';
     let shippingMessage = 'Enter pincode at address step';
     let estimatedTransitDays = '3–4 Business Days';
+    let selectedShippingMethod = input.shippingMethod || 'NORMAL_POST';
 
-    // Only calculate delivery charge if user has provided a valid 6-digit PIN code
-    if (effectivePincode && /^[1-8]\d{5}$/.test(effectivePincode)) {
+    // Express Local Delivery Eligibility — Kolkata / Howrah / Jadavpur / South Kolkata area
+    const isExpressEligiblePin = (pin: number): boolean => {
+      if (pin >= 700001 && pin <= 700160) return true; // Kolkata
+      if (pin >= 711101 && pin <= 711315) return true; // Howrah
+      return false;
+    };
+
+    // Store Self-Pickup / Takeaway logic (no pincode required, 100% free pickup)
+    if (selectedShippingMethod === 'SELF_PICKUP') {
+      isShippingCalculated = true;
+      shippingCharge = 0;
+      shippingZone = 'Store Takeaway (College Street)';
+      shippingMessage = 'FREE Store Pickup at College Street Dispatch Desk';
+      estimatedTransitDays = 'Ready per Appointed Slot';
+      result.deliveryOptions = [
+        {
+          method: 'SELF_PICKUP',
+          label: 'Store Self-Pickup / Takeaway',
+          description: 'Collect in person at College Street Dispatch Desk (Zero Shipping Fee)',
+          price: 0,
+          priceLabel: 'FREE',
+          estimatedDays: 'Per Appointed Slot',
+          eligible: true,
+        },
+      ];
+    } else if (effectivePincode && /^[1-8]\d{5}$/.test(effectivePincode)) {
       isShippingCalculated = true;
       const pinNum = parseInt(effectivePincode, 10);
       const weightSlabs = Math.max(1, Math.ceil(totalWeightGrams / 500));
+      const expressEligible = isExpressEligiblePin(pinNum);
+      result.isExpressEligible = expressEligible;
 
-      // Check Free Shipping Threshold (Free delivery on orders >= ₹999)
-      if (payableSubtotal >= 999) {
-        shippingCharge = 0;
-        shippingZone = 'Free Delivery';
-        shippingMessage = 'FREE Speed Post Delivery (Orders above ₹999)';
-        estimatedTransitDays = '2–4 Business Days';
-      } else {
-        // India Post Speed Post Zone Matrix (Origin: 700009 College St Kolkata)
-        if (pinNum >= 700001 && pinNum <= 700160) {
-          // Local Kolkata Zone
-          shippingZone = 'Local Kolkata (Speed Post)';
-          shippingCharge = 30 + Math.max(0, weightSlabs - 1) * 15;
-          shippingMessage = `₹${shippingCharge} (Local Kolkata Speed Post, ${totalWeightGrams}g)`;
-          estimatedTransitDays = '1–2 Business Days';
-        } else if (pinNum >= 710000 && pinNum <= 749999) {
-          // Same State (West Bengal)
-          shippingZone = 'West Bengal (Speed Post)';
-          shippingCharge = 45 + Math.max(0, weightSlabs - 1) * 20;
-          shippingMessage = `₹${shippingCharge} (West Bengal Speed Post, ${totalWeightGrams}g)`;
-          estimatedTransitDays = '2–3 Business Days';
+      // If user chose EXPRESS_LOCAL but not eligible, fall back to NORMAL_POST
+      if (selectedShippingMethod === 'EXPRESS_LOCAL' && !expressEligible) {
+        selectedShippingMethod = 'NORMAL_POST';
+      }
+
+      // Check Same-Batch Add-On Free Shipping Rule — ONLY for India Post methods (not Express)
+      // Express Delivery uses Porter/Rapido which charge per-trip, no batching/bundling possible
+      let isSameBatchAddon = false;
+      if (selectedShippingMethod !== 'EXPRESS_LOCAL') {
+      const now = new Date();
+      const currentBatchCutoff = getDispatchBatchCutoff(now);
+      const previousBatchCutoff = new Date(currentBatchCutoff.getTime() - 24 * 60 * 60 * 1000);
+
+      const targetPhone = input.address?.phone?.trim();
+      const targetEmail = input.address?.email?.trim();
+      const targetLine1 = (input.address?.addressLine1 || input.address?.line1 || '').trim().toLowerCase();
+      const targetPin = effectivePincode.trim();
+
+      const candidateOrders = await prisma.order.findMany({
+        where: {
+          status: { in: ['PENDING', 'CONFIRMED'] },
+          createdAt: {
+            gte: previousBatchCutoff,
+            lt: currentBatchCutoff,
+          },
+          ...(input.userId ? { userId: input.userId } : {}),
+        },
+        include: { address: true, user: true },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      for (const ord of candidateOrders) {
+        const addr = ord.address;
+        if (!addr) continue;
+
+        const isUserMatch = (input.userId && ord.userId === input.userId) ||
+          (targetPhone && (addr.phone === targetPhone || ord.user?.phone === targetPhone)) ||
+          (targetEmail && ord.user?.email === targetEmail);
+
+        if (isUserMatch) {
+          const addrLine1 = (addr.addressLine1 || '').trim().toLowerCase();
+          const addrPin = (addr.pincode || '').trim();
+
+          // Exactly same recipient and delivery address
+          if ((!targetLine1 || targetLine1 === addrLine1) && targetPin === addrPin) {
+            isSameBatchAddon = true;
+            shippingCharge = 0;
+            shippingZone = 'Same-Batch Add-On (FREE)';
+            shippingMessage = `🎉 FREE Add-on Delivery! Bundled with your un-dispatched order #${ord.orderNumber} in today's 2 PM dispatch batch.`;
+            result.isAddonBundle = true;
+            result.bundledWithOrderNumber = ord.orderNumber;
+            break;
+          }
+        }
+      }
+      } // end: same-batch add-on check (skipped for EXPRESS_LOCAL)
+
+      // ──────────────────────────────────────────────────────────────────
+      // Calculate shipping based on selected method (3-tier system)
+      // ──────────────────────────────────────────────────────────────────
+
+      // Helper: compute Normal Post charge for a given pincode
+      const calcNormalPostCharge = (): { charge: number; zone: string; msg: string; days: string } => {
+        if (payableSubtotal >= 799) {
+          return { charge: 0, zone: 'Free Standard Delivery', msg: 'FREE Standard Delivery (Orders above ₹799)', days: '5–7 Business Days' };
+        }
+        return { charge: 69, zone: 'Standard Delivery', msg: '₹69 Standard Delivery', days: '5–7 Business Days' };
+      };
+
+      // Helper: compute Speed Post charge
+      const calcSpeedPostCharge = (): { charge: number; zone: string; msg: string; days: string } => {
+        return { charge: 199, zone: 'Speed Post', msg: '₹199 Speed Post Delivery', days: '2–4 Business Days' };
+      };
+
+      // Helper: compute Express Local charge
+      const calcExpressLocalCharge = (): { charge: number; zone: string; msg: string; days: string } => {
+        return { charge: 149, zone: 'Express Local Delivery', msg: '₹149 Express Delivery (Same-day local)', days: 'Same Day' };
+      };
+
+      if (!isSameBatchAddon) {
+        // Calculate per selected method
+        if (selectedShippingMethod === 'SPEED_POST') {
+          const sp = calcSpeedPostCharge();
+          shippingCharge = sp.charge;
+          shippingZone = sp.zone;
+          shippingMessage = sp.msg;
+          estimatedTransitDays = sp.days;
+        } else if (selectedShippingMethod === 'EXPRESS_LOCAL' && expressEligible) {
+          const ex = calcExpressLocalCharge();
+          shippingCharge = ex.charge;
+          shippingZone = ex.zone;
+          shippingMessage = ex.msg;
+          estimatedTransitDays = ex.days;
         } else {
-          // National / Rest of India
-          shippingZone = 'National (Speed Post)';
-          shippingCharge = 65 + Math.max(0, weightSlabs - 1) * 30;
-          shippingMessage = `₹${shippingCharge} (National Speed Post, ${totalWeightGrams}g)`;
-          estimatedTransitDays = '3–5 Business Days';
+          // Default: NORMAL_POST
+          selectedShippingMethod = 'NORMAL_POST';
+          const np = calcNormalPostCharge();
+          shippingCharge = np.charge;
+          shippingZone = np.zone;
+          shippingMessage = np.msg;
+          estimatedTransitDays = np.days;
         }
       }
 
-      // Check if Free Shipping Coupon applied
+      // Build delivery options array for frontend display
+      const normalPost = calcNormalPostCharge();
+      const speedPost = calcSpeedPostCharge();
+      const expressLocal = calcExpressLocalCharge();
+
+      const deliveryOptions: DeliveryOption[] = [
+        {
+          method: 'NORMAL_POST',
+          label: 'Standard Delivery',
+          description: payableSubtotal >= 799 ? 'Free nationwide delivery' : `Reliable delivery via postal network`,
+          price: normalPost.charge,
+          priceLabel: normalPost.charge === 0 ? 'FREE' : `₹${normalPost.charge}`,
+          estimatedDays: normalPost.days,
+          eligible: true,
+        },
+        {
+          method: 'SPEED_POST',
+          label: 'Speed Post',
+          description: 'Priority handling with real-time tracking',
+          price: speedPost.charge,
+          priceLabel: `₹${speedPost.charge}`,
+          estimatedDays: speedPost.days,
+          eligible: true,
+        },
+        {
+          method: 'EXPRESS_LOCAL',
+          label: 'Express Delivery',
+          description: 'Same-day local delivery partner',
+          price: expressLocal.charge,
+          priceLabel: `₹${expressLocal.charge}`,
+          estimatedDays: expressLocal.days,
+          eligible: expressEligible,
+        },
+      ];
+
+      result.deliveryOptions = deliveryOptions;
+
+      // Check if Free Shipping Coupon applied (overrides selected method charge)
       if (result.promotionId) {
         const promotion = await prisma.promotion.findUnique({ where: { id: result.promotionId } });
         if (promotion?.discountType === 'FREE_SHIPPING') {
@@ -270,7 +453,7 @@ export class PricingEngine {
           shippingMessage = 'FREE Shipping Coupon Applied';
         }
         let rules: any = {};
-        try { rules = JSON.parse(promotion?.rules || '{}'); } catch (e) {}
+        try { rules = JSON.parse(promotion?.rules || '{}'); } catch (_e) {}
         if (rules.freeShipping === true) {
           shippingCharge = 0;
           shippingMessage = 'FREE Shipping Coupon Applied';
@@ -290,12 +473,25 @@ export class PricingEngine {
     result.shippingZone = shippingZone;
     result.shippingMessage = shippingMessage;
     result.estimatedTransitDays = estimatedTransitDays;
+    result.selectedShippingMethod = selectedShippingMethod;
 
     // 4. Taxes & Fees
     result.taxAmount = 0;
+
+    // COD Handling Fee (₹20 when Cash on Delivery is chosen)
+    const normPay = String(input.paymentMethod || '').trim().toLowerCase();
+    const isCOD = normPay === 'cod' || normPay.includes('cash on delivery');
+
+    if (selectedShippingMethod === 'SELF_PICKUP' && isCOD) {
+      result.isValid = false;
+      result.errors.push('Cash on Delivery is not available for Store Self-Pickup. Please pay online via UPI, Card, or Net Banking.');
+    }
+
+    const codFee = (isCOD && selectedShippingMethod !== 'SELF_PICKUP') ? 20 : 0;
+    result.codFee = codFee;
     
     // 5. Final Totals
-    result.totalAmount = payableSubtotal + result.shippingCharge + result.taxAmount;
+    result.totalAmount = payableSubtotal + result.shippingCharge + codFee + result.taxAmount;
     result.totalSavings = result.itemDiscountTotal + result.promotionDiscount;
 
     result.couponDiscount = result.promotionDiscount;

@@ -13,6 +13,9 @@ import pricingRoutes from './pricing.routes.js';
 import webhookRoutes from './webhook.routes.js';
 import shippingRoutes from './shipping.routes.js';
 import profileRoutes from './profile.routes.js';
+import reviewRoutes from './review.routes.js';
+import questionRoutes from './question.routes.js';
+import paymentRoutes from './payment.routes.js';
 
 const router = Router();
 
@@ -39,5 +42,8 @@ router.use('/pricing', pricingRoutes);
 router.use('/webhook', webhookRoutes);
 router.use('/shipping', shippingRoutes);
 router.use('/profile', profileRoutes);
+router.use('/reviews', reviewRoutes);
+router.use('/questions', questionRoutes);
+router.use('/payments', paymentRoutes);
 
 export default router;

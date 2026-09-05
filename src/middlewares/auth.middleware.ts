@@ -69,3 +69,27 @@ export const requireRole = (roles: string[]) => {
     next();
   };
 };
+
+export const optionalAuth = (req: Request, res: Response, next: NextFunction): void => {
+  const authHeader = req.headers.authorization;
+  let token = '';
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const raw = authHeader.split(' ')[1];
+    if (raw && raw !== 'undefined' && raw !== 'null') {
+      token = raw;
+    }
+  }
+
+  if (!token && req.cookies?.accessToken) {
+    token = req.cookies.accessToken;
+  }
+
+  if (token) {
+    const decoded = verifyToken(token, env.JWT_ACCESS_SECRET);
+    if (decoded) {
+      req.user = decoded;
+    }
+  }
+  next();
+};

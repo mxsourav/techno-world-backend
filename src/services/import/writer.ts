@@ -82,16 +82,22 @@ export class Writer {
       };
     };
 
-    // 1. Process Insertions
+    // 1. Process Insertions in concurrent batches for high speed
+    const BATCH_SIZE = 25;
     if (toAdd.length > 0) {
-      for (const row of toAdd) {
-        try {
-          const data = mapToBookInput(row);
-          await prisma.book.create({ data });
-          recordsAdded++;
-        } catch (e: any) {
-           errors.push({ row: row.row, message: `Insert failed: ${e.message}` });
-        }
+      for (let i = 0; i < toAdd.length; i += BATCH_SIZE) {
+        const chunk = toAdd.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          chunk.map(async (row) => {
+            try {
+              const data = mapToBookInput(row);
+              await prisma.book.create({ data });
+              recordsAdded++;
+            } catch (e: any) {
+              errors.push({ row: row.row, message: `Insert failed: ${e.message}` });
+            }
+          })
+        );
       }
     }
 
@@ -101,71 +107,90 @@ export class Writer {
         recordsSkipped += toUpdate.length;
       } 
       else if (strategy === 'UPDATE' || strategy === 'ADD_STOCK' || strategy === 'REPLACE') {
-        for (const row of toUpdate) {
-          try {
-            const data = mapToBookInput(row);
-            
-            // Find existing book by any unique identifier available
-            const orConditions = [];
-            if (row.isbn13) orConditions.push({ isbn13: row.isbn13 });
-            if (row.isbn10) orConditions.push({ isbn10: row.isbn10 });
-            if (row.bookCode) orConditions.push({ bookCode: row.bookCode });
-            if (row.sku) orConditions.push({ sku: row.sku });
+        // Collect identifiers to batch pre-fetch existing records in 1 query
+        const isbn13s = toUpdate.map(r => r.isbn13).filter(Boolean) as string[];
+        const isbn10s = toUpdate.map(r => r.isbn10).filter(Boolean) as string[];
+        const bookCodes = toUpdate.map(r => r.bookCode).filter(Boolean) as string[];
+        const skus = toUpdate.map(r => r.sku).filter(Boolean) as string[];
 
-            // If we have nothing to search by, we can't update it safely
-            if (orConditions.length === 0) {
-              errors.push({ row: row.row, message: `Update failed: No unique identifier (ISBN/SKU/Code) provided to find the book.` });
-              continue;
-            }
+        const orConditions: any[] = [];
+        if (isbn13s.length > 0) orConditions.push({ isbn13: { in: isbn13s } });
+        if (isbn10s.length > 0) orConditions.push({ isbn10: { in: isbn10s } });
+        if (bookCodes.length > 0) orConditions.push({ bookCode: { in: bookCodes } });
+        if (skus.length > 0) orConditions.push({ sku: { in: skus } });
 
-            const existing = await prisma.book.findFirst({
-              where: { OR: orConditions }
-            });
+        const existingBooks = orConditions.length > 0 ? await prisma.book.findMany({
+          where: { OR: orConditions },
+          select: { id: true, isbn13: true, isbn10: true, bookCode: true, sku: true, stock: true }
+        }) : [];
 
-            if (existing) {
-              if (strategy === 'REPLACE') {
-                // Overwrite all fields (Prisma merge style)
-                await prisma.book.update({
-                  where: { id: existing.id },
-                  data: {
-                    ...data,
-                    authors: { set: data.authors.connect }, // replace authors
-                    subjects: { set: data.subjects.connect }, // replace subjects
+        // Fast in-memory lookup map
+        const existingMap = new Map<string, any>();
+        for (const bk of existingBooks) {
+          if (bk.isbn13) existingMap.set(`isbn13:${bk.isbn13}`, bk);
+          if (bk.isbn10) existingMap.set(`isbn10:${bk.isbn10}`, bk);
+          if (bk.bookCode) existingMap.set(`code:${bk.bookCode}`, bk);
+          if (bk.sku) existingMap.set(`sku:${bk.sku}`, bk);
+        }
+
+        const findExisting = (row: any) => {
+          if (row.isbn13 && existingMap.has(`isbn13:${row.isbn13}`)) return existingMap.get(`isbn13:${row.isbn13}`);
+          if (row.isbn10 && existingMap.has(`isbn10:${row.isbn10}`)) return existingMap.get(`isbn10:${row.isbn10}`);
+          if (row.bookCode && existingMap.has(`code:${row.bookCode}`)) return existingMap.get(`code:${row.bookCode}`);
+          if (row.sku && existingMap.has(`sku:${row.sku}`)) return existingMap.get(`sku:${row.sku}`);
+          return null;
+        };
+
+        for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
+          const chunk = toUpdate.slice(i, i + BATCH_SIZE);
+          await Promise.all(
+            chunk.map(async (row) => {
+              try {
+                const data = mapToBookInput(row);
+                const existing = findExisting(row);
+
+                if (existing) {
+                  if (strategy === 'REPLACE') {
+                    await prisma.book.update({
+                      where: { id: existing.id },
+                      data: {
+                        ...data,
+                        authors: { set: data.authors.connect },
+                        subjects: { set: data.subjects.connect },
+                      }
+                    });
+                  } else {
+                    const mergeData: any = {};
+                    for (const key of Object.keys(data) as (keyof typeof data)[]) {
+                      if (data[key as keyof typeof data] !== undefined && data[key as keyof typeof data] !== null) {
+                        mergeData[key] = data[key as keyof typeof data];
+                      }
+                    }
+
+                    if (data.authors.connect.length > 0) mergeData.authors = { set: data.authors.connect };
+                    if (data.subjects.connect.length > 0) mergeData.subjects = { set: data.subjects.connect };
+
+                    if (strategy === 'ADD_STOCK') {
+                      mergeData.stock = (existing.stock || 0) + (row.stock || 0);
+                    } else if (strategy === 'UPDATE') {
+                      mergeData.stock = row.stock !== undefined ? row.stock : existing.stock;
+                    }
+
+                    await prisma.book.update({
+                      where: { id: existing.id },
+                      data: mergeData
+                    });
                   }
-                });
-              } else {
-                // UPDATE: Merge fields (only update if new value exists)
-                const mergeData: any = {};
-                for (const key of Object.keys(data) as (keyof typeof data)[]) {
-                  if (data[key as keyof typeof data] !== undefined && data[key as keyof typeof data] !== null) {
-                    mergeData[key] = data[key as keyof typeof data];
-                  }
+                  recordsUpdated++;
+                } else {
+                  await prisma.book.create({ data });
+                  recordsAdded++;
                 }
-                
-                // For relations on update, we append or replace. Let's just set.
-                if (data.authors.connect.length > 0) mergeData.authors = { set: data.authors.connect };
-                if (data.subjects.connect.length > 0) mergeData.subjects = { set: data.subjects.connect };
-                
-                if (strategy === 'ADD_STOCK') {
-                  mergeData.stock = (existing.stock || 0) + (row.stock || 0);
-                } else if (strategy === 'UPDATE') {
-                  mergeData.stock = row.stock !== undefined ? row.stock : existing.stock;
-                }
-
-                await prisma.book.update({
-                  where: { id: existing.id },
-                  data: mergeData
-                });
+              } catch (e: any) {
+                errors.push({ row: row.row, message: `Update failed: ${e.message}` });
               }
-              recordsUpdated++;
-            } else {
-              // Should not happen since we checked existing in Analyze, but fallback to insert
-              await prisma.book.create({ data });
-              recordsAdded++;
-            }
-          } catch (e: any) {
-             errors.push({ row: row.row, message: `Update failed: ${e.message}` });
-          }
+            })
+          );
         }
       }
     }

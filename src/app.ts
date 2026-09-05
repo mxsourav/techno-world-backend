@@ -71,6 +71,14 @@ app.use(cookieParser());
 app.use(requestIdMiddleware);
 app.use(generalLimiter);
 
+// Anti-caching headers for API responses to guarantee immediate frontend reflection
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 import path from 'path';
 
 // ...

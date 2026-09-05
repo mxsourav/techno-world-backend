@@ -32,6 +32,7 @@ model User {
   orders              Order[]
   pointTransactions   PointTransaction[]
   reviews             Review[]
+  questions           BookQuestion[]
   savedPaymentMethods SavedPaymentMethod[]
   sessions            Session[]
   wishlistItems       WishlistItem[]
@@ -115,6 +116,7 @@ model Book {
   inventoryHistory InventoryHistory[]
   orderItems       OrderItem[]
   reviews          Review[]
+  questions        BookQuestion[]
   wishlistItems    WishlistItem[]
   authors          Author[]           @relation("AuthorToBook")
   subjects         Subject[]          @relation("BookToSubject")
@@ -287,19 +289,42 @@ model OrderItem {
 
 model Review {
   id         String   @id @default(uuid())
-  userId     String
+  userId     String?
   bookId     String
+  userName   String?
+  userEmail  String?
   rating     Int
   title      String?
-  content    String?  @db.Text
-  isApproved Boolean  @default(false)
+  content    String   @db.Text
+  isApproved Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   book       Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, bookId])
   @@index([bookId])
+  @@index([userId])
+}
+
+model BookQuestion {
+  id         String    @id @default(uuid())
+  bookId     String
+  userId     String?
+  userName   String?
+  userEmail  String?
+  question   String    @db.Text
+  answer     String?   @db.Text
+  answeredBy String?
+  answeredAt DateTime?
+  status     String    @default("PENDING")
+  isApproved Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  book       Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([bookId])
+  @@index([status])
 }
 
 model WishlistItem {

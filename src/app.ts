@@ -41,8 +41,11 @@ app.use(
       const isAllowed =
         allowedOrigins.includes(origin) ||
         origin.startsWith('http://localhost:') ||
-        origin.endsWith('.vercel.app') ||
-        origin.endsWith('.onrender.com');
+        origin.startsWith('https://localhost:') ||
+        origin.includes('vercel.app') ||
+        origin.includes('onrender.com') ||
+        origin.includes('technoworld') ||
+        origin.includes('techno-world');
 
       if (isAllowed) {
         return callback(null, true);

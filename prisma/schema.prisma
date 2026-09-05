@@ -278,7 +278,7 @@ model OrderItem {
   quantity        Int
   priceAtPurchase Float
   createdAt       DateTime @default(now())
-  book            Book     @relation(fields: [bookId], references: [id])
+  book            Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
   order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])

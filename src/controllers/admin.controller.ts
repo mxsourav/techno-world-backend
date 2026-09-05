@@ -187,7 +187,14 @@ export const uploadBookPdf = async (req: Request, res: Response, next: NextFunct
 export const deleteBook = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    await prisma.book.delete({ where: { id } });
+    await prisma.$transaction([
+      prisma.cartItem.deleteMany({ where: { bookId: id } }),
+      prisma.wishlistItem.deleteMany({ where: { bookId: id } }),
+      prisma.review.deleteMany({ where: { bookId: id } }),
+      prisma.inventoryHistory.deleteMany({ where: { bookId: id } }),
+      prisma.orderItem.deleteMany({ where: { bookId: id } }),
+      prisma.book.delete({ where: { id } }),
+    ]);
     res.status(200).json({ success: true, message: 'Book deleted successfully' });
   } catch (error) {
     next(error);
@@ -196,7 +203,14 @@ export const deleteBook = async (req: Request, res: Response, next: NextFunction
 
 export const deleteAllBooks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    await prisma.book.deleteMany({});
+    await prisma.$transaction([
+      prisma.cartItem.deleteMany({}),
+      prisma.wishlistItem.deleteMany({}),
+      prisma.review.deleteMany({}),
+      prisma.inventoryHistory.deleteMany({}),
+      prisma.orderItem.deleteMany({}),
+      prisma.book.deleteMany({}),
+    ]);
     res.status(200).json({ success: true, message: 'All books deleted successfully' });
   } catch (error) {
     next(error);

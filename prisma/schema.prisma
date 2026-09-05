@@ -248,6 +248,14 @@ model Order {
   promotionId     String?
   trackingNumber  String?
   shippingCarrier String?
+  shippingMethod  String?
+  customerEmail   String?
+  pickupName      String?
+  pickupPhone     String?
+  pickupEmail     String?
+  pickupSlots     String?       @db.Text
+  selectedPickupSlot String?
+  pickupStatus    String?       @default("NONE")
   notes           String?       @db.Text
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
@@ -569,6 +577,19 @@ enum ActivityAction {
   IMPORT
   EXPORT
   SETTINGS_CHANGE
+}
+
+model SearchLog {
+  id             String   @id @default(uuid())
+  query          String
+  userId         String?
+  resultsCount   Int      @default(0)
+  source         String?  @default("instant")
+  matchedBookIds String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  @@index([query])
+  @@index([createdAt])
 }
 
 

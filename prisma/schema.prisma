@@ -41,7 +41,6 @@ model Session {
   id           String   @id @default(uuid())
   userId       String
   refreshToken String   @unique @db.VarChar(512)
-  refreshToken String   @unique @db.VarChar(512)
   userAgent    String?
   ipAddress    String?
   expiresAt    DateTime
@@ -61,8 +60,6 @@ model Book {
   isbn13           String?            @unique
   edition          String?
   language         String             @default("English")
-  description      String             @db.Text
-  shortDescription String?            @db.Text
   description      String             @db.Text
   shortDescription String?            @db.Text
   price            Float
@@ -183,12 +180,10 @@ model Author {
   name        String
   slug        String   @unique
   bio         String?  @db.Text
-  bio         String?  @db.Text
   imageUrl    String?
   socialLinks String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  biography   String?  @db.Text
   biography   String?  @db.Text
   books       Book[]   @relation("AuthorToBook")
 
@@ -200,12 +195,10 @@ model Publisher {
   name         String
   slug         String   @unique
   description  String?  @db.Text
-  description  String?  @db.Text
   logoUrl      String?
   contactEmail String?
   contactPhone String?
   website      String?
-  address      String?  @db.Text
   address      String?  @db.Text
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -291,7 +284,6 @@ model Review {
   rating     Int
   title      String?
   content    String?  @db.Text
-  content    String?  @db.Text
   isApproved Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -335,7 +327,6 @@ model HomepageCMS {
   isEnabled  Boolean  @default(true)
   sortOrder  Int      @default(0)
   configData String   @db.Text
-  configData String   @db.Text
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -361,7 +352,6 @@ model Settings {
   id        String   @id @default(uuid())
   key       String   @unique
   value     String   @db.Text
-  value     String   @db.Text
   group     String   @default("general")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -376,7 +366,6 @@ model ActivityLog {
   action    ActivityAction
   entity    String
   entityId  String?
-  details   String?        @db.Text
   details   String?        @db.Text
   ipAddress String?
   userAgent String?
@@ -393,7 +382,6 @@ model Notification {
   id        String   @id @default(uuid())
   userId    String
   title     String
-  message   String   @db.Text
   message   String   @db.Text
   isRead    Boolean  @default(false)
   type      String   @default("info")
@@ -426,7 +414,6 @@ model Promotion {
   name              String
   code              String?          @unique
   description       String?          @db.Text
-  description       String?          @db.Text
   promotionType     String           @default("UNIVERSAL")
   discountType      String           @default("PERCENTAGE")
   discountValue     Float            @default(0)
@@ -437,7 +424,6 @@ model Promotion {
   priority          Int              @default(0)
   allowCombination  Boolean          @default(false)
   autoApply         Boolean          @default(false)
-  rules             String           @default("{}") @db.Text
   rules             String           @default("{}") @db.Text
   usageLimit        Int?
   usageLimitPerUser Int              @default(1)
@@ -586,58 +572,3 @@ enum ActivityAction {
 }
 
 
-model SavedPaymentMethod {
-  id         String   @id @default(uuid())
-  userId     String
-  type       String   // UPI, CARD, NETBANKING
-  provider   String?  // Google Pay, PhonePe, Paytm, HDFC, Visa, etc.
-  maskedData String?  // e.g. "rodd***@okhdfcbank" or "•••• 4242"
-  holderName String?
-  isDefault  Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-model PointTransaction {
-  id          String   @id @default(uuid())
-  userId      String
-  orderId     String?
-  points      Int
-  type        String   // EARNED, REDEEMED, EXPIRED, REVOKED
-  status      String   @default("CREDITED") // PENDING_RETURN_PERIOD, CREDITED, REVOKED
-  description String?  @db.Text
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-}
-
-
-model SystemSetting {
-  id        String   @id @default(uuid())
-  key       String   @unique
-  value     String   @db.Text
-  updatedAt DateTime @updatedAt
-}
-
-model EmailLog {
-  id           String   @id @default(uuid())
-  toEmail      String
-  senderEmail  String
-  senderName   String?
-  subject      String
-  message      String   @db.Text
-  htmlContent  String?  @db.LongText
-  orderNumber  String?
-  provider     String   @default("SMTP")
-  status       String   @default("SENT")
-  errorMessage String?  @db.Text
-  createdAt    DateTime @default(now())
-
-  @@index([query])
-  @@index([createdAt])
-}

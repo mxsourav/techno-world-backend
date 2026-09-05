@@ -80,6 +80,8 @@ export interface PricingResult {
   estimatedTransitDays?: string;
   isAddonBundle?: boolean;
   bundledWithOrderNumber?: string;
+  parentShippingMethod?: string;
+  parentShippingCharge?: number;
   selectedShippingMethod?: string;
   isExpressEligible?: boolean;
   deliveryOptions?: DeliveryOption[];
@@ -309,10 +311,10 @@ export class PricingEngine {
         selectedShippingMethod = 'NORMAL_POST';
       }
 
-      // Check Same-Batch Add-On Free Shipping Rule — ONLY for India Post methods (not Express)
-      // Express Delivery uses Porter/Rapido which charge per-trip, no batching/bundling possible
+      // Check Same-Batch Add-On Free Shipping Rule (with Upgrade with Credit support)
       let isSameBatchAddon = false;
-      if (selectedShippingMethod !== 'EXPRESS_LOCAL') {
+      let parentOrder: any = null;
+
       const now = new Date();
       const currentBatchCutoff = getDispatchBatchCutoff(now);
       const previousBatchCutoff = new Date(currentBatchCutoff.getTime() - 24 * 60 * 60 * 1000);
@@ -350,100 +352,177 @@ export class PricingEngine {
           // Exactly same recipient and delivery address
           if ((!targetLine1 || targetLine1 === addrLine1) && targetPin === addrPin) {
             isSameBatchAddon = true;
-            shippingCharge = 0;
-            shippingZone = 'Same-Batch Add-On (FREE)';
-            shippingMessage = `🎉 FREE Add-on Delivery! Bundled with your un-dispatched order #${ord.orderNumber} in today's 2 PM dispatch batch.`;
+            parentOrder = ord;
             result.isAddonBundle = true;
             result.bundledWithOrderNumber = ord.orderNumber;
+            result.parentShippingMethod = ord.shippingMethod || 'NORMAL_POST';
+            result.parentShippingCharge = ord.shippingCharge || 0;
             break;
           }
         }
       }
-      } // end: same-batch add-on check (skipped for EXPRESS_LOCAL)
 
       // ──────────────────────────────────────────────────────────────────
       // Calculate shipping based on selected method (3-tier system)
       // ──────────────────────────────────────────────────────────────────
 
-      // Helper: compute Normal Post charge for a given pincode
+      // Tier weights: NORMAL_POST (1) < SPEED_POST (2) < EXPRESS_LOCAL (3)
+      const getTierWeight = (m: string) => {
+        if (m === 'EXPRESS_LOCAL') return 3;
+        if (m === 'SPEED_POST') return 2;
+        return 1;
+      };
+
+      // Helper: compute Normal Post charge (FREE only above ₹999 net after discounts)
       const calcNormalPostCharge = (): { charge: number; zone: string; msg: string; days: string } => {
-        if (payableSubtotal >= 799) {
-          return { charge: 0, zone: 'Free Standard Delivery', msg: 'FREE Standard Delivery (Orders above ₹799)', days: '5–7 Business Days' };
+        if (payableSubtotal >= 999) {
+          return { charge: 0, zone: 'Free Standard Delivery', msg: 'FREE Standard Delivery (Orders above ₹999)', days: '5–7 Business Days' };
         }
         return { charge: 69, zone: 'Standard Delivery', msg: '₹69 Standard Delivery', days: '5–7 Business Days' };
       };
 
-      // Helper: compute Speed Post charge
+      // Helper: compute Speed Post charge (ALWAYS paid)
       const calcSpeedPostCharge = (): { charge: number; zone: string; msg: string; days: string } => {
         return { charge: 199, zone: 'Speed Post', msg: '₹199 Speed Post Delivery', days: '2–4 Business Days' };
       };
 
-      // Helper: compute Express Local charge
+      // Helper: compute Express Local charge (ALWAYS paid, never free)
       const calcExpressLocalCharge = (): { charge: number; zone: string; msg: string; days: string } => {
         return { charge: 149, zone: 'Express Local Delivery', msg: '₹149 Express Delivery (Same-day local)', days: 'Same Day' };
       };
 
-      if (!isSameBatchAddon) {
-        // Calculate per selected method
-        if (selectedShippingMethod === 'SPEED_POST') {
-          const sp = calcSpeedPostCharge();
-          shippingCharge = sp.charge;
-          shippingZone = sp.zone;
-          shippingMessage = sp.msg;
-          estimatedTransitDays = sp.days;
-        } else if (selectedShippingMethod === 'EXPRESS_LOCAL' && expressEligible) {
-          const ex = calcExpressLocalCharge();
-          shippingCharge = ex.charge;
-          shippingZone = ex.zone;
-          shippingMessage = ex.msg;
-          estimatedTransitDays = ex.days;
-        } else {
-          // Default: NORMAL_POST
-          selectedShippingMethod = 'NORMAL_POST';
-          const np = calcNormalPostCharge();
-          shippingCharge = np.charge;
-          shippingZone = np.zone;
-          shippingMessage = np.msg;
-          estimatedTransitDays = np.days;
-        }
-      }
-
-      // Build delivery options array for frontend display
       const normalPost = calcNormalPostCharge();
       const speedPost = calcSpeedPostCharge();
       const expressLocal = calcExpressLocalCharge();
 
-      const deliveryOptions: DeliveryOption[] = [
-        {
-          method: 'NORMAL_POST',
-          label: 'Standard Delivery',
-          description: payableSubtotal >= 799 ? 'Free nationwide delivery' : `Reliable delivery via postal network`,
-          price: normalPost.charge,
-          priceLabel: normalPost.charge === 0 ? 'FREE' : `₹${normalPost.charge}`,
-          estimatedDays: normalPost.days,
-          eligible: true,
-        },
-        {
-          method: 'SPEED_POST',
-          label: 'Speed Post',
-          description: 'Priority handling with real-time tracking',
-          price: speedPost.charge,
-          priceLabel: `₹${speedPost.charge}`,
-          estimatedDays: speedPost.days,
-          eligible: true,
-        },
-        {
-          method: 'EXPRESS_LOCAL',
-          label: 'Express Delivery',
-          description: 'Same-day local delivery partner',
-          price: expressLocal.charge,
-          priceLabel: `₹${expressLocal.charge}`,
-          estimatedDays: expressLocal.days,
-          eligible: expressEligible,
-        },
-      ];
+      const parentMethod = parentOrder ? (parentOrder.shippingMethod || 'NORMAL_POST') : null;
+      const parentPaidFee = parentOrder ? (parentOrder.shippingCharge || 0) : 0;
+      const parentTier = parentMethod ? getTierWeight(parentMethod) : 0;
 
-      result.deliveryOptions = deliveryOptions;
+      if (isSameBatchAddon && parentMethod) {
+        // Enforce No Downgrade: cannot pick lower tier than parent order
+        if (!input.shippingMethod || getTierWeight(input.shippingMethod) < parentTier) {
+          selectedShippingMethod = parentMethod;
+        } else {
+          selectedShippingMethod = input.shippingMethod;
+        }
+
+        const selectedTier = getTierWeight(selectedShippingMethod);
+
+        if (selectedTier === parentTier) {
+          // Joined active consignment at ₹0 extra fee
+          shippingCharge = 0;
+          shippingZone = 'Same-Batch Add-On (FREE)';
+          shippingMessage = `🎉 FREE Add-on Delivery! Bundled with your un-dispatched order #${parentOrder.orderNumber} in today's 2 PM dispatch batch.`;
+          estimatedTransitDays = parentMethod === 'EXPRESS_LOCAL' ? 'Same Day' : (parentMethod === 'SPEED_POST' ? '2–4 Business Days' : '5–7 Business Days');
+        } else {
+          // Upgraded to higher delivery service: credit previously paid delivery fee!
+          const fullPrice = selectedShippingMethod === 'EXPRESS_LOCAL' ? expressLocal.charge : speedPost.charge;
+          shippingCharge = Math.max(0, fullPrice - parentPaidFee);
+          shippingZone = 'Consignment Upgrade';
+          shippingMessage = `🚀 Whole consignment upgraded to ${selectedShippingMethod === 'EXPRESS_LOCAL' ? 'Express Delivery' : 'Speed Post'} (₹${parentPaidFee} paid credit deducted)!`;
+          estimatedTransitDays = selectedShippingMethod === 'EXPRESS_LOCAL' ? 'Same Day' : '2–4 Business Days';
+        }
+
+        // Delivery options for add-on with upgrade pricing and no downgrade
+        const deliveryOptions: DeliveryOption[] = [];
+
+        // Option 1: Standard Delivery (Tier 1) - Only if parent was Tier 1
+        if (parentTier <= 1) {
+          deliveryOptions.push({
+            method: 'NORMAL_POST',
+            label: 'Standard Delivery (Active Parcel)',
+            description: `Bundled with Order #${parentOrder.orderNumber} · Zero extra fee`,
+            price: 0,
+            priceLabel: 'FREE',
+            estimatedDays: normalPost.days,
+            eligible: true,
+          });
+        }
+
+        // Option 2: Speed Post (Tier 2) - Upgrade if parent Tier 1, FREE if parent Tier 2, Hidden if parent Tier 3
+        if (parentTier <= 2) {
+          const spDiff = parentTier === 2 ? 0 : Math.max(0, speedPost.charge - parentPaidFee);
+          deliveryOptions.push({
+            method: 'SPEED_POST',
+            label: parentTier === 2 ? 'Speed Post (Active Parcel)' : 'Upgrade to Speed Post (Whole Package)',
+            description: parentTier === 2
+              ? `Bundled with Order #${parentOrder.orderNumber} · Zero extra fee`
+              : `Upgrades whole package to Speed Post (₹${parentPaidFee} credit applied)`,
+            price: spDiff,
+            priceLabel: spDiff === 0 ? 'FREE' : `₹${spDiff}`,
+            estimatedDays: speedPost.days,
+            eligible: true,
+          });
+        }
+
+        // Option 3: Express Local (Tier 3) - Available if express eligible
+        if (expressEligible) {
+          const exDiff = parentTier === 3 ? 0 : Math.max(0, expressLocal.charge - parentPaidFee);
+          deliveryOptions.push({
+            method: 'EXPRESS_LOCAL',
+            label: parentTier === 3 ? 'Express Delivery (Active Parcel)' : 'Upgrade to Express Delivery (Whole Package)',
+            description: parentTier === 3
+              ? `Bundled with Order #${parentOrder.orderNumber} · Zero extra fee`
+              : `Upgrades whole package to Same-Day Express (₹${parentPaidFee} credit applied)`,
+            price: exDiff,
+            priceLabel: exDiff === 0 ? 'FREE' : `₹${exDiff}`,
+            estimatedDays: expressLocal.days,
+            eligible: true,
+          });
+        }
+
+        result.deliveryOptions = deliveryOptions;
+      } else {
+        // Standard first-order calculation
+        if (selectedShippingMethod === 'SPEED_POST') {
+          shippingCharge = speedPost.charge;
+          shippingZone = speedPost.zone;
+          shippingMessage = speedPost.msg;
+          estimatedTransitDays = speedPost.days;
+        } else if (selectedShippingMethod === 'EXPRESS_LOCAL' && expressEligible) {
+          shippingCharge = expressLocal.charge;
+          shippingZone = expressLocal.zone;
+          shippingMessage = expressLocal.msg;
+          estimatedTransitDays = expressLocal.days;
+        } else {
+          selectedShippingMethod = 'NORMAL_POST';
+          shippingCharge = normalPost.charge;
+          shippingZone = normalPost.zone;
+          shippingMessage = normalPost.msg;
+          estimatedTransitDays = normalPost.days;
+        }
+
+        result.deliveryOptions = [
+          {
+            method: 'NORMAL_POST',
+            label: 'Standard Delivery',
+            description: payableSubtotal >= 999 ? 'Free nationwide delivery' : 'Reliable delivery via postal network',
+            price: normalPost.charge,
+            priceLabel: normalPost.charge === 0 ? 'FREE' : `₹${normalPost.charge}`,
+            estimatedDays: normalPost.days,
+            eligible: true,
+          },
+          {
+            method: 'SPEED_POST',
+            label: 'Speed Post',
+            description: 'Priority handling with real-time tracking',
+            price: speedPost.charge,
+            priceLabel: `₹${speedPost.charge}`,
+            estimatedDays: speedPost.days,
+            eligible: true,
+          },
+          {
+            method: 'EXPRESS_LOCAL',
+            label: 'Express Delivery',
+            description: 'Same-day local delivery partner',
+            price: expressLocal.charge,
+            priceLabel: `₹${expressLocal.charge}`,
+            estimatedDays: expressLocal.days,
+            eligible: expressEligible,
+          },
+        ];
+      }
 
       // Check if Free Shipping Coupon applied (overrides selected method charge)
       if (result.promotionId) {

@@ -230,6 +230,19 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         });
       }
 
+      // Add-on Bundle Synchronizer: If customer upgraded delivery service, elevate parent order to match
+      if (pricingResult.isAddonBundle && pricingResult.bundledWithOrderNumber) {
+        const getTier = (m: string) => (m === 'EXPRESS_LOCAL' ? 3 : m === 'SPEED_POST' ? 2 : 1);
+        const finalMethod = pricingResult.selectedShippingMethod || 'NORMAL_POST';
+        const parentMethod = pricingResult.parentShippingMethod || 'NORMAL_POST';
+        if (getTier(finalMethod) > getTier(parentMethod)) {
+          await tx.order.updateMany({
+            where: { orderNumber: pricingResult.bundledWithOrderNumber },
+            data: { shippingMethod: finalMethod }
+          });
+        }
+      }
+
       // Techno Points Loyalty Engine: 1 point/coin for every ₹100 spent
       const pointsEarned = Math.floor(pricingResult.totalAmount / 100);
       if (pointsEarned > 0 && userId) {

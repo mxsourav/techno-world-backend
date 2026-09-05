@@ -44,19 +44,6 @@ export class ExecutionService {
         uniqueSubjects
       );
 
-      // Fetch existing entity IDs to merge with the newly created ones
-      const allAuthors = await prisma.author.findMany({ select: { id: true, name: true } });
-      const allPublishers = await prisma.publisher.findMany({ select: { id: true, name: true } });
-      const allCategories = await prisma.category.findMany({ select: { id: true, name: true } });
-      const allBookTypes = await prisma.bookType.findMany({ select: { id: true, name: true } });
-      const allSubjects = await prisma.subject.findMany({ select: { id: true, name: true } });
-
-      for (const a of allAuthors) authorMap.set(a.name, a.id);
-      for (const p of allPublishers) publisherMap.set(p.name, p.id);
-      for (const c of allCategories) categoryMap.set(c.name, c.id);
-      for (const bt of allBookTypes) bookTypeMap.set(bt.name, bt.id);
-      for (const s of allSubjects) subjectMap.set(s.name, s.id);
-
       // 2. Write books
       importResult = await Writer.executeImport(
         prisma,

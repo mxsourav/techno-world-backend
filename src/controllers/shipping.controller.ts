@@ -84,15 +84,29 @@ export const bookOrderShipment = async (req: Request, res: Response, next: NextF
       return;
     }
 
-    const orderShippingMethod = order.shippingMethod || serviceType || 'SPEED_POST';
+    const { deliveryPartner, agentPhone, bundledOrderIds } = req.body;
+    const allIds = [order.id, ...(Array.isArray(bundledOrderIds) ? bundledOrderIds.filter((id: string) => id !== order.id) : [])];
+
+    let orderShippingMethod = serviceType || order.shippingMethod || 'SPEED_POST';
+    if (!serviceType && Array.isArray(bundledOrderIds) && bundledOrderIds.length > 0) {
+      const allBundledOrders = await prisma.order.findMany({
+        where: { id: { in: allIds } },
+        select: { shippingMethod: true },
+      });
+      if (allBundledOrders.some(o => o.shippingMethod === 'EXPRESS_LOCAL')) {
+        orderShippingMethod = 'EXPRESS_LOCAL';
+      } else if (allBundledOrders.some(o => o.shippingMethod === 'SPEED_POST')) {
+        orderShippingMethod = 'SPEED_POST';
+      }
+    }
 
     // ── EXPRESS_LOCAL: Manual local courier (Porter/Rapido) — no India Post API ──
     if (orderShippingMethod === 'EXPRESS_LOCAL') {
-      const { deliveryPartner, agentPhone } = req.body;
-      const updatedOrder = await prisma.order.update({
-        where: { id: order.id },
+      await prisma.order.updateMany({
+        where: { id: { in: allIds } },
         data: {
           shippingCarrier: deliveryPartner || 'Local Courier',
+          shippingMethod: 'EXPRESS_LOCAL',
           status: 'SHIPPED',
           notes: (order.notes ? order.notes + ' | ' : '') +
             `Express Local dispatch via ${deliveryPartner || 'Local Courier'}${agentPhone ? ` (${agentPhone})` : ''} at ${new Date().toISOString()}`,
@@ -101,12 +115,13 @@ export const bookOrderShipment = async (req: Request, res: Response, next: NextF
 
       res.json({
         success: true,
-        message: `Express delivery assigned to ${deliveryPartner || 'Local Courier'}`,
+        message: `Express delivery assigned to ${deliveryPartner || 'Local Courier'}${allIds.length > 1 ? ` for ${allIds.length} bundled orders` : ''}`,
         data: {
-          orderId: updatedOrder.id,
-          orderNumber: updatedOrder.orderNumber,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
           carrier: deliveryPartner || 'Local Courier',
           method: 'EXPRESS_LOCAL',
+          bundledCount: allIds.length,
         },
       });
       return;
@@ -143,40 +158,40 @@ export const bookOrderShipment = async (req: Request, res: Response, next: NextF
       sender_state: 'Karnataka',
       sender_pincode: '560001',
       sender_mobile_no: '9876543210',
-      receiver_name: order.address.fullName || order.user.name || 'Valued Customer',
+      receiver_name: order.address.fullName,
       receiver_company: '',
       receiver_add_line_1: order.address.addressLine1,
-      receiver_add_line_2: order.address.addressLine2 || '',
       receiver_city: order.address.city,
-      receiver_state: order.address.state || '',
+      receiver_state: order.address.state,
       receiver_pincode: order.address.pincode,
-      receiver_mobile_no: order.address.phone.replace(/\D/g, '').slice(-10) || '9876543211',
-      codr_cod: isCOD || order.paymentMethod === 'COD' ? 'COD' : '',
-      value_for_codr_cod: isCOD || order.paymentMethod === 'COD' ? order.totalAmount : 0,
+      receiver_mobile_no: order.address.phone,
+      receiver_email: order.address.email || order.user.email,
+      insurance: false,
+      value_for_customs: order.totalAmount,
     };
 
     const bookingResult = await indiaPostService.bookArticles([articlePayload]);
 
-    // Update order with AWB barcode and shipping carrier
-    const updatedOrder = await prisma.order.update({
-      where: { id: order.id },
+    await prisma.order.updateMany({
+      where: { id: { in: allIds } },
       data: {
         trackingNumber: barcode,
         shippingCarrier: carrierLabel,
+        shippingMethod: orderShippingMethod,
         status: order.status === 'PENDING' ? 'PROCESSING' : order.status,
-        notes: (order.notes ? order.notes + ' | ' : '') + `${carrierLabel} Batch: ` + bookingResult.batch_id,
       },
     });
 
     res.json({
       success: true,
-      message: `Shipment booked successfully via ${carrierLabel}`,
+      message: `Shipment booked successfully via ${carrierLabel}${allIds.length > 1 ? ` for ${allIds.length} bundled orders` : ''}`,
       data: {
-        orderId: updatedOrder.id,
-        orderNumber: updatedOrder.orderNumber,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
         barcode,
         carrier: carrierLabel,
         method: orderShippingMethod,
+        bundledCount: allIds.length,
         bookingDetails: bookingResult,
       },
     });

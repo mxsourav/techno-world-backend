@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc && node -e \"import('fs').then(fs => { if (fs.existsSync('src/assets')) { fs.mkdirSync('dist/assets', {recursive: true}); fs.copyFileSync('src/assets/techno_world_black.png', 'dist/assets/techno_world_black.png'); } })\"",
     "start": "node dist/server.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",

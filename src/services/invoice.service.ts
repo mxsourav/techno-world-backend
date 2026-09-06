@@ -1,5 +1,23 @@
 import PDFDocument from 'pdfkit';
 import { PrismaClient } from '@prisma/client';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function getBlackLogoPath(): string | null {
+  const candidates = [
+    path.resolve(__dirname, '../assets/techno_world_black.png'),
+    path.resolve(__dirname, '../../src/assets/techno_world_black.png'),
+    path.resolve(process.cwd(), 'src/assets/techno_world_black.png'),
+    path.resolve(process.cwd(), 'dist/assets/techno_world_black.png'),
+    path.resolve(process.cwd(), 'assets/techno_world_black.png'),
+    path.resolve(process.cwd(), '../app/public/techno_world_black.png'),
+  ];
+  return candidates.find(p => fs.existsSync(p)) || null;
+}
 
 const prisma = new PrismaClient();
 
@@ -110,15 +128,27 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
     let y = 40;
 
     // ─── HEADER ──────────────────────────────────────────────
-    doc.fontSize(16).font('Helvetica-Bold').fillColor('#065f46')
-       .text(SELLER.name, leftX, y);
-    y += 18;
+    const blackLogo = getBlackLogoPath();
+    if (blackLogo) {
+      try {
+        doc.image(blackLogo, leftX, y, { width: 140 });
+        y += 34;
+      } catch {
+        doc.fontSize(16).font('Helvetica-Bold').fillColor('#0f172a')
+           .text(SELLER.name, leftX, y);
+        y += 18;
+      }
+    } else {
+      doc.fontSize(16).font('Helvetica-Bold').fillColor('#0f172a')
+         .text(SELLER.name, leftX, y);
+      y += 18;
+    }
     doc.fontSize(8).font('Helvetica').fillColor('#64748b')
        .text(SELLER.tagline, leftX, y);
     y += 12;
     doc.fontSize(7.5).fillColor('#475569')
        .text(SELLER.address.replace('\n', ', '), leftX, y, { width: 280 });
-    y += 20;
+    y += 18;
     doc.text(`WhatsApp Support: ${SELLER.phone}`, leftX, y);
 
     // Invoice title (right side)
@@ -397,7 +427,7 @@ async function generateMultiOrderPDF(orders: any[]): Promise<Buffer> {
     doc.on('error', reject);
 
     orders.forEach((order, orderIdx) => {
-      if (orderIdx > 0) doc.addPage();
+      if (orderIdx > 0) doc.addPage({ size: 'A4', margin: 40 });
 
       const pageW = doc.page.width - 80;
       const leftX = 40;
@@ -411,9 +441,21 @@ async function generateMultiOrderPDF(orders: any[]): Promise<Buffer> {
       const custEmail = order.pickupEmail || order.customerEmail || order.address?.email || order.user?.email || 'N/A';
 
       // HEADER
-      doc.fontSize(14).font('Helvetica-Bold').fillColor('#065f46')
-         .text(SELLER.name, leftX, y);
-      y += 16;
+      const blackLogo = getBlackLogoPath();
+      if (blackLogo) {
+        try {
+          doc.image(blackLogo, leftX, y, { width: 130 });
+          y += 30;
+        } catch {
+          doc.fontSize(14).font('Helvetica-Bold').fillColor('#0f172a')
+             .text(SELLER.name, leftX, y);
+          y += 16;
+        }
+      } else {
+        doc.fontSize(14).font('Helvetica-Bold').fillColor('#0f172a')
+           .text(SELLER.name, leftX, y);
+        y += 16;
+      }
       doc.fontSize(7).font('Helvetica').fillColor('#64748b')
          .text(SELLER.tagline, leftX, y);
       y += 10;

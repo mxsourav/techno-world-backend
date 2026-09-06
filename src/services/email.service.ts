@@ -26,6 +26,15 @@ export interface SendOrderEmailParams {
   totalAmount?: number;
 }
 
+export interface OrderMergeRefundEmailParams {
+  recipientEmail: string;
+  customerName: string;
+  childOrderNumber: string;
+  parentOrderNumber: string;
+  refundAmount: number;
+  newWalletBalance: number;
+}
+
 export class EmailService {
   private static instance: EmailService;
 
@@ -109,10 +118,82 @@ export class EmailService {
     `;
   }
 
-  public async sendOrderNotification(params: SendOrderEmailParams): Promise<{ success: boolean; messageId: string; timestamp: string; status: string; note?: string }> {
+  public async sendOrderMergeRefundEmail(params: OrderMergeRefundEmailParams): Promise<any> {
+    const subject = params.refundAmount > 0
+      ? `Order #${params.childOrderNumber} Consolidated with #${params.parentOrderNumber} – ₹${params.refundAmount} Refunded to TechnoWallet`
+      : `Order #${params.childOrderNumber} Consolidated with #${params.parentOrderNumber}`;
+
+    const refundBadgeHtml = params.refundAmount > 0
+      ? `
+        <div style="margin: 20px 0; background: #ecfdf5; border: 2px solid #059669; border-radius: 12px; padding: 18px; text-align: center;">
+          <span style="font-size: 12px; font-weight: 800; color: #047857; text-transform: uppercase; letter-spacing: 0.5px;">TechnoWallet Instant Refund</span>
+          <div style="font-size: 30px; font-weight: 900; color: #065f46; margin: 6px 0;">+₹${params.refundAmount.toFixed(2)}</div>
+          <div style="font-size: 13px; font-weight: 700; color: #0f172a;">Refund of Delivery Charge for Order #${params.childOrderNumber}</div>
+          <div style="font-size: 12px; color: #334155; margin-top: 4px;">Updated TechnoWallet Balance: <b>₹${params.newWalletBalance.toFixed(2)}</b></div>
+        </div>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 20px;">
+          <h4 style="margin: 0 0 8px; font-size: 13px; font-weight: 800; color: #0f172a;">
+            ✨ Why Your TechnoWallet Balance is 100% Cash-Equivalent:
+          </h4>
+          <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #475569; line-height: 1.6;">
+            <li><b>No Expiry Date:</b> Unlike promotional coins or points, your TechnoWallet balance never expires.</li>
+            <li><b>Zero Restrictions:</b> Can be used on <i>any</i> academic, medical, engineering, or general book.</li>
+            <li><b>No Maximum Usage Limits:</b> You can use your entire wallet balance (up to 100% of order total).</li>
+            <li><b>Stackable with Techno Coins:</b> Fully combinable with your Techno Points and promotional discounts!</li>
+          </ul>
+        </div>
+      `
+      : `
+        <div style="margin: 20px 0; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 14px; text-align: center; color: #166534; font-size: 13px; font-weight: 700;">
+          🎉 Both orders have been consolidated into a single package for fast united dispatch at zero extra delivery charge.
+        </div>
+      `;
+
+    const customHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff; color: #1e293b;">
+        <div style="background: linear-gradient(135deg, #064e3b 0%, #047857 100%); padding: 22px; border-radius: 12px; text-align: center; color: #ffffff;">
+          <h2 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">Techno World Books</h2>
+          <p style="margin: 4px 0 0; font-size: 13px; color: #a7f3d0;">Consolidated Package & TechnoWallet Refund Notice</p>
+        </div>
+        
+        <div style="padding: 24px 8px; font-size: 14px; line-height: 1.6;">
+          <h3 style="margin-top: 0; font-size: 16px; font-weight: 700; color: #0f172a;">Dear ${params.customerName || 'Valued Customer'},</h3>
+          <p style="color: #334155; margin-top: 10px;">
+            Your subsequent order <b>#${params.childOrderNumber}</b> has been combined with your existing order <b>#${params.parentOrderNumber}</b> into a single package for unified dispatch.
+          </p>
+
+          ${refundBadgeHtml}
+
+          <div style="margin-top: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; font-size: 12px; color: #64748b;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span>Primary Consignment:</span>
+              <span style="font-weight: 700; color: #0f172a;">#${params.parentOrderNumber}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>Merged Add-on Order:</span>
+              <span style="font-weight: 700; color: #0f172a;">#${params.childOrderNumber}</span>
+            </div>
+          </div>
+
+          <p style="margin-top: 24px; font-size: 12px; color: #64748b; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+            Need help or want to track your parcel? Feel free to message us on WhatsApp at <b>+91 747 913 5626</b>.
+          </p>
+        </div>
+      </div>
+    `;
+
+    return this.sendOrderNotification({
+      recipientEmail: params.recipientEmail,
+      orderNumber: params.childOrderNumber,
+      subject,
+      message: `Your order #${params.childOrderNumber} has been consolidated with #${params.parentOrderNumber}. ₹${params.refundAmount} delivery fee has been refunded to your TechnoWallet balance.`,
+    }, customHtml);
+  }
+
+  public async sendOrderNotification(params: SendOrderEmailParams, customHtml?: string): Promise<{ success: boolean; messageId: string; timestamp: string; status: string; note?: string }> {
     const config = await this.getEffectiveSmtpConfig();
     const timestamp = new Date().toISOString();
-    const html = this.generateBrandedHtml(params.subject, params.message, params.orderNumber, params.totalAmount);
+    const html = customHtml || this.generateBrandedHtml(params.subject, params.message, params.orderNumber, params.totalAmount);
     const sender = `"${config.senderName}" <${config.senderEmail || config.user || 'orders@technoworld.com'}>`;
 
     let deliveryStatus = 'DISPATCHED_TO_OUTBOX';

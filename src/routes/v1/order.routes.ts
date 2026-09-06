@@ -12,6 +12,8 @@ import {
   setPickupSlots,
   confirmPickupSlot,
   markOrderCollected,
+  getOrderMergeCandidates,
+  mergeChildOrder,
 } from '../../controllers/order.controller.js';
 import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
 import { validateRequest } from '../../middlewares/validate.middleware.js';
@@ -29,6 +31,8 @@ router.post('/:id/confirm-pickup-slot', requireAuth, confirmPickupSlot);
 // Admin endpoints
 router.get('/admin/all', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), getAllOrders);
 router.get('/admin/notifications', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), getOrderNotifications);
+router.get('/admin/:orderId/merge-candidates', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), getOrderMergeCandidates);
+router.post('/admin/merge-child-order', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), mergeChildOrder);
 router.patch('/admin/batch-status', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), batchUpdateOrderStatus);
 router.post('/admin/batch-email', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), batchSendOrderEmail);
 router.patch('/admin/book/:id/dimensions', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), updateBookDimensions);

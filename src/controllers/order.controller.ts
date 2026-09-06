@@ -933,3 +933,224 @@ export const markOrderCollected = async (req: Request, res: Response, next: Next
     next(error);
   }
 };
+
+// GET /api/v1/orders/admin/:orderId/merge-candidates
+export const getOrderMergeCandidates = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { orderId } = req.params;
+    const order = await prisma.order.findFirst({
+      where: { OR: [{ id: orderId }, { orderNumber: orderId }] },
+      include: { address: true, user: true }
+    });
+
+    if (!order) {
+      res.status(404).json({ success: false, message: 'Order not found' });
+      return;
+    }
+
+    const phone = (order.pickupPhone || order.address?.phone || order.user?.phone || '').replace(/\D/g, '').slice(-10);
+    const pin = (order.address?.pincode || '').trim();
+
+    const candidates = await prisma.order.findMany({
+      where: {
+        id: { not: order.id },
+        parentOrderId: null, // Candidate should not already be a child order
+        status: { in: ['PENDING', 'CONFIRMED', 'PROCESSING'] },
+        trackingNumber: null,
+        OR: [
+          ...(order.userId ? [{ userId: order.userId }] : []),
+          ...(phone && pin ? [{ address: { phone: { contains: phone }, pincode: pin } }] : [])
+        ]
+      },
+      include: {
+        address: true,
+        user: { select: { id: true, name: true, email: true, phone: true } },
+        items: { include: { book: { select: { id: true, title: true, coverUrl: true } } } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: candidates
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/v1/orders/admin/merge-child-order
+export const mergeChildOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { childOrderId, parentOrderId } = req.body;
+
+    if (!childOrderId || !parentOrderId) {
+      res.status(400).json({ success: false, message: 'Both childOrderId and parentOrderId are required' });
+      return;
+    }
+
+    if (childOrderId === parentOrderId) {
+      res.status(400).json({ success: false, message: 'Cannot merge an order into itself' });
+      return;
+    }
+
+    // Fetch child order
+    const childOrder = await prisma.order.findFirst({
+      where: {
+        OR: [{ id: childOrderId }, { orderNumber: childOrderId }]
+      },
+      include: { user: true, address: true }
+    });
+
+    if (!childOrder) {
+      res.status(404).json({ success: false, message: 'Child order not found' });
+      return;
+    }
+
+    if (['SHIPPED', 'DELIVERED', 'CANCELLED'].includes(childOrder.status) || childOrder.trackingNumber) {
+      res.status(400).json({ success: false, message: 'Cannot merge an order that has already been dispatched, delivered, or cancelled' });
+      return;
+    }
+
+    // Fetch parent order
+    const parentOrder = await prisma.order.findFirst({
+      where: {
+        OR: [{ id: parentOrderId }, { orderNumber: parentOrderId }]
+      },
+      include: { user: true, address: true }
+    });
+
+    if (!parentOrder) {
+      res.status(404).json({ success: false, message: 'Parent order not found' });
+      return;
+    }
+
+    if (['SHIPPED', 'DELIVERED', 'CANCELLED'].includes(parentOrder.status) || parentOrder.trackingNumber) {
+      res.status(400).json({ success: false, message: 'Parent order has already been dispatched, delivered, or cancelled' });
+      return;
+    }
+
+    // Verify same customer (userId match or phone/pincode match)
+    const childPhone = (childOrder.pickupPhone || childOrder.address?.phone || childOrder.user?.phone || '').replace(/\D/g, '').slice(-10);
+    const parentPhone = (parentOrder.pickupPhone || parentOrder.address?.phone || parentOrder.user?.phone || '').replace(/\D/g, '').slice(-10);
+    const isUserMatch = Boolean(childOrder.userId && parentOrder.userId && childOrder.userId === parentOrder.userId);
+    const isPhoneMatch = Boolean(childPhone && parentPhone && childPhone === parentPhone);
+
+    if (!isUserMatch && !isPhoneMatch) {
+      res.status(400).json({ success: false, message: 'Orders do not appear to belong to the same customer (different account and phone number)' });
+      return;
+    }
+
+    const refundAmount = childOrder.shippingCharge || 0;
+    const targetUserId = childOrder.userId || parentOrder.userId;
+
+    // Perform atomic merge & wallet refund
+    const result = await prisma.$transaction(async (tx) => {
+      let updatedWalletBalance = 0;
+
+      if (refundAmount > 0 && targetUserId) {
+        // Credit shipping fee to TechnoWallet
+        const updatedUser = await tx.user.update({
+          where: { id: targetUserId },
+          data: {
+            technoWallet: { increment: refundAmount }
+          },
+          select: { technoWallet: true }
+        });
+        updatedWalletBalance = updatedUser.technoWallet;
+
+        // Record audit transaction
+        await tx.walletTransaction.create({
+          data: {
+            userId: targetUserId,
+            orderId: childOrder.id,
+            amount: refundAmount,
+            type: 'CREDIT',
+            status: 'COMPLETED',
+            description: `Refund of ₹${refundAmount} delivery fee for order #${childOrder.orderNumber} manually merged into parcel #${parentOrder.orderNumber}`
+          }
+        });
+      } else if (targetUserId) {
+        const u = await tx.user.findUnique({ where: { id: targetUserId }, select: { technoWallet: true } });
+        updatedWalletBalance = u?.technoWallet || 0;
+      }
+
+      // Update child order
+      const childNotes = [
+        childOrder.notes,
+        `[${new Date().toISOString()}] Manually merged into parent order #${parentOrder.orderNumber}.${refundAmount > 0 ? ` ₹${refundAmount} delivery fee refunded to TechnoWallet.` : ''}`
+      ].filter(Boolean).join('\n');
+
+      const updatedChild = await tx.order.update({
+        where: { id: childOrder.id },
+        data: {
+          parentOrderId: parentOrder.id,
+          isMerged: true,
+          mergedAt: new Date(),
+          shippingCharge: 0,
+          shippingRefunded: refundAmount,
+          totalAmount: Math.max(0, childOrder.totalAmount - refundAmount),
+          notes: childNotes,
+        }
+      });
+
+      // Update parent order notes
+      const parentNotes = [
+        parentOrder.notes,
+        `[${new Date().toISOString()}] Consolidated with child order #${childOrder.orderNumber}.`
+      ].filter(Boolean).join('\n');
+
+      const updatedParent = await tx.order.update({
+        where: { id: parentOrder.id },
+        data: {
+          notes: parentNotes,
+        }
+      });
+
+      return { updatedChild, updatedParent, updatedWalletBalance };
+    });
+
+    // In-app notification
+    if (targetUserId) {
+      await prisma.notification.create({
+        data: {
+          userId: targetUserId,
+          title: `📦 Order #${childOrder.orderNumber} Consolidated with #${parentOrder.orderNumber}`,
+          message: refundAmount > 0
+            ? `Your order #${childOrder.orderNumber} was merged into consignment #${parentOrder.orderNumber}. ₹${refundAmount} delivery fee has been refunded to your TechnoWallet balance (never expires, 100% usable).`
+            : `Your order #${childOrder.orderNumber} was combined with package #${parentOrder.orderNumber} for consolidated delivery.`,
+          type: 'order',
+          link: '/profile?tab=orders'
+        }
+      }).catch(err => console.warn('[MERGE_NOTIF_ERROR]', err.message));
+    }
+
+    // Send email notification
+    const customerEmail = childOrder.pickupEmail || childOrder.customerEmail || childOrder.address?.email || childOrder.user?.email || parentOrder.customerEmail;
+    const customerName = childOrder.pickupName || childOrder.address?.fullName || childOrder.user?.name || parentOrder.address?.fullName || 'Valued Customer';
+
+    if (customerEmail) {
+      emailService.sendOrderMergeRefundEmail({
+        recipientEmail: customerEmail,
+        customerName,
+        childOrderNumber: childOrder.orderNumber,
+        parentOrderNumber: parentOrder.orderNumber,
+        refundAmount,
+        newWalletBalance: result.updatedWalletBalance
+      }).catch(err => console.warn('[MERGE_EMAIL_ERROR]', err.message));
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Order #${childOrder.orderNumber} successfully merged into #${parentOrder.orderNumber}.${refundAmount > 0 ? ` ₹${refundAmount} refunded to TechnoWallet.` : ''}`,
+      data: {
+        childOrder: result.updatedChild,
+        parentOrder: result.updatedParent,
+        refundAmount,
+        newWalletBalance: result.updatedWalletBalance
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};

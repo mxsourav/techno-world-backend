@@ -19,6 +19,7 @@ model User {
   phone               String?
   technoPoints        Int                  @default(0)
   pendingPoints       Int                  @default(0)
+  technoWallet        Float                @default(0)
   tokenVersion        Int                  @default(1)
   failedLogins        Int                  @default(0)
   lockedUntil         DateTime?
@@ -31,6 +32,7 @@ model User {
   notifications       Notification[]
   orders              Order[]
   pointTransactions   PointTransaction[]
+  walletTransactions  WalletTransaction[]
   reviews             Review[]
   questions           BookQuestion[]
   savedPaymentMethods SavedPaymentMethod[]
@@ -261,16 +263,23 @@ model Order {
   notes           String?       @db.Text
   invoiceNumber      String?   @unique
   invoiceGeneratedAt DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  address         Address?      @relation(fields: [addressId], references: [id])
-  promotion       Promotion?    @relation(fields: [promotionId], references: [id])
-  user            User          @relation(fields: [userId], references: [id])
-  items           OrderItem[]
+  parentOrderId      String?
+  isMerged           Boolean       @default(false)
+  mergedAt           DateTime?
+  shippingRefunded   Float         @default(0)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  address            Address?      @relation(fields: [addressId], references: [id])
+  promotion          Promotion?    @relation(fields: [promotionId], references: [id])
+  user               User          @relation(fields: [userId], references: [id])
+  parentOrder        Order?        @relation("OrderHierarchy", fields: [parentOrderId], references: [id])
+  childOrders        Order[]       @relation("OrderHierarchy")
+  items              OrderItem[]
 
   @@index([userId])
   @@index([status])
   @@index([orderNumber])
+  @@index([parentOrderId])
   @@index([addressId], map: "Order_addressId_fkey")
   @@index([promotionId], map: "Order_promotionId_fkey")
 }
@@ -531,6 +540,21 @@ model PointTransaction {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model WalletTransaction {
+  id          String   @id @default(uuid())
+  userId      String
+  orderId     String?
+  amount      Float
+  type        String   // "CREDIT" | "DEBIT"
+  status      String   @default("COMPLETED")
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([orderId])
 }
 
 model SystemSetting {

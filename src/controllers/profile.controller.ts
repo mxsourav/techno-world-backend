@@ -24,6 +24,7 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
         role: true,
         technoPoints: true,
         pendingPoints: true,
+        technoWallet: true,
         createdAt: true,
         addresses: {
           orderBy: { createdAt: 'desc' },
@@ -88,6 +89,7 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
         role: true,
         technoPoints: true,
         pendingPoints: true,
+        technoWallet: true,
         updatedAt: true,
       },
     });
@@ -409,12 +411,17 @@ export const getPointTransactions = async (req: Request, res: Response, next: Ne
       return;
     }
 
-    const [user, transactions] = await Promise.all([
+    const [user, transactions, walletTransactions] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
-        select: { technoPoints: true, pendingPoints: true },
+        select: { technoPoints: true, pendingPoints: true, technoWallet: true },
       }),
       prisma.pointTransaction.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }),
+      prisma.walletTransaction.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
         take: 50,
@@ -426,6 +433,7 @@ export const getPointTransactions = async (req: Request, res: Response, next: Ne
       data: {
         technoPoints: user?.technoPoints || 0,
         pendingPoints: user?.pendingPoints || 0,
+        technoWallet: user?.technoWallet || 0,
         terms: {
           rate: '1 Techno Point = ₹1.00 (Awarded at 1 point per ₹100 spent)',
           creditTiming: 'Points are credited after the 7-day return window concludes',
@@ -433,7 +441,13 @@ export const getPointTransactions = async (req: Request, res: Response, next: Ne
           expiryNote: 'Points expire 1 year from credit date',
           redemptionLimit: 'Up to 20% of cart total per checkout',
         },
+        walletTerms: {
+          expiry: 'Never Expires',
+          usableLimit: '100% usable on any product, no maximum caps or limits',
+          stackable: 'Fully stackable with Techno Coins and coupon discounts',
+        },
         transactions: transactions || [],
+        walletTransactions: walletTransactions || [],
       },
     });
   } catch (error) {
@@ -471,6 +485,23 @@ export const getUserOrders = async (req: Request, res: Response, next: NextFunct
           },
         },
         address: true,
+        parentOrder: {
+          select: {
+            id: true,
+            orderNumber: true,
+            trackingNumber: true,
+            status: true,
+          },
+        },
+        childOrders: {
+          select: {
+            id: true,
+            orderNumber: true,
+            totalAmount: true,
+            shippingRefunded: true,
+            isMerged: true,
+          },
+        },
       },
     });
 

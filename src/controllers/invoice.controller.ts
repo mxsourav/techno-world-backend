@@ -22,7 +22,10 @@ export const downloadInvoice = async (req: Request, res: Response, next: NextFun
 
     // Verify the order belongs to this user
     const order = await prisma.order.findFirst({
-      where: { id: orderId, userId },
+      where: {
+        OR: [{ id: orderId }, { orderNumber: orderId }],
+        userId
+      },
       select: { id: true, orderNumber: true, invoiceNumber: true, status: true }
     });
 
@@ -61,8 +64,10 @@ export const adminDownloadInvoice = async (req: Request, res: Response, next: Ne
   try {
     const { orderId } = req.params;
 
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [{ id: orderId }, { orderNumber: orderId }]
+      },
       select: { id: true, orderNumber: true, invoiceNumber: true }
     });
 
@@ -95,8 +100,10 @@ export const adminGenerateInvoice = async (req: Request, res: Response, next: Ne
   try {
     const { orderId } = req.params;
 
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [{ id: orderId }, { orderNumber: orderId }]
+      },
       select: { id: true, orderNumber: true, invoiceNumber: true }
     });
 
@@ -154,9 +161,12 @@ export const adminBatchDownload = async (req: Request, res: Response, next: Next
 
     // Ensure all have invoice numbers
     for (const oid of orderIds) {
-      const o = await prisma.order.findUnique({ where: { id: oid }, select: { invoiceNumber: true } });
+      const o = await prisma.order.findFirst({
+        where: { OR: [{ id: oid }, { orderNumber: oid }] },
+        select: { id: true, invoiceNumber: true }
+      });
       if (o && !o.invoiceNumber) {
-        await assignInvoiceNumber(oid);
+        await assignInvoiceNumber(o.id);
       }
     }
 

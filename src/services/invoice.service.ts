@@ -38,12 +38,16 @@ export async function generateInvoiceNumber(): Promise<string> {
 
 // ─── Assign Invoice Number to Order ─────────────────────────────
 export async function assignInvoiceNumber(orderId: string): Promise<string> {
-  const order = await prisma.order.findUnique({ where: { id: orderId }, select: { invoiceNumber: true } });
-  if (order?.invoiceNumber) return order.invoiceNumber;
+  const order = await prisma.order.findFirst({
+    where: { OR: [{ id: orderId }, { orderNumber: orderId }] },
+    select: { id: true, invoiceNumber: true }
+  });
+  if (!order) throw new Error(`Order ${orderId} not found`);
+  if (order.invoiceNumber) return order.invoiceNumber;
 
   const invoiceNumber = await generateInvoiceNumber();
   await prisma.order.update({
-    where: { id: orderId },
+    where: { id: order.id },
     data: { invoiceNumber, invoiceGeneratedAt: new Date() }
   });
   return invoiceNumber;
@@ -69,8 +73,8 @@ function getShippingLabel(method?: string | null): string {
 
 // ─── PDF Generation ─────────────────────────────────────────────
 export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
+  const order = await prisma.order.findFirst({
+    where: { OR: [{ id: orderId }, { orderNumber: orderId }] },
     include: {
       items: {
         include: {
@@ -90,7 +94,7 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
   if (!order) throw new Error(`Order ${orderId} not found`);
 
   // Ensure invoice number is assigned
-  const invoiceNumber = order.invoiceNumber || await assignInvoiceNumber(orderId);
+  const invoiceNumber = order.invoiceNumber || await assignInvoiceNumber(order.id);
 
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -343,7 +347,12 @@ export async function generateMergedInvoicesPDF(orderIds: string[]): Promise<Buf
   // For merged PDFs, we generate each invoice as a separate buffer then concatenate pages
   // Since pdfkit can't merge, we generate all invoices into one doc
   const allOrders = await prisma.order.findMany({
-    where: { id: { in: orderIds } },
+    where: {
+      OR: [
+        { id: { in: orderIds } },
+        { orderNumber: { in: orderIds } }
+      ]
+    },
     include: {
       items: {
         include: {

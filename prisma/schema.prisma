@@ -259,6 +259,8 @@ model Order {
   selectedPickupSlot String?
   pickupStatus    String?       @default("NONE")
   notes           String?       @db.Text
+  invoiceNumber      String?   @unique
+  invoiceGeneratedAt DateTime?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   address         Address?      @relation(fields: [addressId], references: [id])

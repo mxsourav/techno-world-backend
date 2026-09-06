@@ -16,9 +16,11 @@ import profileRoutes from './profile.routes.js';
 import reviewRoutes from './review.routes.js';
 import questionRoutes from './question.routes.js';
 import paymentRoutes from './payment.routes.js';
+import invoiceRoutes from './invoice.routes.js';
 
 const router = Router();
 
+// API Routes
 router.get('/', (req, res) => {
   res.json({
     message: 'Techno World Books API v1',
@@ -45,5 +47,6 @@ router.use('/profile', profileRoutes);
 router.use('/reviews', reviewRoutes);
 router.use('/questions', questionRoutes);
 router.use('/payments', paymentRoutes);
+router.use('/invoices', invoiceRoutes);
 
 export default router;

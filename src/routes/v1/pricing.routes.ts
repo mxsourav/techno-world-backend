@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { calculatePricing } from '../../controllers/pricing.controller.js';
+import { optionalAuth } from '../../middlewares/auth.middleware.js';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
@@ -11,6 +12,6 @@ const pricingLimiter = rateLimit({
   message: { success: false, message: 'Too many pricing requests, please try again later.' }
 });
 
-router.post('/calculate', calculatePricing);
+router.post('/calculate', optionalAuth, calculatePricing);
 
 export default router;

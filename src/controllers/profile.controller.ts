@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../config/logger.js';
+import { ensureUserTestingBonus } from '../services/loyalty.service.js';
 
 const prisma = new PrismaClient();
 
@@ -12,6 +13,9 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
       res.status(401).json({ success: false, message: 'Authentication required' });
       return;
     }
+
+    // Ensure testing bonus (minimum 150 points & ₹50 cash)
+    await ensureUserTestingBonus(userId);
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -410,6 +414,9 @@ export const getPointTransactions = async (req: Request, res: Response, next: Ne
       res.status(401).json({ success: false, message: 'Authentication required' });
       return;
     }
+
+    // Ensure testing bonus (minimum 150 points & ₹50 cash)
+    await ensureUserTestingBonus(userId);
 
     const [user, transactions, walletTransactions] = await Promise.all([
       prisma.user.findUnique({

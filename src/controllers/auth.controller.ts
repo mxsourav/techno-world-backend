@@ -4,6 +4,7 @@ import argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { generateTokens, verifyToken } from '../utils/jwt.js';
+import { ensureUserTestingBonus } from '../services/loyalty.service.js';
 
 const prisma = new PrismaClient();
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -97,14 +98,26 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
+    // Ensure testing bonus (at least 150 points & ₹50 cash)
+    const bonus = await ensureUserTestingBonus(user.id);
+
+    const userPayload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      technoPoints: bonus.technoPoints,
+      technoWallet: bonus.technoWallet,
+    };
+
     res.status(200).json({
       success: true,
       data: {
         accessToken,
         refreshToken,
-        user: { id: user.id, email: user.email, role: user.role, name: user.name }
+        user: userPayload
       },
-      user: { id: user.id, email: user.email, role: user.role, name: user.name }
+      user: userPayload
     });
   } catch (error) {
     console.error('[LOGIN_ERROR]', error instanceof Error ? error.message : 'Unknown');
@@ -270,6 +283,9 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    // Ensure testing bonus (at least 150 points & ₹50 cash)
+    const bonus = await ensureUserTestingBonus(user.id);
+
     res.status(200).json({
       success: true,
       message: 'Developer Google OAuth bypass authentication successful',
@@ -281,7 +297,8 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
           role: user.role,
           name: user.name,
           avatarUrl: user.avatarUrl,
-          technoPoints: user.technoPoints,
+          technoPoints: bonus.technoPoints,
+          technoWallet: bonus.technoWallet,
         },
       },
     });

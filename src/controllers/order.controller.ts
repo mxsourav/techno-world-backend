@@ -17,7 +17,7 @@ function generateOrderNumber(): string {
 
 export const createOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { items, addressId, address, paymentMethod, couponCode, shippingMethod } = req.body;
+    const { items, addressId, address, paymentMethod, couponCode, shippingMethod, pointsUsed, walletUsed } = req.body;
     const orderEmail = (req.body.email || req.body.customerEmail || address?.email || (req as any).user?.email || '').trim();
     let userId = (req as any).user?.userId || (req as any).user?.id || req.body.userId;
     
@@ -90,6 +90,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       addressId,
       shippingMethod: shippingMethod || 'NORMAL_POST',
       paymentMethod: paymentMethod || 'COD',
+      pointsUsed: pointsUsed !== undefined ? Number(pointsUsed) : undefined,
+      walletUsed: walletUsed !== undefined ? Number(walletUsed) : undefined,
       address: {
         fullName: address?.fullName || address?.name,
         phone: address?.phone,
@@ -196,6 +198,29 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         }
       }
 
+      const isFullyCovered = pricingResult.totalAmount <= 0;
+      const totalDiscount = Number(((pricingResult.promotionDiscount || 0) + (pricingResult.pointsDiscount || 0) + (pricingResult.walletDiscount || 0)).toFixed(2));
+
+      const rawPayMethod = String(paymentMethod || '').trim();
+      const isCodRequested = rawPayMethod.toUpperCase() === 'COD' || rawPayMethod.toLowerCase().includes('cash on delivery');
+
+      const effectivePaymentMethod = isFullyCovered
+        ? 'REWARDS_AND_WALLET'
+        : (isCodRequested ? 'COD' : (paymentMethod || 'UPI'));
+
+      const effectivePaymentStatus = isFullyCovered
+        ? 'PAID'
+        : (isCodRequested ? 'PENDING' : 'PAID');
+
+      const notesParts: string[] = [];
+      if (pricingResult.pointsUsed) {
+        notesParts.push(`Redeemed ${pricingResult.pointsUsed} Techno Points (₹${pricingResult.pointsDiscount})`);
+      }
+      if (pricingResult.walletUsed) {
+        notesParts.push(`Used ₹${pricingResult.walletUsed.toFixed(2)} TechnoWallet Cash`);
+      }
+      const orderNotes = notesParts.length > 0 ? `[Loyalty: ${notesParts.join(' | ')}]` : null;
+
       const created = await tx.order.create({
         data: {
           orderNumber: generateOrderNumber(),
@@ -203,10 +228,10 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
           customerEmail: orderEmail,
           addressId: finalAddressId,
           status: 'PENDING',
-          paymentStatus: (String(paymentMethod || '').trim().toUpperCase() === 'COD' || String(paymentMethod || '').toLowerCase().includes('cash on delivery')) ? 'PENDING' : 'PAID',
-          paymentMethod: (String(paymentMethod || '').trim().toUpperCase() === 'COD' || String(paymentMethod || '').toLowerCase().includes('cash on delivery')) ? 'COD' : (paymentMethod || 'COD'),
+          paymentStatus: effectivePaymentStatus,
+          paymentMethod: effectivePaymentMethod,
           subtotal: pricingResult.subtotal,
-          discountAmount: pricingResult.promotionDiscount,
+          discountAmount: totalDiscount,
           shippingCharge: pricingResult.shippingCharge,
           shippingMethod: pricingResult.selectedShippingMethod || shippingMethod || 'NORMAL_POST',
           shippingCarrier: isSelfPickup ? 'STORE_TAKEAWAY' : null,
@@ -217,10 +242,53 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
           taxAmount: pricingResult.taxAmount,
           totalAmount: pricingResult.totalAmount,
           promotionId: pricingResult.promotionId,
+          notes: orderNotes,
           items: { create: orderItems },
         },
         include: { items: { include: { book: true } }, address: true, user: true },
       });
+
+      // Deduct Redeemed TechnoPoints
+      if (pricingResult.pointsUsed && pricingResult.pointsUsed > 0 && userId) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { technoPoints: { decrement: pricingResult.pointsUsed } },
+        });
+
+        const oneYearExpiry = new Date();
+        oneYearExpiry.setFullYear(oneYearExpiry.getFullYear() + 1);
+
+        await tx.pointTransaction.create({
+          data: {
+            userId,
+            orderId: created.id,
+            points: pricingResult.pointsUsed,
+            type: 'REDEEMED',
+            status: 'DEBITED',
+            description: `Redeemed ${pricingResult.pointsUsed} Techno Points on Order #${created.orderNumber}`,
+            expiresAt: oneYearExpiry,
+          },
+        });
+      }
+
+      // Deduct Used TechnoWallet Cash
+      if (pricingResult.walletUsed && pricingResult.walletUsed > 0 && userId) {
+        await tx.user.update({
+          where: { id: userId },
+          data: { technoWallet: { decrement: pricingResult.walletUsed } },
+        });
+
+        await tx.walletTransaction.create({
+          data: {
+            userId,
+            orderId: created.id,
+            amount: pricingResult.walletUsed,
+            type: 'DEBIT',
+            status: 'COMPLETED',
+            description: `Debited ₹${pricingResult.walletUsed.toFixed(2)} from TechnoWallet on Order #${created.orderNumber}`,
+          },
+        });
+      }
 
       if (pricingResult.promotionId && userId) {
         await tx.promotion.update({
@@ -250,7 +318,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         }
       }
 
-      // Techno Points Loyalty Engine: 1 point/coin for every ₹100 spent
+      // Techno Points Loyalty Engine: 1 point/coin for every ₹100 spent (on remaining payable)
       const pointsEarned = Math.floor(pricingResult.totalAmount / 100);
       if (pointsEarned > 0 && userId) {
         await tx.user.update({
@@ -278,8 +346,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     });
 
     let razorpayOrder = null;
-    const isOrderCOD = String(paymentMethod || '').trim().toUpperCase() === 'COD' || String(paymentMethod || '').toLowerCase().includes('cash on delivery');
-    if (!isOrderCOD && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
+    const isOrderCOD = order.paymentMethod === 'COD' || order.paymentMethod === 'REWARDS_AND_WALLET';
+    if (!isOrderCOD && order.totalAmount > 0 && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
       const razorpay = new Razorpay({
         key_id: env.RAZORPAY_KEY_ID,
         key_secret: env.RAZORPAY_KEY_SECRET
@@ -302,7 +370,11 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       message: 'Order placed successfully', 
       data: {
         ...order,
-        razorpayOrderId: razorpayOrder?.id
+        razorpayOrderId: razorpayOrder?.id,
+        pointsUsed: pricingResult.pointsUsed || 0,
+        pointsDiscount: pricingResult.pointsDiscount || 0,
+        walletUsed: pricingResult.walletUsed || 0,
+        walletDiscount: pricingResult.walletDiscount || 0,
       }
     });
   } catch (error: any) {

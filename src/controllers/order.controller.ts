@@ -1161,3 +1161,88 @@ export const mergeChildOrder = async (req: Request, res: Response, next: NextFun
     next(error);
   }
 };
+
+// GET /api/v1/orders/admin/lookup?query=...
+export const adminLookupOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const rawQuery = (req.query.query as string || req.params.query as string || '').trim();
+    if (!rawQuery) {
+      res.status(400).json({ success: false, message: 'Please provide an Order ID, Tracking No, Phone, or Email to search' });
+      return;
+    }
+
+    // Strip leading '#' if present (e.g. #TW-1002 -> TW-1002)
+    const query = rawQuery.replace(/^#/, '');
+
+    const orders = await prisma.order.findMany({
+      where: {
+        OR: [
+          { orderNumber: { equals: query } },
+          { orderNumber: { contains: query } },
+          { id: { equals: query } },
+          { id: { contains: query } },
+          { trackingNumber: { contains: query } },
+          { customerEmail: { contains: query } },
+          { pickupEmail: { contains: query } },
+          { pickupPhone: { contains: query } },
+          { user: { email: { contains: query } } },
+          { user: { name: { contains: query } } },
+          { user: { phone: { contains: query } } },
+          { address: { phone: { contains: query } } },
+          { address: { fullName: { contains: query } } },
+          { address: { city: { contains: query } } },
+          { address: { pincode: { contains: query } } },
+        ],
+      },
+      include: {
+        items: {
+          include: {
+            book: {
+              select: {
+                id: true,
+                title: true,
+                slug: true,
+                coverUrl: true,
+                sku: true,
+                bookCode: true,
+                isbn10: true,
+                isbn13: true,
+                stock: true,
+                edition: true,
+                price: true,
+                mrp: true,
+              },
+            },
+          },
+        },
+        user: { select: { id: true, name: true, email: true, phone: true } },
+        address: true,
+        parentOrder: { select: { id: true, orderNumber: true, status: true } },
+        childOrders: { select: { id: true, orderNumber: true, status: true, totalAmount: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+
+    if (orders.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: `No order found matching "${rawQuery}". Checked all active, delivered, and historical orders.`,
+        data: null,
+        allMatches: [],
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      count: orders.length,
+      data: orders[0], // First best match
+      allMatches: orders, // Full list if multiple matches
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

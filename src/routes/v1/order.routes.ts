@@ -14,6 +14,7 @@ import {
   markOrderCollected,
   getOrderMergeCandidates,
   mergeChildOrder,
+  adminLookupOrder,
 } from '../../controllers/order.controller.js';
 import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
 import { validateRequest } from '../../middlewares/validate.middleware.js';
@@ -29,6 +30,8 @@ router.get('/my-orders', requireAuth, getMyOrders);
 router.post('/:id/confirm-pickup-slot', requireAuth, confirmPickupSlot);
 
 // Admin endpoints
+router.get('/admin/lookup', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), adminLookupOrder);
+router.get('/admin/lookup/:query', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), adminLookupOrder);
 router.get('/admin/all', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), getAllOrders);
 router.get('/admin/notifications', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), getOrderNotifications);
 router.get('/admin/:orderId/merge-candidates', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), getOrderMergeCandidates);

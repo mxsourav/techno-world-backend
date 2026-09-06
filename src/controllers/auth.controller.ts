@@ -101,6 +101,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       success: true,
       data: {
         accessToken,
+        refreshToken,
         user: { id: user.id, email: user.email, role: user.role, name: user.name }
       },
       user: { id: user.id, email: user.email, role: user.role, name: user.name }
@@ -113,7 +114,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 export const refresh = async (req: Request, res: Response): Promise<void> => {
   try {
-    const token = req.cookies?.refreshToken;
+    const token = (req.body?.refreshToken as string) || (req.headers['x-refresh-token'] as string) || req.cookies?.refreshToken;
     if (!token) {
       res.status(401).json({ success: false, message: 'No refresh token provided' });
       return;
@@ -173,6 +174,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
       message: 'Token refreshed',
       data: {
         accessToken,
+        refreshToken: newRefreshToken,
         user: { id: user.id, email: user.email, role: user.role, name: user.name }
       }
     });

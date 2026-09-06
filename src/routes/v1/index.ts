@@ -17,6 +17,7 @@ import reviewRoutes from './review.routes.js';
 import questionRoutes from './question.routes.js';
 import paymentRoutes from './payment.routes.js';
 import invoiceRoutes from './invoice.routes.js';
+import blogRoutes from './blog.routes.js';
 
 const router = Router();
 
@@ -48,5 +49,6 @@ router.use('/reviews', reviewRoutes);
 router.use('/questions', questionRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/invoices', invoiceRoutes);
+router.use('/blog', blogRoutes);
 
 export default router;

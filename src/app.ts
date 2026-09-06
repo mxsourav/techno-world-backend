@@ -94,7 +94,18 @@ app.use(
   })
 );
 
-app.use('/uploads', express.static(path.resolve('uploads')));
+app.use(
+  '/uploads',
+  express.static(path.resolve('uploads'), {
+    maxAge: '30d',
+    immutable: true,
+    setHeaders: (res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    },
+  })
+);
 app.use(routes);
 
 app.use(errorHandler);

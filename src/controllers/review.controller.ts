@@ -40,7 +40,7 @@ export const getReviews = async (req: Request, res: Response, next: NextFunction
       bookSlug: r.book?.slug,
       bookCover: r.book?.coverUrl,
       userId: r.userId,
-      userName: r.userName || r.user?.name || 'Verified Customer',
+      userName: r.userName || r.user?.name || 'Reader',
       rating: r.rating,
       title: r.title || '',
       content: r.content,
@@ -48,7 +48,8 @@ export const getReviews = async (req: Request, res: Response, next: NextFunction
       isApproved: r.isApproved,
       createdAt: r.createdAt,
       date: r.createdAt,
-      verified: true,
+      verified: Boolean(r.isVerified),
+      isVerified: Boolean(r.isVerified),
     }));
 
     res.status(200).json({
@@ -99,8 +100,38 @@ export const createReview = async (req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    const reviewerName = (userName && userName.trim()) || loggedInUser?.name || 'Verified Reader';
+    const reviewerName = (userName && userName.trim()) || loggedInUser?.name || 'Reader';
     const reviewerEmail = (userEmail && userEmail.trim()) || loggedInUser?.email || null;
+
+    // Check if user has genuinely purchased this book
+    let isVerified = false;
+    const orderConditions: any[] = [];
+    if (loggedInUser?.id) {
+      orderConditions.push({ userId: loggedInUser.id });
+    }
+    if (reviewerEmail) {
+      orderConditions.push({ customerEmail: reviewerEmail });
+      orderConditions.push({ user: { email: reviewerEmail } });
+    }
+
+    if (orderConditions.length > 0) {
+      const purchase = await prisma.order.findFirst({
+        where: {
+          OR: orderConditions,
+          status: { in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
+          items: {
+            some: {
+              bookId: bookId,
+            },
+          },
+        },
+        select: { id: true },
+      });
+
+      if (purchase) {
+        isVerified = true;
+      }
+    }
 
     const newReview = await prisma.review.create({
       data: {
@@ -111,6 +142,7 @@ export const createReview = async (req: Request, res: Response, next: NextFuncti
         rating: Math.round(numRating),
         title: title && typeof title === 'string' ? title.trim() : null,
         content: content.trim(),
+        isVerified,
         isApproved: true,
       },
     });
@@ -174,8 +206,114 @@ export const getAdminReviews = async (req: Request, res: Response, next: NextFun
         title: r.title || 'Reader Review',
         content: r.content,
         isApproved: r.isApproved,
+        isVerified: Boolean(r.isVerified),
         createdAt: r.createdAt,
       })),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Admin: Inject curated review for a specific book (promotional / clickbait)
+export const adminCreateReview = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { bookId, rating, title, content, userName, userEmail, isVerified = true, createdAt } = req.body;
+
+    if (!bookId) {
+      res.status(400).json({ success: false, message: 'Book ID is required' });
+      return;
+    }
+
+    const book = await prisma.book.findUnique({ where: { id: bookId } });
+    if (!book) {
+      res.status(404).json({ success: false, message: 'Selected book not found' });
+      return;
+    }
+
+    const numRating = Number(rating);
+    if (!numRating || numRating < 1 || numRating > 5) {
+      res.status(400).json({ success: false, message: 'Rating must be between 1 and 5 stars' });
+      return;
+    }
+
+    if (!content || typeof content !== 'string' || content.trim().length === 0) {
+      res.status(400).json({ success: false, message: 'Review content/comment is required' });
+      return;
+    }
+
+    const reviewDate = createdAt ? new Date(createdAt) : new Date();
+
+    const newReview = await prisma.review.create({
+      data: {
+        bookId,
+        userName: (userName && userName.trim()) || 'Verified Reader',
+        userEmail: (userEmail && userEmail.trim()) || null,
+        rating: Math.round(numRating),
+        title: title && typeof title === 'string' ? title.trim() : null,
+        content: content.trim(),
+        isVerified: Boolean(isVerified),
+        isApproved: true,
+        createdAt: reviewDate,
+      },
+      include: {
+        book: {
+          select: { id: true, title: true, slug: true, coverUrl: true, isbn13: true },
+        },
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Curated review created successfully',
+      data: {
+        id: newReview.id,
+        bookId: newReview.bookId,
+        bookTitle: newReview.book?.title,
+        bookCover: newReview.book?.coverUrl,
+        bookSlug: newReview.book?.slug,
+        userName: newReview.userName,
+        userEmail: newReview.userEmail,
+        rating: newReview.rating,
+        title: newReview.title,
+        content: newReview.content,
+        isVerified: newReview.isVerified,
+        isApproved: newReview.isApproved,
+        createdAt: newReview.createdAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Admin: Toggle Verified Buyer badge status
+export const toggleReviewVerified = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { isVerified } = req.body;
+
+    let verifiedValue: boolean;
+    if (typeof isVerified === 'boolean') {
+      verifiedValue = isVerified;
+    } else {
+      const current = await prisma.review.findUnique({ where: { id }, select: { isVerified: true } });
+      if (!current) {
+        res.status(404).json({ success: false, message: 'Review not found' });
+        return;
+      }
+      verifiedValue = !current.isVerified;
+    }
+
+    const updated = await prisma.review.update({
+      where: { id },
+      data: { isVerified: verifiedValue },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Review badge updated to ${updated.isVerified ? 'Verified Buyer' : 'Standard'}`,
+      data: updated,
     });
   } catch (error) {
     next(error);

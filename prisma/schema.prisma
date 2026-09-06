@@ -296,6 +296,7 @@ model Review {
   rating     Int
   title      String?
   content    String   @db.Text
+  isVerified Boolean  @default(false)
   isApproved Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

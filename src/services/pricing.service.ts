@@ -319,19 +319,24 @@ export class PricingEngine {
       const currentBatchCutoff = getDispatchBatchCutoff(now);
       const previousBatchCutoff = new Date(currentBatchCutoff.getTime() - 24 * 60 * 60 * 1000);
 
-      const targetPhone = input.address?.phone?.trim();
-      const targetEmail = input.address?.email?.trim();
-      const targetLine1 = (input.address?.addressLine1 || input.address?.line1 || '').trim().toLowerCase();
-      const targetPin = effectivePincode.trim();
+      const normDigits = (str: string | null | undefined) => {
+        if (!str) return '';
+        return str.replace(/\D/g, '').slice(-10);
+      };
+
+      const targetPhoneNorm = normDigits(input.address?.phone);
+      const targetPin = (effectivePincode || '').trim();
+      const targetLine1Norm = (input.address?.addressLine1 || input.address?.line1 || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const targetAddrId = input.addressId;
 
       const candidateOrders = await prisma.order.findMany({
         where: {
-          status: { in: ['PENDING', 'CONFIRMED'] },
+          status: { in: ['PENDING', 'CONFIRMED', 'PROCESSING'] },
+          trackingNumber: null,
           createdAt: {
             gte: previousBatchCutoff,
             lt: currentBatchCutoff,
           },
-          ...(input.userId ? { userId: input.userId } : {}),
         },
         include: { address: true, user: true },
         orderBy: { createdAt: 'desc' },
@@ -341,24 +346,23 @@ export class PricingEngine {
         const addr = ord.address;
         if (!addr) continue;
 
-        const isUserMatch = (input.userId && ord.userId === input.userId) ||
-          (targetPhone && (addr.phone === targetPhone || ord.user?.phone === targetPhone)) ||
-          (targetEmail && ord.user?.email === targetEmail);
+        const addrPin = (addr.pincode || '').trim();
+        const addrPhoneNorm = normDigits(addr.phone) || normDigits(ord.user?.phone);
+        const addrLine1Norm = (addr.addressLine1 || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
-        if (isUserMatch) {
-          const addrLine1 = (addr.addressLine1 || '').trim().toLowerCase();
-          const addrPin = (addr.pincode || '').trim();
+        const isExactAddressIdMatch = Boolean(targetAddrId && ord.addressId && targetAddrId === ord.addressId);
+        const isPhoneAndPinMatch = Boolean(targetPhoneNorm && addrPhoneNorm && targetPhoneNorm === addrPhoneNorm && targetPin && addrPin && targetPin === addrPin);
+        const isUserAndPinMatch = Boolean(input.userId && ord.userId && input.userId === ord.userId && targetPin && addrPin && targetPin === addrPin);
+        const isLineAndPinMatch = Boolean(targetLine1Norm && addrLine1Norm && targetLine1Norm === addrLine1Norm && targetPin && addrPin && targetPin === addrPin);
 
-          // Exactly same recipient and delivery address
-          if ((!targetLine1 || targetLine1 === addrLine1) && targetPin === addrPin) {
-            isSameBatchAddon = true;
-            parentOrder = ord;
-            result.isAddonBundle = true;
-            result.bundledWithOrderNumber = ord.orderNumber;
-            result.parentShippingMethod = ord.shippingMethod || 'NORMAL_POST';
-            result.parentShippingCharge = ord.shippingCharge || 0;
-            break;
-          }
+        if (isExactAddressIdMatch || isPhoneAndPinMatch || isUserAndPinMatch || isLineAndPinMatch) {
+          isSameBatchAddon = true;
+          parentOrder = ord;
+          result.isAddonBundle = true;
+          result.bundledWithOrderNumber = ord.orderNumber;
+          result.parentShippingMethod = ord.shippingMethod || 'NORMAL_POST';
+          result.parentShippingCharge = ord.shippingCharge || 0;
+          break;
         }
       }
 

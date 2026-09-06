@@ -598,31 +598,36 @@ export class PricingEngine {
 
     if (input.userId) {
       const bonus = await ensureUserTestingBonus(input.userId);
-      userPointsBalance = bonus.technoPoints;
-      userWalletBalance = bonus.technoWallet;
+      userPointsBalance = Math.max(0, bonus.technoPoints || 0);
+      userWalletBalance = Math.max(0, Number((bonus.technoWallet || 0).toFixed(2)));
 
-      // Calculate effective points used (1 Point = ₹1.00 discount)
-      const reqPoints = Math.max(0, Math.floor(Number(input.pointsUsed || 0)));
+      // Sanitize input pointsUsed (must be non-negative integer)
+      const rawPoints = Number(input.pointsUsed);
+      const reqPoints = (!isNaN(rawPoints) && isFinite(rawPoints) && rawPoints > 0)
+        ? Math.floor(rawPoints)
+        : 0;
       const maxUsablePoints = Math.min(userPointsBalance, grossPayable);
       pointsUsed = Math.min(reqPoints, maxUsablePoints);
       pointsDiscount = pointsUsed;
 
       const remainingPayableAfterPoints = Math.max(0, grossPayable - pointsDiscount);
 
-      // Calculate effective wallet cash used (₹1.00 Wallet = ₹1.00 Cash)
-      const reqWallet = Math.max(0, Number(input.walletUsed || 0));
+      // Sanitize input walletUsed (must be non-negative finite number)
+      const rawWallet = Number(input.walletUsed);
+      const reqWallet = (!isNaN(rawWallet) && isFinite(rawWallet) && rawWallet > 0)
+        ? Number(rawWallet.toFixed(2))
+        : 0;
       const maxUsableWallet = Math.min(userWalletBalance, remainingPayableAfterPoints);
       walletUsed = Number(Math.min(reqWallet, maxUsableWallet).toFixed(2));
       walletDiscount = walletUsed;
     } else {
-      const reqPoints = Math.max(0, Math.floor(Number(input.pointsUsed || 0)));
-      pointsUsed = Math.min(reqPoints, grossPayable);
-      pointsDiscount = pointsUsed;
-
-      const remainingPayableAfterPoints = Math.max(0, grossPayable - pointsDiscount);
-      const reqWallet = Math.max(0, Number(input.walletUsed || 0));
-      walletUsed = Number(Math.min(reqWallet, remainingPayableAfterPoints).toFixed(2));
-      walletDiscount = walletUsed;
+      // SECURITY LOCK: Unauthenticated guests have 0 points, 0 wallet cash, and 0 loyalty discounts
+      pointsUsed = 0;
+      pointsDiscount = 0;
+      walletUsed = 0;
+      walletDiscount = 0;
+      userPointsBalance = 0;
+      userWalletBalance = 0;
     }
 
     result.pointsUsed = pointsUsed;

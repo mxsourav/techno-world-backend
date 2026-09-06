@@ -18,32 +18,20 @@ function generateOrderNumber(): string {
 export const createOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { items, addressId, address, paymentMethod, couponCode, shippingMethod, pointsUsed, walletUsed } = req.body;
-    const orderEmail = (req.body.email || req.body.customerEmail || address?.email || (req as any).user?.email || '').trim();
-    let userId = (req as any).user?.userId || (req as any).user?.id || req.body.userId;
-    
-    // Ensure a valid User record exists
-    if (!userId && orderEmail) {
-      const userByEmail = await prisma.user.findFirst({ where: { email: orderEmail } });
-      if (userByEmail) {
-        userId = userByEmail.id;
-      }
+    const authenticatedUserId = (req as any).user?.userId || (req as any).user?.id;
+    if (!authenticatedUserId) {
+      res.status(401).json({ success: false, message: 'Valid authentication required to checkout' });
+      return;
     }
 
-    if (!userId) {
-      const defaultUser = await prisma.user.findFirst();
-      if (defaultUser) {
-        userId = defaultUser.id;
-      } else {
-        res.status(401).json({ success: false, message: 'Valid authentication required to checkout' });
-        return;
-      }
-    } else {
-      const existingUser = await prisma.user.findUnique({ where: { id: userId } });
-      if (!existingUser) {
-        const defaultUser = await prisma.user.findFirst();
-        if (defaultUser) userId = defaultUser.id;
-      }
+    const existingUser = await prisma.user.findUnique({ where: { id: authenticatedUserId } });
+    if (!existingUser || !existingUser.isActive) {
+      res.status(401).json({ success: false, message: 'User account not found or inactive' });
+      return;
     }
+
+    const userId = existingUser.id;
+    const orderEmail = (existingUser.email || req.body.email || req.body.customerEmail || address?.email || '').trim();
     
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ success: false, message: 'Items are required' });
@@ -248,12 +236,21 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         include: { items: { include: { book: true } }, address: true, user: true },
       });
 
-      // Deduct Redeemed TechnoPoints
+      // Deduct Redeemed TechnoPoints with atomic balance check (prevents race conditions & double spending)
       if (pricingResult.pointsUsed && pricingResult.pointsUsed > 0 && userId) {
-        await tx.user.update({
-          where: { id: userId },
-          data: { technoPoints: { decrement: pricingResult.pointsUsed } },
+        const pointUpdate = await tx.user.updateMany({
+          where: {
+            id: userId,
+            technoPoints: { gte: pricingResult.pointsUsed },
+          },
+          data: {
+            technoPoints: { decrement: pricingResult.pointsUsed },
+          },
         });
+
+        if (pointUpdate.count === 0) {
+          throw new Error('Insufficient TechnoPoints balance or concurrent redemption conflict. Transaction rolled back.');
+        }
 
         const oneYearExpiry = new Date();
         oneYearExpiry.setFullYear(oneYearExpiry.getFullYear() + 1);
@@ -271,12 +268,21 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         });
       }
 
-      // Deduct Used TechnoWallet Cash
+      // Deduct Used TechnoWallet Cash with atomic balance check (prevents race conditions & double spending)
       if (pricingResult.walletUsed && pricingResult.walletUsed > 0 && userId) {
-        await tx.user.update({
-          where: { id: userId },
-          data: { technoWallet: { decrement: pricingResult.walletUsed } },
+        const walletUpdate = await tx.user.updateMany({
+          where: {
+            id: userId,
+            technoWallet: { gte: pricingResult.walletUsed },
+          },
+          data: {
+            technoWallet: { decrement: pricingResult.walletUsed },
+          },
         });
+
+        if (walletUpdate.count === 0) {
+          throw new Error('Insufficient TechnoWallet cash balance or concurrent redemption conflict. Transaction rolled back.');
+        }
 
         await tx.walletTransaction.create({
           data: {

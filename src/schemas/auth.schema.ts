@@ -17,3 +17,10 @@ export const registerSchema = z.object({
   lastName: z.string().min(2).max(50)
   // Notice we deliberately exclude 'role' so users cannot make themselves admins
 }).strict();
+
+export const devGoogleOAuthBypassSchema = z.object({
+  email: z.string().email('Valid email address is required').max(255),
+  name: z.string().min(1).max(100).optional(),
+  googleId: z.string().min(1).max(100).optional(),
+  avatarUrl: z.string().url('Invalid avatar URL').optional().nullable(),
+}).strict();

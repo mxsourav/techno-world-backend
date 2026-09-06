@@ -481,12 +481,20 @@ export const getAdminSettings = async (req: Request, res: Response, next: NextFu
 // PATCH /api/v1/admin/profile
 export const updateAdminProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    let adminId = (req as any).user?.userId || (req as any).user?.id;
+    const adminId = (req as any).user?.userId || (req as any).user?.id;
     if (!adminId) {
-      const fallback = await prisma.user.findFirst({
-        where: { role: { in: ['ADMIN', 'SUPER_ADMIN'] } },
-      });
-      adminId = fallback?.id;
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+
+    const currentAdmin = await prisma.user.findUnique({
+      where: { id: adminId },
+      select: { id: true, role: true }
+    });
+
+    if (!currentAdmin || (currentAdmin.role !== 'ADMIN' && currentAdmin.role !== 'SUPER_ADMIN')) {
+      res.status(403).json({ success: false, message: 'Forbidden: administrative privileges required' });
+      return;
     }
     const { name, email, phone, password } = req.body;
 

@@ -21,6 +21,7 @@ import blogRoutes from './blog.routes.js';
 import analyticsRoutes from './analytics.routes.js';
 import contactRoutes from './contact.routes.js';
 import bookRequestRoutes from './bookRequest.routes.js';
+import heroRoutes from './hero.routes.js';
 
 const router = Router();
 
@@ -56,5 +57,7 @@ router.use('/blog', blogRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/contact', contactRoutes);
 router.use('/book-requests', bookRequestRoutes);
+router.use('/hero', heroRoutes);
+router.use('/admin/hero', heroRoutes);
 
 export default router;

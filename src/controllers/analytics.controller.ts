@@ -4,7 +4,7 @@ import { analyticsService } from '../services/analytics.service.js';
 // POST /api/v1/analytics/pulse (Public heartbeat)
 export const recordPulse = (req: Request, res: Response): void => {
   try {
-    const { sessionId, path, pageTitle, referrer } = req.body;
+    const { sessionId, path, pageTitle, referrer, deviceType, screenWidth } = req.body;
     const userAgent = req.headers['user-agent'];
     const ip = req.ip || (req.headers['x-forwarded-for'] as string);
 
@@ -13,6 +13,8 @@ export const recordPulse = (req: Request, res: Response): void => {
       path,
       pageTitle,
       referrer,
+      deviceType,
+      screenWidth,
       userAgent,
       ip,
     });

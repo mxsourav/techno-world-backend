@@ -233,7 +233,11 @@ export const updateBook = async (req: Request, res: Response, next: NextFunction
     if (body.title !== undefined) data.title = body.title;
     if (body.price !== undefined) data.price = Number(body.price);
     if (body.mrp !== undefined) data.mrp = Number(body.mrp);
+    if (body.costPrice !== undefined) data.costPrice = body.costPrice !== null && body.costPrice !== '' ? Number(body.costPrice) : null;
     if (body.stock !== undefined) data.stock = Number(body.stock);
+    if (body.reservedStock !== undefined) data.reservedStock = Number(body.reservedStock) || 0;
+    if (body.reorderLevel !== undefined) data.reorderLevel = Number(body.reorderLevel) || 20;
+    if (body.warehouse !== undefined) data.warehouse = body.warehouse ? String(body.warehouse).trim() : 'Main Warehouse';
     if (body.pages !== undefined) data.pages = Number(body.pages);
     if (body.isbn13 !== undefined) data.isbn13 = body.isbn13;
     if (body.isbn10 !== undefined) data.isbn10 = body.isbn10;
@@ -370,7 +374,11 @@ export const createBook = async (req: Request, res: Response, next: NextFunction
       slug,
       price: Number(body.price) || 0,
       mrp: Number(body.mrp) || Number(body.price) || 0,
+      costPrice: body.costPrice !== null && body.costPrice !== undefined && body.costPrice !== '' ? Number(body.costPrice) : null,
       stock: Number(body.stock) || 0,
+      reservedStock: Number(body.reservedStock) || 0,
+      reorderLevel: Number(body.reorderLevel) || 20,
+      warehouse: body.warehouse ? String(body.warehouse).trim() : 'Main Warehouse',
       pages: Number(body.pages) || 0,
       isbn13: body.isbn13 || null,
       isbn10: body.isbn10 || null,

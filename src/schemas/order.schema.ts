@@ -29,4 +29,12 @@ export const createOrderSchema = z.object({
   }).passthrough().optional().nullable(),
   paymentMethod: z.string().optional().nullable(),
   couponCode: z.string().optional().nullable(),
+  shippingMethod: z.string().optional().nullable(),
+  pointsUsed: z.number().int('Points must be an integer').min(0, 'Points used cannot be negative').optional().nullable(),
+  walletUsed: z.number().min(0, 'Wallet cash used cannot be negative').finite('Wallet amount must be finite').optional().nullable(),
+  pickupName: z.string().optional().nullable(),
+  pickupPhone: z.string().optional().nullable(),
+  pickupEmail: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable(),
+  customerEmail: z.string().email().optional().nullable(),
 }).passthrough();

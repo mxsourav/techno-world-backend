@@ -18,6 +18,9 @@ import questionRoutes from './question.routes.js';
 import paymentRoutes from './payment.routes.js';
 import invoiceRoutes from './invoice.routes.js';
 import blogRoutes from './blog.routes.js';
+import analyticsRoutes from './analytics.routes.js';
+import contactRoutes from './contact.routes.js';
+import bookRequestRoutes from './bookRequest.routes.js';
 
 const router = Router();
 
@@ -50,5 +53,8 @@ router.use('/questions', questionRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/invoices', invoiceRoutes);
 router.use('/blog', blogRoutes);
+router.use('/analytics', analyticsRoutes);
+router.use('/contact', contactRoutes);
+router.use('/book-requests', bookRequestRoutes);
 
 export default router;

@@ -671,3 +671,40 @@ model BlogPost {
 }
 
 
+
+model ContactMessage {
+  id          String    @id @default(uuid())
+  name        String
+  email       String
+  orderNumber String?
+  message     String    @db.Text
+  status      String    @default("UNREAD")
+  reply       String?   @db.Text
+  repliedAt   DateTime?
+  ipAddress   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model BookRequest {
+  id         String    @id @default(uuid())
+  title      String
+  author     String
+  email      String
+  phone      String?
+  publisher  String?
+  edition    String?
+  notes      String?   @db.Text
+  imageUrl   String?   @db.Text
+  status     String    @default("PENDING")
+  adminNotes String?   @db.Text
+  ipAddress  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}

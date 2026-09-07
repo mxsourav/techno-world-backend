@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import { ensureUserTestingBonus } from './loyalty.service.js';
 
 const prisma = new PrismaClient();
 
@@ -26,6 +27,8 @@ export interface PricingInput {
   addressId?: string | null;
   shippingMethod?: string | null; // 'NORMAL_POST' | 'SPEED_POST' | 'EXPRESS_LOCAL'
   paymentMethod?: string | null;  // 'COD' | 'upi' | 'card' etc.
+  pointsUsed?: number | null;
+  walletUsed?: number | null;
   address?: {
     fullName?: string | null;
     phone?: string | null;
@@ -88,6 +91,12 @@ export interface PricingResult {
   taxAmount: number;
   totalSavings: number;
   totalAmount: number;
+  pointsUsed?: number;
+  pointsDiscount?: number;
+  walletUsed?: number;
+  walletDiscount?: number;
+  userPointsBalance?: number;
+  userWalletBalance?: number;
   promotionError?: string;
   isValid: boolean;
   errors: string[];
@@ -108,6 +117,10 @@ export class PricingEngine {
       taxAmount: 0,
       totalSavings: 0,
       totalAmount: 0,
+      pointsUsed: 0,
+      pointsDiscount: 0,
+      walletUsed: 0,
+      walletDiscount: 0,
       isValid: true,
       errors: [],
     };
@@ -573,9 +586,59 @@ export class PricingEngine {
     const codFee = (isCOD && selectedShippingMethod !== 'SELF_PICKUP') ? 20 : 0;
     result.codFee = codFee;
     
-    // 5. Final Totals
-    result.totalAmount = payableSubtotal + result.shippingCharge + codFee + result.taxAmount;
-    result.totalSavings = result.itemDiscountTotal + result.promotionDiscount;
+    // 5. Final Totals & Loyalty Points / TechnoWallet Reductions
+    const grossPayable = payableSubtotal + result.shippingCharge + codFee + result.taxAmount;
+
+    let pointsUsed = 0;
+    let pointsDiscount = 0;
+    let walletUsed = 0;
+    let walletDiscount = 0;
+    let userPointsBalance = 0;
+    let userWalletBalance = 0;
+
+    if (input.userId) {
+      const bonus = await ensureUserTestingBonus(input.userId);
+      userPointsBalance = Math.max(0, bonus.technoPoints || 0);
+      userWalletBalance = Math.max(0, Number((bonus.technoWallet || 0).toFixed(2)));
+
+      // Sanitize input pointsUsed (must be non-negative integer)
+      const rawPoints = Number(input.pointsUsed);
+      const reqPoints = (!isNaN(rawPoints) && isFinite(rawPoints) && rawPoints > 0)
+        ? Math.floor(rawPoints)
+        : 0;
+      const maxUsablePoints = Math.min(userPointsBalance, grossPayable);
+      pointsUsed = Math.min(reqPoints, maxUsablePoints);
+      pointsDiscount = pointsUsed;
+
+      const remainingPayableAfterPoints = Math.max(0, grossPayable - pointsDiscount);
+
+      // Sanitize input walletUsed (must be non-negative finite number)
+      const rawWallet = Number(input.walletUsed);
+      const reqWallet = (!isNaN(rawWallet) && isFinite(rawWallet) && rawWallet > 0)
+        ? Number(rawWallet.toFixed(2))
+        : 0;
+      const maxUsableWallet = Math.min(userWalletBalance, remainingPayableAfterPoints);
+      walletUsed = Number(Math.min(reqWallet, maxUsableWallet).toFixed(2));
+      walletDiscount = walletUsed;
+    } else {
+      // SECURITY LOCK: Unauthenticated guests have 0 points, 0 wallet cash, and 0 loyalty discounts
+      pointsUsed = 0;
+      pointsDiscount = 0;
+      walletUsed = 0;
+      walletDiscount = 0;
+      userPointsBalance = 0;
+      userWalletBalance = 0;
+    }
+
+    result.pointsUsed = pointsUsed;
+    result.pointsDiscount = pointsDiscount;
+    result.walletUsed = walletUsed;
+    result.walletDiscount = walletDiscount;
+    result.userPointsBalance = userPointsBalance;
+    result.userWalletBalance = userWalletBalance;
+
+    result.totalAmount = Math.max(0, Number((grossPayable - pointsDiscount - walletDiscount).toFixed(2)));
+    result.totalSavings = result.itemDiscountTotal + result.promotionDiscount + pointsDiscount + walletDiscount;
 
     result.couponDiscount = result.promotionDiscount;
     result.couponCode = result.promotionCode;

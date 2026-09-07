@@ -62,6 +62,13 @@ export const getAdminCatalog = async (req: Request, res: Response, next: NextFun
         include: {
           category: true,
           publisher: true,
+          _count: {
+            select: {
+              cartItems: true,
+              wishlistItems: true,
+              orderItems: true,
+            }
+          }
         }
       }),
       prisma.book.count({ where })
@@ -85,6 +92,9 @@ export const getAdminCatalog = async (req: Request, res: Response, next: NextFun
         healthScore: score,
         categoryName: book.category?.name,
         publisherName: book.publisher?.name,
+        inCartCount: (book as any)._count?.cartItems || 0,
+        wishlistCount: (book as any)._count?.wishlistItems || 0,
+        lifetimeSales: book.lifetimeSales || (book as any)._count?.orderItems || 0,
       };
     });
 

@@ -4,6 +4,7 @@ import argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { generateTokens, verifyToken } from '../utils/jwt.js';
+import { ensureUserTestingBonus } from '../services/loyalty.service.js';
 
 const prisma = new PrismaClient();
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -46,11 +47,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     } catch (e) {
       const bcrypt = await import('bcrypt');
       isValid = await bcrypt.default.compare(password, user.password);
-    }
-
-    // Direct password match fallback for emergency superadmin access
-    if (!isValid && (password === 'admin123' && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN'))) {
-      isValid = true;
     }
 
     if (!isValid) {
@@ -97,13 +93,26 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
+    // Ensure testing bonus (at least 150 points & ₹50 cash)
+    const bonus = await ensureUserTestingBonus(user.id);
+
+    const userPayload = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      technoPoints: bonus.technoPoints,
+      technoWallet: bonus.technoWallet,
+    };
+
     res.status(200).json({
       success: true,
       data: {
         accessToken,
-        user: { id: user.id, email: user.email, role: user.role, name: user.name }
+        refreshToken,
+        user: userPayload
       },
-      user: { id: user.id, email: user.email, role: user.role, name: user.name }
+      user: userPayload
     });
   } catch (error) {
     console.error('[LOGIN_ERROR]', error instanceof Error ? error.message : 'Unknown');
@@ -113,7 +122,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 export const refresh = async (req: Request, res: Response): Promise<void> => {
   try {
-    const token = req.cookies?.refreshToken;
+    const token = (req.body?.refreshToken as string) || (req.headers['x-refresh-token'] as string) || req.cookies?.refreshToken;
     if (!token) {
       res.status(401).json({ success: false, message: 'No refresh token provided' });
       return;
@@ -173,6 +182,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
       message: 'Token refreshed',
       data: {
         accessToken,
+        refreshToken: newRefreshToken,
         user: { id: user.id, email: user.email, role: user.role, name: user.name }
       }
     });
@@ -201,6 +211,11 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
 // TODO: [OAUTH_REAL_KEYS_INJECTED] Remove Developer OAuth Bypass once client provides live Google Client ID & Secret
 export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise<void> => {
   try {
+    if (env.NODE_ENV === 'production') {
+      res.status(403).json({ success: false, message: 'Developer OAuth bypass is strictly disabled in production' });
+      return;
+    }
+
     const devGoogleEmail = (req.body.email || '').trim().toLowerCase();
     if (!devGoogleEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(devGoogleEmail)) {
       res.status(400).json({ success: false, message: 'Valid email address is required to sign in' });
@@ -220,6 +235,18 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
       },
     });
 
+    // SECURITY CHECK: Disallow administrative accounts from ever using developer OAuth bypass
+    if (user && (user.role === Role.ADMIN || user.role === Role.SUPER_ADMIN)) {
+      res.status(403).json({ success: false, message: 'Administrator accounts cannot be accessed via developer OAuth bypass' });
+      return;
+    }
+
+    // SECURITY CHECK: If user exists with password credentials and is not linked to Google, block account takeover
+    if (user && user.password !== 'GOOGLE_OAUTH_USER_NO_PASSWORD' && !user.googleId) {
+      res.status(400).json({ success: false, message: 'This email is registered with password credentials. Please sign in using your password.' });
+      return;
+    }
+
     if (!user) {
       user = await prisma.user.create({
         data: {
@@ -229,7 +256,7 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
           avatarUrl: devAvatar,
           password: 'GOOGLE_OAUTH_USER_NO_PASSWORD',
           role: Role.CUSTOMER,
-          technoPoints: 120, // Initial welcome bonus points for dev testing
+          technoPoints: 0,
         },
       });
     } else if (!user.googleId) {
@@ -255,18 +282,21 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
     // Exact Cookie Parity with standard login
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      secure: (env.NODE_ENV as string) === 'production',
+      sameSite: (env.NODE_ENV as string) === 'production' ? 'strict' : 'lax',
       maxAge: 15 * 60 * 1000,
     });
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: env.NODE_ENV === 'production',
-      sameSite: env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      secure: (env.NODE_ENV as string) === 'production',
+      sameSite: (env.NODE_ENV as string) === 'production' ? 'strict' : 'lax',
       path: '/api/v1/auth/refresh',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
+
+    // Ensure testing bonus (at least 150 points & ₹50 cash)
+    const bonus = await ensureUserTestingBonus(user.id);
 
     res.status(200).json({
       success: true,
@@ -279,7 +309,8 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
           role: user.role,
           name: user.name,
           avatarUrl: user.avatarUrl,
-          technoPoints: user.technoPoints,
+          technoPoints: bonus.technoPoints,
+          technoWallet: bonus.technoWallet,
         },
       },
     });

@@ -10,6 +10,7 @@ import { requestIdMiddleware } from './middlewares/requestId.js';
 import { generalLimiter } from './middlewares/rateLimiter.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import routes from './routes/index.js';
+import { generateSitemap } from './controllers/sitemap.controller.js';
 
 const app = express();
 
@@ -94,7 +95,19 @@ app.use(
   })
 );
 
-app.use('/uploads', express.static(path.resolve('uploads')));
+app.use(
+  '/uploads',
+  express.static(path.resolve('uploads'), {
+    maxAge: '30d',
+    immutable: true,
+    setHeaders: (res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
+    },
+  })
+);
+app.get('/sitemap.xml', generateSitemap);
 app.use(routes);
 
 app.use(errorHandler);

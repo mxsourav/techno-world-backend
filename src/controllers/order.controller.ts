@@ -18,9 +18,17 @@ function generateOrderNumber(): string {
 export const createOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { items, addressId, address, paymentMethod, couponCode, shippingMethod } = req.body;
-    let userId = (req as any).user?.userId || (req as any).user?.id;
+    const orderEmail = (req.body.email || req.body.customerEmail || address?.email || (req as any).user?.email || '').trim();
+    let userId = (req as any).user?.userId || (req as any).user?.id || req.body.userId;
     
     // Ensure a valid User record exists
+    if (!userId && orderEmail) {
+      const userByEmail = await prisma.user.findFirst({ where: { email: orderEmail } });
+      if (userByEmail) {
+        userId = userByEmail.id;
+      }
+    }
+
     if (!userId) {
       const defaultUser = await prisma.user.findFirst();
       if (defaultUser) {
@@ -42,7 +50,6 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    const orderEmail = (req.body.email || req.body.customerEmail || address?.email || (req as any).user?.email || '').trim();
     if (!orderEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(orderEmail)) {
       res.status(400).json({ success: false, message: 'Valid Customer Email ID is mandatory to place an order' });
       return;

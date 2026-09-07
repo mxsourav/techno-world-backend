@@ -644,4 +644,30 @@ model SearchLog {
   @@index([createdAt])
 }
 
+model BlogPost {
+  id              String    @id @default(uuid())
+  title           String
+  slug            String    @unique
+  excerpt         String?   @db.Text
+  content         String    @db.Text
+  category        String
+  thumbnailUrl    String?   @db.Text
+  readTime        String?   @default("5 min read")
+  hue             Int?      @default(160)
+  relatedCategory String?
+  relatedBookIds  Json?
+  scheduledAt     DateTime?
+  expiresAt       DateTime?
+  isActive        Boolean   @default(true)
+  views           Int       @default(0)
+  authorName      String?   @default("Techno World Editorial")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+  @@index([scheduledAt])
+  @@index([expiresAt])
+}
+
 

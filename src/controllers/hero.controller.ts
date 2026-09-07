@@ -81,15 +81,15 @@ export const uploadHeroCover = async (req: Request, res: Response, next: NextFun
 
     // Process image through Sharp pipeline:
     // 1. Auto-rotate based on EXIF orientation
-    // 2. Resize within 800x1200 maintaining 100% of the artwork without cropping
-    // 3. Compress to modern WebP (quality 90)
+    // 2. Resize within 1600x2400 maintaining 100% of the artwork without cropping
+    // 3. Compress to modern WebP (high crispness quality 95)
     const optimizedBuffer = await sharp(file.buffer)
       .rotate()
-      .resize(800, 1200, {
+      .resize(1600, 2400, {
         fit: 'inside',
         withoutEnlargement: true,
       })
-      .webp({ quality: 90, effort: 4 })
+      .webp({ quality: 95, effort: 5 })
       .toBuffer();
 
     // Prepare uploads directory

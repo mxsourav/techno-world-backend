@@ -10,6 +10,7 @@ import { requestIdMiddleware } from './middlewares/requestId.js';
 import { generalLimiter } from './middlewares/rateLimiter.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import routes from './routes/index.js';
+import { generateSitemap } from './controllers/sitemap.controller.js';
 
 const app = express();
 
@@ -106,6 +107,7 @@ app.use(
     },
   })
 );
+app.get('/sitemap.xml', generateSitemap);
 app.use(routes);
 
 app.use(errorHandler);

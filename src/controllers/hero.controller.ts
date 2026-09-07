@@ -195,3 +195,33 @@ export const deleteHeroCover = async (req: Request, res: Response, next: NextFun
     next(error);
   }
 };
+
+/**
+ * Admin protected endpoint: Update 3D book model preset ('academic' | 'novel' | 'reference').
+ */
+export const updateHeroModel = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { hero_book_model } = req.body;
+    if (!hero_book_model || !['academic', 'novel', 'reference'].includes(hero_book_model)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid hero_book_model. Must be academic, novel, or reference.',
+      });
+      return;
+    }
+
+    const updatedConfig = await prisma.heroConfig.upsert({
+      where: { id: 'default' },
+      update: { hero_book_model },
+      create: { id: 'default', hero_book_model },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Hero 3D book model updated successfully',
+      data: updatedConfig,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

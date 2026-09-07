@@ -57,17 +57,39 @@ export const uploadHeroCover = async (req: Request, res: Response, next: NextFun
       return;
     }
 
+    // Read metadata to determine aspect ratio and best matching 3D book preset
+    const metadata = await sharp(file.buffer).metadata();
+    const width = metadata.width || 600;
+    const height = metadata.height || 900;
+    const ratio = height / width;
+
+    // Determine 3D book model preset:
+    // User can optionally specify req.body.hero_book_model ('academic' | 'novel' | 'reference')
+    // Otherwise auto-detect based on physical publishing ratios:
+    let detectedModel: 'academic' | 'novel' | 'reference' = 'academic';
+    if (ratio < 1.42) {
+      detectedModel = 'novel';
+    } else if (ratio > 1.58) {
+      detectedModel = 'reference';
+    } else {
+      detectedModel = 'academic';
+    }
+
+    const hero_book_model = (req.body.hero_book_model && ['academic', 'novel', 'reference'].includes(req.body.hero_book_model))
+      ? req.body.hero_book_model
+      : detectedModel;
+
     // Process image through Sharp pipeline:
     // 1. Auto-rotate based on EXIF orientation
-    // 2. Standard book aspect ratio crop (~1:1.5, 600x900px for sharp Retina rendering)
-    // 3. Compress to modern WebP (quality 88)
+    // 2. Resize within 800x1200 maintaining 100% of the artwork without cropping
+    // 3. Compress to modern WebP (quality 90)
     const optimizedBuffer = await sharp(file.buffer)
       .rotate()
-      .resize(600, 900, {
-        fit: 'cover',
-        position: 'center',
+      .resize(800, 1200, {
+        fit: 'inside',
+        withoutEnlargement: true,
       })
-      .webp({ quality: 88, effort: 4 })
+      .webp({ quality: 90, effort: 4 })
       .toBuffer();
 
     // Prepare uploads directory
@@ -108,17 +130,19 @@ export const uploadHeroCover = async (req: Request, res: Response, next: NextFun
       update: {
         hero_book_cover_url: relativeUrl,
         hero_book_cover_updated_at: now,
+        hero_book_model,
       },
       create: {
         id: 'default',
         hero_book_cover_url: relativeUrl,
         hero_book_cover_updated_at: now,
+        hero_book_model,
       },
     });
 
     res.status(200).json({
       success: true,
-      message: 'Hero book cover uploaded and updated successfully',
+      message: 'Hero 3D book cover updated successfully',
       data: updatedConfig,
     });
   } catch (error) {

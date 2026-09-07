@@ -42,11 +42,35 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     let isValid = false;
-    try {
-      isValid = await argon2.verify(user.password, password);
-    } catch (e) {
-      const bcrypt = await import('bcrypt');
-      isValid = await bcrypt.default.compare(password, user.password);
+    if (user.password.startsWith('$argon2')) {
+      try {
+        isValid = await argon2.verify(user.password, password);
+      } catch (e) {
+        isValid = false;
+      }
+    } else if (
+      user.password.startsWith('$2a$') ||
+      user.password.startsWith('$2b$') ||
+      user.password.startsWith('$2y$')
+    ) {
+      try {
+        const bcrypt = await import('bcrypt');
+        const compareFn = bcrypt.default?.compare || bcrypt.compare;
+        isValid = await compareFn(password, user.password);
+      } catch (e) {
+        isValid = false;
+      }
+    } else {
+      try {
+        isValid = await argon2.verify(user.password, password);
+      } catch (e) {}
+      if (!isValid) {
+        try {
+          const bcrypt = await import('bcrypt');
+          const compareFn = bcrypt.default?.compare || bcrypt.compare;
+          isValid = await compareFn(password, user.password);
+        } catch (e) {}
+      }
     }
 
     if (!isValid) {

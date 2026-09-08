@@ -364,11 +364,14 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    const clientId = env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+    const clientId =
+      env.GOOGLE_CLIENT_ID ||
+      process.env.GOOGLE_CLIENT_ID ||
+      '285337463761-2ag5qau6mv0ilqac6n8upplrdus4o6l4.apps.googleusercontent.com';
     if (!clientId) {
       res.status(500).json({
         success: false,
-        message: 'Google Client ID is not configured on the server. Please set GOOGLE_CLIENT_ID in server environment.',
+        message: 'Google Client ID is not configured on the server.',
       });
       return;
     }

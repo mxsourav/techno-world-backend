@@ -246,16 +246,14 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
       return;
     }
     const devGoogleName = req.body.name || devGoogleEmail.split('@')[0];
-    const devGoogleId = req.body.googleId || 'google_dev_test_98765';
+    // Generate a unique deterministic Google ID for this email address to avoid collision
+    const devGoogleId = req.body.googleId || `dev_google_${Buffer.from(devGoogleEmail).toString('hex')}`;
     const devAvatar = req.body.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80';
 
-    // Upsert the test customer record in SQLite
+    // Query strictly by email so different entered emails always access or create their own distinct user account
     let user = await prisma.user.findFirst({
       where: {
-        OR: [
-          { googleId: devGoogleId },
-          { email: devGoogleEmail },
-        ],
+        email: devGoogleEmail,
       },
     });
 
@@ -286,7 +284,7 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
     } else if (!user.googleId) {
       user = await prisma.user.update({
         where: { id: user.id },
-        data: { googleId: devGoogleId, avatarUrl: devAvatar },
+        data: { googleId: devGoogleId, avatarUrl: user.avatarUrl || devAvatar },
       });
     }
 

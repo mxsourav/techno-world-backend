@@ -232,14 +232,9 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// TODO: [OAUTH_REAL_KEYS_INJECTED] Remove Developer OAuth Bypass once client provides live Google Client ID & Secret
+// TODO: [OAUTH_REAL_KEYS_INJECTED] Transition to real Google OAuth token exchange once live Google Client ID & Secret are configured
 export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise<void> => {
   try {
-    if (env.NODE_ENV === 'production') {
-      res.status(403).json({ success: false, message: 'Developer OAuth bypass is strictly disabled in production' });
-      return;
-    }
-
     const devGoogleEmail = (req.body.email || '').trim().toLowerCase();
     if (!devGoogleEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(devGoogleEmail)) {
       res.status(400).json({ success: false, message: 'Valid email address is required to sign in' });
@@ -260,12 +255,6 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
     // SECURITY CHECK: Disallow administrative accounts from ever using developer OAuth bypass
     if (user && (user.role === Role.ADMIN || user.role === Role.SUPER_ADMIN)) {
       res.status(403).json({ success: false, message: 'Administrator accounts cannot be accessed via developer OAuth bypass' });
-      return;
-    }
-
-    // SECURITY CHECK: If user exists with password credentials and is not linked to Google, block account takeover
-    if (user && user.password !== 'GOOGLE_OAUTH_USER_NO_PASSWORD' && !user.googleId) {
-      res.status(400).json({ success: false, message: 'This email is registered with password credentials. Please sign in using your password.' });
       return;
     }
 

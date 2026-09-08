@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { PrismaClient, Role } from '@prisma/client';
 import argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
+import { OAuth2Client } from 'google-auth-library';
 import { env } from '../config/env.js';
 import { generateTokens, verifyToken } from '../utils/jwt.js';
 import { ensureUserTestingBonus } from '../services/loyalty.service.js';
@@ -348,3 +349,168 @@ export const googleAuthCallback = async (req: Request, res: Response): Promise<v
     res.status(500).json({ success: false, message: 'Google OAuth callback failed' });
   }
 };
+
+/**
+ * Production Google Sign-In with Google Identity Services (GIS)
+ * Verifies the Google ID token cryptographically using google-auth-library,
+ * matches client audience, performs safe user lookup / registration / account linking,
+ * and issues standard application JWT & HTTP-only cookies.
+ */
+export const googleAuth = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { credential } = req.body;
+    if (!credential || typeof credential !== 'string') {
+      res.status(400).json({ success: false, message: 'Google credential (ID token) is required' });
+      return;
+    }
+
+    const clientId = env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      res.status(500).json({
+        success: false,
+        message: 'Google Client ID is not configured on the server. Please set GOOGLE_CLIENT_ID in server environment.',
+      });
+      return;
+    }
+
+    const client = new OAuth2Client(clientId);
+    let ticket;
+    try {
+      ticket = await client.verifyIdToken({
+        idToken: credential,
+        audience: clientId,
+      });
+    } catch (verifyErr: any) {
+      console.error('[GOOGLE_ID_TOKEN_VERIFY_FAILED]', verifyErr.message);
+      res.status(401).json({
+        success: false,
+        message: 'Invalid or expired Google credential token',
+      });
+      return;
+    }
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.sub || !payload.email) {
+      res.status(401).json({
+        success: false,
+        message: 'Malformed Google ID token: missing user identifier or email',
+      });
+      return;
+    }
+
+    if (!payload.email_verified) {
+      res.status(401).json({
+        success: false,
+        message: 'Google email address is not verified by Google',
+      });
+      return;
+    }
+
+    const googleId = payload.sub;
+    const email = payload.email.trim().toLowerCase();
+    const name = payload.name || payload.given_name || email.split('@')[0];
+    const avatarUrl = payload.picture || null;
+
+    // Look for existing user by googleId OR by email
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { googleId },
+          { email },
+        ],
+      },
+    });
+
+    // SECURITY CHECK: Protect administrative accounts from automatic OAuth access
+    if (user && (user.role === Role.ADMIN || user.role === Role.SUPER_ADMIN)) {
+      res.status(403).json({
+        success: false,
+        message: 'Administrator accounts must sign in using password credentials',
+      });
+      return;
+    }
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email,
+          name,
+          googleId,
+          avatarUrl,
+          password: 'GOOGLE_OAUTH_USER_NO_PASSWORD',
+          role: Role.CUSTOMER,
+          technoPoints: 0,
+        },
+      });
+    } else {
+      // Safe account linking: link googleId and update avatar if not yet present
+      const updates: any = {};
+      if (!user.googleId) {
+        updates.googleId = googleId;
+      }
+      if (!user.avatarUrl && avatarUrl) {
+        updates.avatarUrl = avatarUrl;
+      }
+      if (Object.keys(updates).length > 0) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: updates,
+        });
+      }
+    }
+
+    // Generate standard application JWT tokens
+    const { accessToken, refreshToken } = generateTokens(user.id, user.role);
+
+    // Save refresh session in database
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        refreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        userAgent: req.headers['user-agent'] || 'Google GIS Client',
+        ipAddress: req.ip || '127.0.0.1',
+      },
+    });
+
+    // Set HTTP-only secure cookies with matching parity
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: (env.NODE_ENV as string) === 'production',
+      sameSite: (env.NODE_ENV as string) === 'production' ? 'strict' : 'lax',
+      maxAge: 15 * 60 * 1000,
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: (env.NODE_ENV as string) === 'production',
+      sameSite: (env.NODE_ENV as string) === 'production' ? 'strict' : 'lax',
+      path: '/api/v1/auth/refresh',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    const bonus = await ensureUserTestingBonus(user.id);
+
+    res.status(200).json({
+      success: true,
+      message: 'Google authentication successful',
+      data: {
+        accessToken,
+        refreshToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          name: user.name,
+          avatarUrl: user.avatarUrl,
+          technoPoints: bonus.technoPoints,
+          technoWallet: bonus.technoWallet,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[GOOGLE_AUTH_ERROR]', error instanceof Error ? error.message : 'Unknown');
+    res.status(500).json({ success: false, message: 'Google authentication failed' });
+  }
+};
+

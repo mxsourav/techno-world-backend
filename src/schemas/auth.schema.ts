@@ -24,3 +24,8 @@ export const devGoogleOAuthBypassSchema = z.object({
   googleId: z.string().min(1).max(100).optional(),
   avatarUrl: z.string().url('Invalid avatar URL').optional().nullable(),
 }).strict();
+
+export const googleAuthSchema = z.object({
+  credential: z.string().min(10, 'Google credential token is required'),
+}).strict();
+

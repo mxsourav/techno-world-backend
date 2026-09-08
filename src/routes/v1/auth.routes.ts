@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { login, refresh, logout, devGoogleOAuthBypass, googleAuthCallback } from '../../controllers/auth.controller.js';
+import { login, refresh, logout, devGoogleOAuthBypass, googleAuthCallback, googleAuth } from '../../controllers/auth.controller.js';
 import { validateRequest } from '../../middlewares/validate.middleware.js';
-import { loginSchema, devGoogleOAuthBypassSchema } from '../../schemas/auth.schema.js';
+import { loginSchema, devGoogleOAuthBypassSchema, googleAuthSchema } from '../../schemas/auth.schema.js';
 
 const router = Router();
 
@@ -10,8 +10,10 @@ router.post('/login', validateRequest(loginSchema), login);
 router.post('/refresh', refresh);
 router.post('/logout', logout);
 
+// Google Identity Services (GIS) Official Token Verification
+router.post('/google', validateRequest(googleAuthSchema), googleAuth);
+
 // Google OAuth Scaffolding & Developer Bypass
-// TODO: [OAUTH_REAL_KEYS_INJECTED] Remove dev-bypass route once live Google OAuth keys are provided
 router.post('/google/dev-bypass', validateRequest(devGoogleOAuthBypassSchema), devGoogleOAuthBypass);
 router.get('/google/callback', googleAuthCallback);
 

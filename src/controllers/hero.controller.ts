@@ -1,10 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 
-const prisma = new PrismaClient();
 
 /**
  * Public endpoint: Retrieve hero configuration including active book cover URL.

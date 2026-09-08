@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import { indiaPostService } from '../services/indiapost.service.js';
 import {
   indiaPostTariffRequestSchema,
@@ -7,7 +7,6 @@ import {
 } from '../schemas/indiapost.schema.js';
 import { logger } from '../config/logger.js';
 
-const prisma = new PrismaClient();
 
 /**
  * Pincode Master Search

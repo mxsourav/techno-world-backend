@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { PrismaClient, Role } from '@prisma/client';
+import { Role } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import argon2 from 'argon2';
 import jwt from 'jsonwebtoken';
 import { OAuth2Client } from 'google-auth-library';
@@ -7,7 +8,6 @@ import { env } from '../config/env.js';
 import { generateTokens, verifyToken } from '../utils/jwt.js';
 import { ensureUserTestingBonus } from '../services/loyalty.service.js';
 
-const prisma = new PrismaClient();
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME_MS = 15 * 60 * 1000; // 15 minutes
 

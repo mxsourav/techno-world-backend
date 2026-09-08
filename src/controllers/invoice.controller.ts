@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import {
   generateInvoicePDF,
   assignInvoiceNumber,
@@ -7,7 +7,6 @@ import {
   generateMergedInvoicesPDF
 } from '../services/invoice.service.js';
 
-const prisma = new PrismaClient();
 
 // ─── Customer: Download own invoice ──────────────────────────────
 export const downloadInvoice = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

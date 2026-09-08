@@ -1,5 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { prisma } from '../../config/database.js';
 import { ExcelRow } from '../import.service.js';
 import { EntityCreator } from './entityCreator.js';
 import { Writer, DuplicateStrategy } from './writer.js';

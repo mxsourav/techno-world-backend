@@ -1,12 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import Razorpay from 'razorpay';
 import { env } from '../config/env.js';
 import { PricingEngine } from '../services/pricing.service.js';
 import { emailService } from '../services/email.service.js';
 import { logger } from '../config/logger.js';
 
-const prisma = new PrismaClient();
 
 function generateOrderNumber(): string {
   const date = new Date();

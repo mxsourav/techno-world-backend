@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -19,7 +19,6 @@ function getBlackLogoPath(): string | null {
   return candidates.find(p => fs.existsSync(p)) || null;
 }
 
-const prisma = new PrismaClient();
 
 // ─── Seller Details ─────────────────────────────────────────────
 const SELLER = {

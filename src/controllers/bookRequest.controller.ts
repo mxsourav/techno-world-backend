@@ -1,9 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import { emailService } from '../services/email.service.js';
 import { logger } from '../config/logger.js';
 
-const prisma = new PrismaClient();
 
 // POST /api/v1/book-requests (Public)
 export const submitBookRequest = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

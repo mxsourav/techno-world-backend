@@ -693,6 +693,7 @@ model HeroConfig {
   id                         String    @id @default("default")
   hero_book_cover_url        String?   @db.Text
   hero_book_cover_updated_at DateTime?
+  hero_book_model            String?   @default("academic")
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
 }

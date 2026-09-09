@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 
-const prisma = new PrismaClient();
 
 // Get questions for storefront (user name is hidden per privacy & design spec)
 export const getQuestions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

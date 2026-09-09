@@ -1,9 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import { logger } from '../config/logger.js';
 import { ensureUserTestingBonus } from '../services/loyalty.service.js';
 
-const prisma = new PrismaClient();
 
 // GET /api/v1/profile
 export const getProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

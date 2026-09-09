@@ -1,10 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 
-const prisma = new PrismaClient();
 
 /**
  * Public endpoint: Retrieve hero configuration including active book cover URL.
@@ -57,17 +56,39 @@ export const uploadHeroCover = async (req: Request, res: Response, next: NextFun
       return;
     }
 
+    // Read metadata to determine aspect ratio and best matching 3D book preset
+    const metadata = await sharp(file.buffer).metadata();
+    const width = metadata.width || 600;
+    const height = metadata.height || 900;
+    const ratio = height / width;
+
+    // Determine 3D book model preset:
+    // User can optionally specify req.body.hero_book_model ('academic' | 'novel' | 'reference')
+    // Otherwise auto-detect based on physical publishing ratios:
+    let detectedModel: 'academic' | 'novel' | 'reference' = 'academic';
+    if (ratio < 1.42) {
+      detectedModel = 'novel';
+    } else if (ratio > 1.58) {
+      detectedModel = 'reference';
+    } else {
+      detectedModel = 'academic';
+    }
+
+    const hero_book_model = (req.body.hero_book_model && ['academic', 'novel', 'reference'].includes(req.body.hero_book_model))
+      ? req.body.hero_book_model
+      : detectedModel;
+
     // Process image through Sharp pipeline:
     // 1. Auto-rotate based on EXIF orientation
-    // 2. Standard book aspect ratio crop (~1:1.5, 600x900px for sharp Retina rendering)
-    // 3. Compress to modern WebP (quality 88)
+    // 2. Resize within 1600x2400 maintaining 100% of the artwork without cropping
+    // 3. Compress to modern WebP (high crispness quality 95)
     const optimizedBuffer = await sharp(file.buffer)
       .rotate()
-      .resize(600, 900, {
-        fit: 'cover',
-        position: 'center',
+      .resize(1600, 2400, {
+        fit: 'inside',
+        withoutEnlargement: true,
       })
-      .webp({ quality: 88, effort: 4 })
+      .webp({ quality: 95, effort: 5 })
       .toBuffer();
 
     // Prepare uploads directory
@@ -108,17 +129,19 @@ export const uploadHeroCover = async (req: Request, res: Response, next: NextFun
       update: {
         hero_book_cover_url: relativeUrl,
         hero_book_cover_updated_at: now,
+        hero_book_model,
       },
       create: {
         id: 'default',
         hero_book_cover_url: relativeUrl,
         hero_book_cover_updated_at: now,
+        hero_book_model,
       },
     });
 
     res.status(200).json({
       success: true,
-      message: 'Hero book cover uploaded and updated successfully',
+      message: 'Hero 3D book cover updated successfully',
       data: updatedConfig,
     });
   } catch (error) {
@@ -165,6 +188,36 @@ export const deleteHeroCover = async (req: Request, res: Response, next: NextFun
     res.status(200).json({
       success: true,
       message: 'Hero book cover reset to default mockup',
+      data: updatedConfig,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Admin protected endpoint: Update 3D book model preset ('academic' | 'novel' | 'reference').
+ */
+export const updateHeroModel = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { hero_book_model } = req.body;
+    if (!hero_book_model || !['academic', 'novel', 'reference'].includes(hero_book_model)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid hero_book_model. Must be academic, novel, or reference.',
+      });
+      return;
+    }
+
+    const updatedConfig = await prisma.heroConfig.upsert({
+      where: { id: 'default' },
+      update: { hero_book_model },
+      create: { id: 'default', hero_book_model },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Hero 3D book model updated successfully',
       data: updatedConfig,
     });
   } catch (error) {

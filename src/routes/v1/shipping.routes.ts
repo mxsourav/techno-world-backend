@@ -12,6 +12,7 @@ router.get('/track/:identifier', shippingController.trackShipment);
 
 // Admin-only fulfillment routes
 router.post('/book/:orderId', requireAuth, requireAdmin, shippingController.bookOrderShipment);
+router.post('/book-batch', requireAuth, requireAdmin, shippingController.bookBatchShipments);
 router.get('/label/:orderId', requireAuth, requireAdmin, shippingController.getShippingLabel);
 
 export default router;

@@ -1,6 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 
-const prisma = new PrismaClient();
 
 async function main() {
   const books = await prisma.book.findMany();

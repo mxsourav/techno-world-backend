@@ -1,8 +1,7 @@
 import * as xlsx from 'xlsx';
 import { z } from 'zod';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 
-const prisma = new PrismaClient();
 
 const ExcelRowSchema = z.object({
   title: z.string().min(1, 'Title is required'),

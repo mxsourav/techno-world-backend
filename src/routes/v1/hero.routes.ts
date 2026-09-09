@@ -5,6 +5,7 @@ import {
   getHeroConfig,
   uploadHeroCover,
   deleteHeroCover,
+  updateHeroModel,
 } from '../../controllers/hero.controller.js';
 
 const router = Router();
@@ -19,6 +20,20 @@ const upload = multer({
 
 // Public route to fetch active hero config & cover
 router.get('/', getHeroConfig);
+
+// Protected admin routes: Model updates
+router.put(
+  '/admin/model',
+  requireAuth,
+  requireRole(['ADMIN', 'SUPER_ADMIN']),
+  updateHeroModel
+);
+router.put(
+  '/model',
+  requireAuth,
+  requireRole(['ADMIN', 'SUPER_ADMIN']),
+  updateHeroModel
+);
 
 // Protected admin routes: Support both /admin/cover and /cover
 router.post(

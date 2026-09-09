@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import { indiaPostService } from '../services/indiapost.service.js';
 import {
   indiaPostTariffRequestSchema,
@@ -7,7 +7,6 @@ import {
 } from '../schemas/indiapost.schema.js';
 import { logger } from '../config/logger.js';
 
-const prisma = new PrismaClient();
 
 /**
  * Pincode Master Search
@@ -153,11 +152,11 @@ export const bookOrderShipment = async (req: Request, res: Response, next: NextF
       height: Number(height) || 3,
       sender_name: 'Techno World Books Hub',
       sender_company: 'Techno World Publications',
-      sender_add_line_1: 'Plot 42, Knowledge Park III',
-      sender_city: 'Bengaluru',
-      sender_state: 'Karnataka',
-      sender_pincode: '560001',
-      sender_mobile_no: '9876543210',
+      sender_add_line_1: 'College Street (Bidhan Sarani), Near Presidency',
+      sender_city: 'Kolkata',
+      sender_state: 'West Bengal',
+      sender_pincode: '700006',
+      sender_mobile_no: '9830000000',
       receiver_name: order.address.fullName,
       receiver_company: '',
       receiver_add_line_1: order.address.addressLine1,
@@ -308,3 +307,119 @@ export const getShippingLabel = async (req: Request, res: Response, next: NextFu
     res.status(500).json({ success: false, message: error.message || 'Label generation failed' });
   }
 };
+
+/**
+ * Bulk Consignment Booking with India Post CEPT (Admin only)
+ * POST /api/v1/shipping/book-batch
+ */
+export const bookBatchShipments = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { orderIds, serviceType } = req.body;
+
+    if (!Array.isArray(orderIds) || orderIds.length === 0) {
+      res.status(400).json({ success: false, message: 'orderIds array is required' });
+      return;
+    }
+
+    const orders = await prisma.order.findMany({
+      where: {
+        id: { in: orderIds },
+      },
+      include: {
+        address: true,
+        user: true,
+        items: {
+          include: { book: true },
+        },
+      },
+    });
+
+    if (orders.length === 0) {
+      res.status(404).json({ success: false, message: 'No matching orders found' });
+      return;
+    }
+
+    const articles: any[] = [];
+    const updatedOrders: any[] = [];
+
+    for (const order of orders) {
+      if (!order.address) continue;
+
+      const orderMethod = serviceType || order.shippingMethod || 'SPEED_POST';
+      const barcode = order.trackingNumber || indiaPostService.generateBarcode(orderMethod === 'NORMAL_POST' ? 'BP' : 'EB', 'IN');
+      const totalWeight = Math.max(250, order.items.length * 350);
+
+      let articleType = serviceType;
+      let carrierLabel = 'India Post Speed Post';
+      if (!articleType) {
+        if (orderMethod === 'NORMAL_POST') {
+          articleType = totalWeight <= 500 ? 'BP_INLAND_DOC' : 'BP_INLAND_PARCEL';
+          carrierLabel = 'India Post Book Post';
+        } else {
+          articleType = totalWeight <= 500 ? 'SP_INLAND_DOC' : 'SP_INLAND_PARCEL';
+          carrierLabel = 'India Post Speed Post';
+        }
+      }
+
+      articles.push({
+        barcode_no: barcode,
+        article_type: articleType,
+        physical_weight: totalWeight,
+        length: 20,
+        breadth_diameter: 15,
+        height: 3,
+        sender_name: 'Techno World Books Hub',
+        sender_company: 'Techno World Publications',
+        sender_add_line_1: 'College Street (Bidhan Sarani), Near Presidency',
+        sender_city: 'Kolkata',
+        sender_state: 'West Bengal',
+        sender_pincode: '700006',
+        sender_mobile_no: '9830000000',
+        receiver_name: order.address.fullName,
+        receiver_company: '',
+        receiver_add_line_1: order.address.addressLine1,
+        receiver_city: order.address.city,
+        receiver_state: order.address.state,
+        receiver_pincode: order.address.pincode,
+        receiver_mobile_no: order.address.phone,
+        receiver_email: order.address.email || order.user?.email,
+        insurance: false,
+        value_for_customs: order.totalAmount,
+      });
+
+      updatedOrders.push({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        barcode,
+        carrier: carrierLabel,
+        method: orderMethod,
+      });
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          trackingNumber: barcode,
+          shippingCarrier: carrierLabel,
+          shippingMethod: orderMethod,
+          status: order.status === 'PENDING' ? 'PROCESSING' : order.status,
+        },
+      });
+    }
+
+    const bookingResult = await indiaPostService.bookArticles(articles);
+
+    res.json({
+      success: true,
+      message: `Batch shipment booked successfully for ${articles.length} parcels via India Post CEPT`,
+      data: {
+        totalBooked: articles.length,
+        orders: updatedOrders,
+        bookingDetails: bookingResult,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Batch shipment booking failed: ' + error.message);
+    res.status(500).json({ success: false, message: error.message || 'Batch shipment booking failed' });
+  }
+};
+

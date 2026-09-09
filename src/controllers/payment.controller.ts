@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient, PaymentStatus } from '@prisma/client';
+import { PaymentStatus } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import crypto from 'crypto';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 
-const prisma = new PrismaClient();
 
 // Helper to normalize payment method display
 function normalizePaymentMethod(method?: string | null): string {

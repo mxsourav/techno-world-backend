@@ -1,11 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import fs from 'fs';
 import path from 'path';
 import { ImportService } from '../services/import.service.js';
 import { ExecutionService } from '../services/import/execution.service.js';
 
-const prisma = new PrismaClient();
 
 export const getAdminStats = async (req: Request, res: Response, next: NextFunction) => {
   try {

@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import { ensureUserTestingBonus } from './loyalty.service.js';
 
-const prisma = new PrismaClient();
 
 export function getDispatchBatchCutoff(date: Date): Date {
   const d = new Date(date);

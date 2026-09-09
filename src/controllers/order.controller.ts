@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import Razorpay from 'razorpay';
 import { env } from '../config/env.js';
 import { PricingEngine } from '../services/pricing.service.js';
@@ -10,8 +10,6 @@ import dotenv from "dotenv"
 import twilio from 'twilio';
 
 dotenv.config();
-
-const prisma = new PrismaClient();
 
 function generateOrderNumber(): string {
   const date = new Date();

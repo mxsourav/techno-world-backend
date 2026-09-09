@@ -1,9 +1,8 @@
 import nodemailer from 'nodemailer';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 
-const prisma = new PrismaClient();
 
 export interface SmtpConfig {
   senderEmail: string;

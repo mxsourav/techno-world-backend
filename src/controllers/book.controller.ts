@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../config/database.js';
 
-const prisma = new PrismaClient();
 
 // Map Prisma Book to Frontend Book shape
 const mapBookToFrontendShape = (book: any) => ({

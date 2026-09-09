@@ -1,9 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import fs from 'fs';
 import path from 'path';
 
-const prisma = new PrismaClient();
 
 export const listMedia = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {

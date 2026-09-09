@@ -1,11 +1,11 @@
 import { Request, Response } from 'express';
 import crypto from 'crypto';
-import { PrismaClient, OrderStatus } from '@prisma/client';
+import { OrderStatus } from '@prisma/client';
+import { prisma } from '../config/database.js';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { indiaPostWebhookPayloadSchema } from '../schemas/indiapost.schema.js';
 
-const prisma = new PrismaClient();
 
 export const handleRazorpayWebhook = async (req: Request, res: Response): Promise<void> => {
   const secret = env.RAZORPAY_WEBHOOK_SECRET;

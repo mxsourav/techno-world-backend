@@ -49,7 +49,9 @@ app.use(
         origin.includes('vercel.app') ||
         origin.includes('onrender.com') ||
         origin.includes('technoworld') ||
-        origin.includes('techno-world');
+        origin.includes('techno-world') ||
+        origin.includes('hostingersite.com') ||
+        origin.includes('hostinger');
 
       if (isAllowed) {
         return callback(null, true);

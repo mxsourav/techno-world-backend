@@ -11,6 +11,9 @@ import { generalLimiter } from './middlewares/rateLimiter.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import routes from './routes/index.js';
 import { generateSitemap } from './controllers/sitemap.controller.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 

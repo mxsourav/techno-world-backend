@@ -6,6 +6,11 @@ import { PricingEngine } from '../services/pricing.service.js';
 import { emailService } from '../services/email.service.js';
 import { logger } from '../config/logger.js';
 
+import dotenv from "dotenv"
+import twilio from 'twilio';
+
+dotenv.config();
+
 const prisma = new PrismaClient();
 
 function generateOrderNumber(): string {
@@ -14,6 +19,72 @@ function generateOrderNumber(): string {
   const rand = Math.floor(1000 + Math.random() * 9000);
   return `TW-${dateStr}-${rand}`;
 }
+
+
+
+const sendOrderSMS = async (
+  phone: string,
+  orderNumber: string,
+  totalAmount: number
+) => {
+  try {
+    const cleanPhone = phone.replace(/\D/g, '').slice(-10);
+
+    if (cleanPhone.length !== 10) {
+      console.warn(`Invalid phone number for SMS: ${phone}`);
+      return;
+    }
+
+    const message =
+      `Your order #${orderNumber} has been placed successfully. ` +
+      `Order amount: Rs.${totalAmount.toFixed(2)}. Thank you for shopping with us!`;
+
+    console.log(`Sending SMS to ${cleanPhone}: ${message}`);
+
+    console.log('Twilio credentials:', {
+      accountSid: process.env.TWILIO_ACCOUNT_SID
+        ? `loaded (${process.env.TWILIO_ACCOUNT_SID.substring(0, 2)}...)`
+        : 'MISSING',
+
+      apiKeySid: process.env.TWILIO_API_KEY_SID
+        ? `loaded (${process.env.TWILIO_API_KEY_SID.substring(0, 2)}...)`
+        : 'MISSING',
+
+      apiKeySecret: process.env.TWILIO_API_KEY_SECRET
+        ? 'loaded'
+        : 'MISSING',
+
+      phoneNumber: process.env.TWILIO_PHONE_NUMBER
+        ? 'loaded'
+        : 'MISSING',
+    });
+
+    const client = twilio(
+      process.env.TWILIO_ACCOUNT_SID,
+      process.env.TWILIO_AUTH_TOKEN,
+    );
+
+    const response = await client.messages.create({
+      body: "Order confirmed!!",
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: `+91${cleanPhone}`,
+    });
+
+    console.log('Twilio SMS sent:', {
+      sid: response.sid,
+      status: response.status,
+      to: response.to,
+    });
+
+    return response;
+  } catch (error: any) {
+    console.error(
+      'Twilio SMS failed:',
+      error.message || error
+    );
+  }
+};
+
 
 export const createOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -32,7 +103,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
 
     const userId = existingUser.id;
     const orderEmail = (existingUser.email || req.body.email || req.body.customerEmail || address?.email || '').trim();
-    
+
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ success: false, message: 'Items are required' });
       return;
@@ -96,7 +167,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       res.status(400).json({ success: false, message: pricingResult.errors[0] || 'Pricing validation failed' });
       return;
     }
-    
+
     if (pricingResult.promotionError) {
       res.status(400).json({ success: false, message: pricingResult.promotionError });
       return;
@@ -105,17 +176,17 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     // Atomic Transaction: Stock decrement + Order Creation + Address Deduplication + Loyalty Points Increment
     const order = await prisma.$transaction(async (tx) => {
       const orderItems: any[] = [];
-      
+
       for (const item of pricingResult.items) {
         orderItems.push({ bookId: item.bookId, quantity: item.quantity, priceAtPurchase: item.unitPrice });
-        
+
         // Controlled Overselling Check: allow up to 5 items of backorder buffer
         const ALLOWED_NEGATIVE_STOCK_BUFFER = -5;
         const minStockAllowed = item.quantity + ALLOWED_NEGATIVE_STOCK_BUFFER;
 
         // Atomically verify and decrement stock
         const stockUpdate = await tx.book.updateMany({
-          where: { 
+          where: {
             id: item.bookId,
             stock: { gte: minStockAllowed }
           },
@@ -301,7 +372,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
           where: { id: pricingResult.promotionId },
           data: { usedCount: { increment: 1 } }
         });
-        
+
         await tx.promotionUsage.create({
           data: {
             promotionId: pricingResult.promotionId,
@@ -364,16 +435,32 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         currency: 'INR',
         receipt: order.id
       });
-      
+
       await prisma.order.update({
         where: { id: order.id },
         data: { paymentId: razorpayOrder.id }
       });
     }
 
-    res.status(201).json({ 
-      success: true, 
-      message: 'Order placed successfully', 
+    // Send test order confirmation SMS
+    const customerPhone =
+      order.address?.phone ||
+      order.user?.phone ||
+      pickupPhone ||
+      req.body.phone ||
+      address?.phone;
+
+    if (customerPhone) {
+      await sendOrderSMS(
+        customerPhone,
+        order.orderNumber,
+        Number(order.totalAmount)
+      );
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Order placed successfully',
       data: {
         ...order,
         razorpayOrderId: razorpayOrder?.id,
@@ -420,7 +507,7 @@ export const getMyOrders = async (req: Request, res: Response, next: NextFunctio
 export const getAllOrders = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { status, page = '1', limit = '50' } = req.query;
-    
+
     const queryStatus = typeof status === 'string' ? status : undefined;
     const skip = (Number(page) - 1) * Number(limit);
     const take = Number(limit);
@@ -505,8 +592,8 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
     const noteEntry = reason
       ? `[${new Date().toISOString()}] Status changed to ${status}: ${reason}`
       : notes
-      ? `[${new Date().toISOString()}] Status changed to ${status}: ${notes}`
-      : `[${new Date().toISOString()}] Status changed to ${status}`;
+        ? `[${new Date().toISOString()}] Status changed to ${status}: ${notes}`
+        : `[${new Date().toISOString()}] Status changed to ${status}`;
 
     const updatedNotes = existing.notes ? `${existing.notes}\n${noteEntry}` : noteEntry;
 
@@ -566,7 +653,7 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
     if (status === 'CANCELLED') {
       const recipientEmail = (order as any).customerEmail || order.address?.email || order.user?.email || 'customer@example.com';
       const recipientName = order.address?.fullName || order.user?.name || 'Valued Customer';
-      
+
       const pointsToRevoke = Math.floor(order.totalAmount / 100);
       if (pointsToRevoke > 0 && order.userId) {
         await prisma.user.update({
@@ -691,8 +778,8 @@ export const batchUpdateOrderStatus = async (req: Request, res: Response, next: 
       const noteEntry = reason
         ? `[${new Date().toISOString()}] Status batch-changed to ${status}: ${reason}`
         : notes
-        ? `[${new Date().toISOString()}] Status batch-changed to ${status}: ${notes}`
-        : `[${new Date().toISOString()}] Status batch-changed to ${status}`;
+          ? `[${new Date().toISOString()}] Status batch-changed to ${status}: ${notes}`
+          : `[${new Date().toISOString()}] Status batch-changed to ${status}`;
 
       const updatedNotes = existing.notes ? `${existing.notes}\n${noteEntry}` : noteEntry;
 

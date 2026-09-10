@@ -18,7 +18,9 @@ import {
   updateBook,
   createBook,
   getActivityLogs,
-  getSearchAndSalesAnalytics
+  getSearchAndSalesAnalytics,
+  getAutoAcceptSetting,
+  updateAutoAcceptSetting
 } from '../../controllers/admin.controller.js';
 
 import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
@@ -33,6 +35,8 @@ router.get('/stats', getAdminStats);
 router.get('/analytics/search-trends', getSearchAndSalesAnalytics);
 router.get('/customers', getAdminCustomers);
 router.get('/settings', getAdminSettings);
+router.get('/settings/auto-accept', getAutoAcceptSetting);
+router.post('/settings/auto-accept', updateAutoAcceptSetting);
 router.patch('/profile', updateAdminProfile);
 router.put('/smtp', updateSmtpSettings);
 router.post('/smtp/test', testSmtpSettings);

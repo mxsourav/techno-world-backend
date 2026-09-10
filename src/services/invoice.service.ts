@@ -230,6 +230,7 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
 
     // Table rows
     let itemTotal = 0;
+    let totalConsignmentWeightGrams = 0;
     order.items.forEach((item, idx) => {
       const title = item.book?.title || 'Book';
       const authors = item.book?.authors?.map((a: any) => a.name).join(', ') || '';
@@ -238,6 +239,16 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
       const rate = item.priceAtPurchase;
       const total = qty * rate;
       itemTotal += total;
+
+      const bookWeight = (item.book as any)?.weight;
+      const bookPages = (item.book as any)?.pages;
+      let unitWeightGrams = 450;
+      if (bookWeight && typeof bookWeight === 'number' && bookWeight > 0) {
+        unitWeightGrams = bookWeight < 10 ? Math.round(bookWeight * 1000) : Math.round(bookWeight);
+      } else if (bookPages && typeof bookPages === 'number' && bookPages > 0) {
+        unitWeightGrams = Math.round(bookPages * 1.25 + 50);
+      }
+      totalConsignmentWeightGrams += unitWeightGrams * qty;
 
       // Check if we need a new page
       if (y > 700) {
@@ -306,11 +317,14 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
     doc.text(formatINR(order.totalAmount), totalsValX - 5, y, { width: 60, align: 'right' });
     y += 20;
 
-    // ─── DELIVERY METHOD ─────────────────────────────────────
+    // ─── DELIVERY METHOD & WEIGHT ────────────────────────────
     doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
     y += 10;
+    const totalWeightKg = (totalConsignmentWeightGrams / 1000).toFixed(2);
+    const totalWeightStr = `${totalWeightKg} kg (${totalConsignmentWeightGrams}g)`;
+
     doc.fontSize(8).font('Helvetica-Bold').fillColor('#1e293b')
-       .text(`Delivery Method: ${getShippingLabel(order.shippingMethod)}`, leftX, y);
+       .text(`Delivery Method: ${getShippingLabel(order.shippingMethod)}  |  Total Parcel Weight: ${totalWeightStr}`, leftX, y);
     y += 18;
 
     // ─── FOOTER NOTICE ───────────────────────────────────────

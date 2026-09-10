@@ -276,7 +276,24 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       if (pricingResult.walletUsed) {
         notesParts.push(`Used ₹${pricingResult.walletUsed.toFixed(2)} TechnoWallet Cash`);
       }
-      const orderNotes = notesParts.length > 0 ? `[Loyalty: ${notesParts.join(' | ')}]` : null;
+
+      // Check if auto-accept orders is enabled (default is true: auto-accept ON)
+      let isAutoAccept = true;
+      try {
+        const autoSetting = await tx.systemSetting.findUnique({ where: { key: 'AUTO_ACCEPT_ORDERS' } });
+        if (autoSetting) {
+          isAutoAccept = autoSetting.value === 'true';
+        }
+      } catch {
+        isAutoAccept = true;
+      }
+
+      if (isAutoAccept) {
+        notesParts.push('Auto-Accepted: Order confirmed for packing');
+      }
+
+      const orderNotes = notesParts.length > 0 ? `[Notes: ${notesParts.join(' | ')}]` : null;
+      const initialStatus = isAutoAccept ? 'CONFIRMED' : 'PENDING';
 
       const created = await tx.order.create({
         data: {
@@ -284,7 +301,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
           userId: userId,
           customerEmail: orderEmail,
           addressId: finalAddressId,
-          status: 'PENDING',
+          status: initialStatus,
           paymentStatus: effectivePaymentStatus,
           paymentMethod: effectivePaymentMethod,
           subtotal: pricingResult.subtotal,
@@ -438,8 +455,6 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         where: { id: order.id },
         data: { paymentId: razorpayOrder.id }
       });
-    }
-
     // Send test order confirmation SMS
     const customerPhone =
       order.address?.phone ||
@@ -454,6 +469,22 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         order.orderNumber,
         Number(order.totalAmount)
       );
+    }
+
+    if (order.status === 'CONFIRMED' && order.userId) {
+      try {
+        await prisma.notification.create({
+          data: {
+            userId: order.userId,
+            title: `✅ Order Confirmed: #${order.orderNumber}`,
+            message: `Your order #${order.orderNumber} (₹${order.totalAmount}) has been automatically approved and confirmed for packing!`,
+            type: 'order_confirmed',
+            link: `/account?order=${order.id}`,
+          },
+        });
+      } catch {
+        // non-blocking
+      }
     }
 
     res.status(201).json({

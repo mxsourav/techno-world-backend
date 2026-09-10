@@ -952,3 +952,41 @@ export const getSearchAndSalesAnalytics = async (req: Request, res: Response, ne
     next(error);
   }
 };
+
+// GET /api/v1/admin/settings/auto-accept
+export const getAutoAcceptSetting = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const setting = await prisma.systemSetting.findUnique({ where: { key: 'AUTO_ACCEPT_ORDERS' } });
+    // Default is true (ON) as requested
+    const enabled = setting ? setting.value === 'true' : true;
+    res.status(200).json({
+      success: true,
+      enabled,
+      message: `Auto-accept orders is currently ${enabled ? 'ENABLED (ON)' : 'DISABLED (OFF)'}`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/v1/admin/settings/auto-accept
+export const updateAutoAcceptSetting = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { enabled } = req.body;
+    const isEnabled = Boolean(enabled);
+
+    await prisma.systemSetting.upsert({
+      where: { key: 'AUTO_ACCEPT_ORDERS' },
+      update: { value: isEnabled ? 'true' : 'false' },
+      create: { key: 'AUTO_ACCEPT_ORDERS', value: isEnabled ? 'true' : 'false' },
+    });
+
+    res.status(200).json({
+      success: true,
+      enabled: isEnabled,
+      message: `Auto-accept orders successfully turned ${isEnabled ? 'ON' : 'OFF'}`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -455,6 +455,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         where: { id: order.id },
         data: { paymentId: razorpayOrder.id }
       });
+    }
+
     // Send test order confirmation SMS
     const customerPhone =
       order.address?.phone ||

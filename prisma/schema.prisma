@@ -94,8 +94,11 @@ model Book {
   examination      String?
   classStandard    String?
   coverUrl         String?
+  coverPublicId    String?
   galleryUrls      String?            @default("[]")
   previewPdfUrl    String?
+  previewPdfPublicId String?
+  previewPdfResourceType String?      @default("raw")
   status           BookStatus         @default(DRAFT)
   visibility       Boolean            @default(true)
   isFeatured       Boolean            @default(false)
@@ -120,6 +123,7 @@ model Book {
   reviews          Review[]
   questions        BookQuestion[]
   wishlistItems    WishlistItem[]
+  images           BookImage[]
   authors          Author[]           @relation("AuthorToBook")
   subjects         Subject[]          @relation("BookToSubject")
 
@@ -687,6 +691,60 @@ model ContactMessage {
 
   @@index([status])
   @@index([createdAt])
+}
+
+model BookImage {
+  id           String   @id @default(uuid())
+  bookId       String
+  publicId     String
+  secureUrl    String   @db.Text
+  resourceType String   @default("image")
+  format       String?
+  width        Int?
+  height       Int?
+  bytes        Int?
+  sortOrder    Int      @default(0)
+  isCover      Boolean  @default(false)
+  altText      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  book         Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@index([sortOrder])
+}
+
+enum SiteMediaType {
+  BANNER
+  PROMOTIONAL
+  FIXED
+  VIDEO
+}
+
+model SiteMedia {
+  id           String        @id @default(uuid())
+  type         SiteMediaType @default(BANNER)
+  name         String
+  publicId     String        @unique
+  secureUrl    String        @db.Text
+  resourceType String        @default("image")
+  format       String?
+  width        Int?
+  height       Int?
+  bytes        Int?
+  duration     Float?
+  isActive     Boolean       @default(true)
+  sortOrder    Int           @default(0)
+  altText      String?
+  targetUrl    String?
+  metadata     String?       @db.Text
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([type])
+  @@index([isActive])
+  @@index([sortOrder])
 }
 
 model HeroConfig {

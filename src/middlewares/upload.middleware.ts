@@ -64,3 +64,55 @@ export const secureDataUpload = multer({
   fileFilter: dataFileFilter,
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit for bulk catalogs
 });
+
+// 5. Cloudinary Media Upload Middlewares (Memory Storage for buffer streaming)
+const imageMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml', 'image/avif'];
+const imageExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg', '.avif'];
+
+const bookImageFileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (!imageMimes.includes(file.mimetype) || !imageExtensions.includes(ext)) {
+    return cb(new Error('Invalid image type. Only JPG, PNG, WEBP, GIF, SVG, and AVIF are allowed.'));
+  }
+  cb(null, true);
+};
+
+export const cloudinaryImageUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: bookImageFileFilter,
+  limits: { fileSize: 15 * 1024 * 1024 } // 15MB
+});
+
+const pdfFileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (file.mimetype !== 'application/pdf' || ext !== '.pdf') {
+    return cb(new Error('Invalid document type. Only PDF files are allowed.'));
+  }
+  cb(null, true);
+};
+
+export const cloudinaryPdfUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: pdfFileFilter,
+  limits: { fileSize: 30 * 1024 * 1024 } // 30MB
+});
+
+const siteMediaFileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+  const videoMimes = ['video/mp4', 'video/webm', 'video/quicktime'];
+  const videoExtensions = ['.mp4', '.webm', '.mov'];
+
+  const ext = path.extname(file.originalname).toLowerCase();
+  const isImage = imageMimes.includes(file.mimetype) && imageExtensions.includes(ext);
+  const isVideo = videoMimes.includes(file.mimetype) && videoExtensions.includes(ext);
+
+  if (!isImage && !isVideo) {
+    return cb(new Error('Invalid media type. Only standard images (JPG, PNG, WEBP, GIF, SVG) and videos (MP4, WEBM, MOV) are allowed.'));
+  }
+  cb(null, true);
+};
+
+export const cloudinarySiteMediaUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: siteMediaFileFilter,
+  limits: { fileSize: 60 * 1024 * 1024 } // 60MB max for video
+});

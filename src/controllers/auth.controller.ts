@@ -29,9 +29,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           { email: rawInput },
           { email: normalized },
           ...(normalized === 'admin' ? [
-            { email: 'admin@technoworld.com' },
-            { email: 'admin@example.com' },
-            { role: Role.SUPER_ADMIN }
+            { role: Role.SUPER_ADMIN },
+            { role: Role.ADMIN }
           ] : [])
         ]
       }

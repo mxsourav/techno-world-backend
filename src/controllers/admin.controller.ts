@@ -4,6 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import { ImportService } from '../services/import.service.js';
 import { ExecutionService } from '../services/import/execution.service.js';
+import { CloudinaryService } from '../services/cloudinary.service.js';
+import { emailService } from '../services/email.service.js';
 
 
 export const getAdminStats = async (req: Request, res: Response, next: NextFunction) => {
@@ -141,12 +143,16 @@ export const getBookPreview = async (req: Request, res: Response, next: NextFunc
     const { id } = req.params;
     const book = await prisma.book.findUnique({
       where: { id },
-      include: { authors: true, publisher: true, category: true }
+      include: {
+        authors: true,
+        publisher: true,
+        category: true,
+        images: { orderBy: { sortOrder: 'asc' } },
+      }
     });
     
     if (!book) { res.status(404).json({ success: false, message: 'Book not found' }); return; }
     
-    // In a real app we'd fetch actual PDF URL if stored separately, but here we just return the book with standard fields
     res.status(200).json({ success: true, data: book });
   } catch (error) {
     next(error);
@@ -186,15 +192,51 @@ export const uploadBookPdf = async (req: Request, res: Response, next: NextFunct
 export const deleteBook = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
+
+    const book = await prisma.book.findUnique({
+      where: { id },
+      include: { images: true },
+    });
+
+    if (!book) {
+      res.status(404).json({ success: false, message: 'Book not found' });
+      return;
+    }
+
+    // 1. Delete all Cloudinary assets associated with this book
+    try {
+      if (book.images && book.images.length > 0) {
+        for (const img of book.images) {
+          if (img.publicId) {
+            await CloudinaryService.deleteAsset(img.publicId, (img.resourceType as any) || 'image');
+          }
+        }
+      }
+      if (book.coverPublicId && !book.images?.some((img) => img.publicId === book.coverPublicId)) {
+        await CloudinaryService.deleteAsset(book.coverPublicId, 'image');
+      }
+      if (book.previewPdfPublicId) {
+        await CloudinaryService.deleteAsset(book.previewPdfPublicId, (book.previewPdfResourceType as any) || 'raw');
+      }
+      await CloudinaryService.deleteFolder(CloudinaryService.getBookImagesFolder(book.slug));
+      await CloudinaryService.deleteFolder(CloudinaryService.getBookDocsFolder(book.slug));
+      await CloudinaryService.deleteFolder(CloudinaryService.getBookRootFolder(book.slug));
+    } catch (cleanupErr) {
+      console.warn(`[Cloudinary] Asset cleanup warning for book ${book.slug}:`, cleanupErr);
+    }
+
+    // 2. Delete database records in transaction
     await prisma.$transaction([
       prisma.cartItem.deleteMany({ where: { bookId: id } }),
       prisma.wishlistItem.deleteMany({ where: { bookId: id } }),
       prisma.review.deleteMany({ where: { bookId: id } }),
       prisma.inventoryHistory.deleteMany({ where: { bookId: id } }),
       prisma.orderItem.deleteMany({ where: { bookId: id } }),
+      prisma.bookImage.deleteMany({ where: { bookId: id } }),
       prisma.book.delete({ where: { id } }),
     ]);
-    res.status(200).json({ success: true, message: 'Book deleted successfully' });
+
+    res.status(200).json({ success: true, message: 'Book and associated media deleted successfully' });
   } catch (error) {
     next(error);
   }
@@ -453,7 +495,7 @@ export const getAdminSettings = async (req: Request, res: Response, next: NextFu
     });
 
     let smtpConfig = {
-      senderEmail: 'admin@technoworld.com',
+      senderEmail: '',
       senderName: 'Techno World Books',
       host: 'smtp.gmail.com',
       port: 587,
@@ -620,7 +662,7 @@ export const getEmailLogs = async (req: Request, res: Response, next: NextFuncti
 
 export const getAdminCustomers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { search, page = 1, limit = 50 } = req.query;
+    const { search, status, page = 1, limit = 50 } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
 
     const where: any = {};
@@ -633,6 +675,12 @@ export const getAdminCustomers = async (req: Request, res: Response, next: NextF
       ];
     }
 
+    if (status === 'ACTIVE') {
+      where.isActive = true;
+    } else if (status === 'BLACKLISTED' || status === 'INACTIVE') {
+      where.isActive = false;
+    }
+
     const [users, total] = await Promise.all([
       prisma.user.findMany({
         where,
@@ -642,7 +690,9 @@ export const getAdminCustomers = async (req: Request, res: Response, next: NextF
           email: true,
           phone: true,
           role: true,
+          isActive: true,
           technoPoints: true,
+          technoWallet: true,
           createdAt: true,
           addresses: {
             orderBy: { isDefault: 'desc' },
@@ -693,6 +743,437 @@ export const getAdminCustomers = async (req: Request, res: Response, next: NextF
     next(error);
   }
 };
+
+// PATCH /api/v1/admin/customers/:id/status (Blacklist / Whitelist)
+export const toggleCustomerStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { isActive, reason } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, name: true, email: true, isActive: true, tokenVersion: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ success: false, message: 'Customer not found' });
+      return;
+    }
+
+    const newActiveState = typeof isActive === 'boolean' ? isActive : !user.isActive;
+
+    // Update user: if blacklisting, increment tokenVersion and purge active sessions to invalidate JWT
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id },
+        data: {
+          isActive: newActiveState,
+          tokenVersion: newActiveState ? user.tokenVersion : { increment: 1 },
+        },
+      });
+
+      if (!newActiveState) {
+        await tx.session.deleteMany({ where: { userId: id } });
+      }
+    });
+
+    // Send activity notification email to customer
+    try {
+      await emailService.sendAccountStatusEmail({
+        recipientEmail: user.email,
+        recipientName: user.name,
+        status: newActiveState ? 'ACTIVATED' : 'SUSPENDED',
+        reason: reason?.trim() || (newActiveState ? 'Administrative review passed' : 'Administrative compliance review'),
+      });
+    } catch (emailErr: any) {
+      console.warn(`[toggleCustomerStatus] Failed to send status email: ${emailErr.message}`);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: newActiveState ? 'Customer account re-activated successfully' : 'Customer blacklisted and sessions terminated',
+      data: {
+        id: user.id,
+        isActive: newActiveState,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/v1/admin/customers/:id/points (Manual Loyalty Points Grant / Deduct - Points ONLY)
+export const adjustCustomerPoints = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { points, type = 'CREDIT', reason } = req.body;
+
+    const pointsNum = Math.abs(parseInt(points, 10));
+    if (isNaN(pointsNum) || pointsNum <= 0) {
+      res.status(400).json({ success: false, message: 'Points amount must be a positive whole number' });
+      return;
+    }
+
+    const isCredit = type.toUpperCase() === 'CREDIT';
+    const auditReason = (reason || '').trim() || (isCredit ? 'Manual loyalty reward granted by store admin' : 'Points deduction adjustment by store admin');
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, name: true, email: true, technoPoints: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ success: false, message: 'Customer not found' });
+      return;
+    }
+
+    if (!isCredit && user.technoPoints < pointsNum) {
+      res.status(400).json({
+        success: false,
+        message: `Cannot deduct ${pointsNum} points. Customer currently only has ${user.technoPoints} points.`,
+      });
+      return;
+    }
+
+    const newBalance = isCredit ? user.technoPoints + pointsNum : user.technoPoints - pointsNum;
+
+    // Execute atomic transaction for points adjustment
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id },
+        data: {
+          technoPoints: newBalance,
+        },
+      });
+
+      const expiryDate = new Date();
+      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+
+      await tx.pointTransaction.create({
+        data: {
+          userId: id,
+          points: pointsNum,
+          type: isCredit ? 'ADMIN_CREDIT' : 'ADMIN_DEBIT',
+          status: 'COMPLETED',
+          description: auditReason,
+          expiresAt: expiryDate,
+        },
+      });
+    });
+
+    // Dispatch automated email notification
+    try {
+      await emailService.sendPointsAdjustedEmail({
+        recipientEmail: user.email,
+        recipientName: user.name,
+        points: pointsNum,
+        type: isCredit ? 'CREDIT' : 'DEBIT',
+        newBalance,
+        reason: auditReason,
+      });
+    } catch (emailErr: any) {
+      console.warn(`[adjustCustomerPoints] Failed to dispatch points email: ${emailErr.message}`);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `${pointsNum} TechnoPoints ${isCredit ? 'credited' : 'deducted'} successfully`,
+      data: {
+        id: user.id,
+        technoPoints: newBalance,
+        pointsAdjusted: pointsNum,
+        type: isCredit ? 'CREDIT' : 'DEBIT',
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/v1/admin/customers/:id/details (Detailed Order History & Purchased Books)
+export const getCustomerDetails = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        technoPoints: true,
+        technoWallet: true,
+        createdAt: true,
+        updatedAt: true,
+        addresses: {
+          orderBy: { isDefault: 'desc' },
+        },
+        orders: {
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            paymentStatus: true,
+            paymentMethod: true,
+            subtotal: true,
+            shippingCharge: true,
+            discountAmount: true,
+            totalAmount: true,
+            shippingCarrier: true,
+            trackingNumber: true,
+            createdAt: true,
+            items: {
+              select: {
+                id: true,
+                quantity: true,
+                priceAtPurchase: true,
+                book: {
+                  select: {
+                    id: true,
+                    title: true,
+                    slug: true,
+                    edition: true,
+                    isbn13: true,
+                    isbn10: true,
+                    price: true,
+                    mrp: true,
+                    images: {
+                      where: { isCover: true },
+                      take: 1,
+                      select: { secureUrl: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+        pointTransactions: {
+          select: {
+            id: true,
+            points: true,
+            type: true,
+            status: true,
+            description: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        },
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ success: false, message: 'Customer not found' });
+      return;
+    }
+
+    // Compile comprehensive book purchase statistics
+    const bookPurchaseMap = new Map<string, any>();
+    user.orders.forEach((ord: any) => {
+      ord.items.forEach((it: any) => {
+        const bookId = it.book?.id;
+        if (!bookId) return;
+
+        if (bookPurchaseMap.has(bookId)) {
+          const existing = bookPurchaseMap.get(bookId);
+          existing.totalQuantity += it.quantity;
+          existing.totalSpent += it.quantity * it.priceAtPurchase;
+          existing.orderReferences.push({
+            orderNumber: ord.orderNumber,
+            date: ord.createdAt,
+            status: ord.status,
+          });
+        } else {
+          bookPurchaseMap.set(bookId, {
+            bookId,
+            title: it.book.title,
+            slug: it.book.slug,
+            edition: it.book.edition,
+            isbn: it.book.isbn13 || it.book.isbn10 || 'N/A',
+            coverImage: it.book.images?.[0]?.secureUrl || '',
+            unitPrice: it.priceAtPurchase,
+            totalQuantity: it.quantity,
+            totalSpent: it.quantity * it.priceAtPurchase,
+            lastPurchasedAt: ord.createdAt,
+            orderReferences: [{
+              orderNumber: ord.orderNumber,
+              date: ord.createdAt,
+              status: ord.status,
+            }],
+          });
+        }
+      });
+    });
+
+    const purchasedBooks = Array.from(bookPurchaseMap.values()).sort(
+      (a, b) => new Date(b.lastPurchasedAt).getTime() - new Date(a.lastPurchasedAt).getTime()
+    );
+
+    const totalSpent = user.orders
+      .filter((o: any) => o.status !== 'CANCELLED' && o.status !== 'REFUNDED')
+      .reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0);
+
+    res.status(200).json({
+      success: true,
+      message: 'Customer details fetched successfully',
+      data: {
+        customer: {
+          ...user,
+          totalSpent,
+          totalOrders: user.orders.length,
+          purchasedBooks,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/v1/admin/customers/export (Export CSV / Excel / SQL)
+export const exportCustomerData = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { format = 'csv' } = req.query;
+
+    const customers = await prisma.user.findMany({
+      where: { role: 'CUSTOMER' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        isActive: true,
+        technoPoints: true,
+        technoWallet: true,
+        createdAt: true,
+        addresses: {
+          where: { isDefault: true },
+          take: 1,
+          select: {
+            addressLine1: true,
+            city: true,
+            state: true,
+            pincode: true,
+          },
+        },
+        orders: {
+          select: {
+            totalAmount: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const exportRows = customers.map((c) => {
+      const addr = c.addresses[0] || {};
+      const totalOrders = c.orders.length;
+      const totalSpent = c.orders
+        .filter((o) => o.status !== 'CANCELLED' && o.status !== 'REFUNDED')
+        .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+
+      return {
+        id: c.id,
+        name: c.name || 'Anonymous',
+        email: c.email,
+        phone: c.phone || 'N/A',
+        status: c.isActive ? 'ACTIVE' : 'BLACKLISTED',
+        technoPoints: c.technoPoints,
+        technoWallet: c.technoWallet,
+        totalOrders,
+        totalSpent: totalSpent.toFixed(2),
+        city: addr.city || '',
+        state: addr.state || '',
+        pincode: addr.pincode || '',
+        address: addr.addressLine1 ? `"${addr.addressLine1.replace(/"/g, '""')}"` : '',
+        createdAt: new Date(c.createdAt).toISOString().split('T')[0],
+      };
+    });
+
+    const dateStr = new Date().toISOString().split('T')[0];
+
+    if (format === 'sql') {
+      let sqlContent = `-- Techno World Books Customer Export\n-- Generated on: ${new Date().toISOString()}\n-- Total Records: ${exportRows.length}\n\n`;
+      sqlContent += `CREATE TABLE IF NOT EXISTS customer_exports (\n  id VARCHAR(64) PRIMARY KEY,\n  name VARCHAR(255),\n  email VARCHAR(255),\n  phone VARCHAR(50),\n  status VARCHAR(30),\n  techno_points INT,\n  techno_wallet DECIMAL(10,2),\n  total_orders INT,\n  total_spent DECIMAL(10,2),\n  city VARCHAR(100),\n  state VARCHAR(100),\n  pincode VARCHAR(20),\n  created_at DATE\n);\n\n`;
+
+      if (exportRows.length > 0) {
+        sqlContent += `INSERT INTO customer_exports (id, name, email, phone, status, techno_points, techno_wallet, total_orders, total_spent, city, state, pincode, created_at) VALUES\n`;
+        const values = exportRows.map((r) => {
+          const cleanName = (r.name || '').replace(/'/g, "''");
+          const cleanEmail = (r.email || '').replace(/'/g, "''");
+          const cleanPhone = (r.phone || '').replace(/'/g, "''");
+          const cleanCity = (r.city || '').replace(/'/g, "''");
+          const cleanState = (r.state || '').replace(/'/g, "''");
+          const cleanPincode = (r.pincode || '').replace(/'/g, "''");
+          return `  ('${r.id}', '${cleanName}', '${cleanEmail}', '${cleanPhone}', '${r.status}', ${r.technoPoints}, ${r.technoWallet}, ${r.totalOrders}, ${r.totalSpent}, '${cleanCity}', '${cleanState}', '${cleanPincode}', '${r.createdAt}')`;
+        });
+        sqlContent += values.join(',\n') + ';\n';
+      }
+
+      res.setHeader('Content-Type', 'application/sql');
+      res.setHeader('Content-Disposition', `attachment; filename="techno_customers_${dateStr}.sql"`);
+      res.send(sqlContent);
+      return;
+    }
+
+    // Default: CSV format (compatible with Microsoft Excel, Google Sheets)
+    const headers = [
+      'Customer ID',
+      'Full Name',
+      'Email Address',
+      'Phone Number',
+      'Account Status',
+      'TechnoPoints',
+      'TechnoWallet (INR)',
+      'Total Orders Placed',
+      'Total Lifetime Spend (INR)',
+      'City',
+      'State',
+      'Pincode',
+      'Street Address',
+      'Registration Date',
+    ];
+
+    const csvLines = [headers.join(',')];
+    for (const r of exportRows) {
+      const cleanName = `"${r.name.replace(/"/g, '""')}"`;
+      const cleanEmail = `"${r.email.replace(/"/g, '""')}"`;
+      const cleanPhone = `"${r.phone}"`;
+      const line = [
+        r.id,
+        cleanName,
+        cleanEmail,
+        cleanPhone,
+        r.status,
+        r.technoPoints,
+        r.technoWallet,
+        r.totalOrders,
+        r.totalSpent,
+        `"${r.city}"`,
+        `"${r.state}"`,
+        `"${r.pincode}"`,
+        r.address,
+        r.createdAt,
+      ].join(',');
+      csvLines.push(line);
+    }
+
+    const csvContent = '\uFEFF' + csvLines.join('\n'); // UTF-8 BOM for Excel compatibility
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="techno_customers_${dateStr}.csv"`);
+    res.send(csvContent);
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 // GET /api/v1/admin/analytics/search-trends
 export const getSearchAndSalesAnalytics = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

@@ -124,10 +124,8 @@ export class EmailService {
   }
 
   public generateBrandedHeader(subtitle = 'Official Customer Communications'): string {
-    const b64 = getWhiteLogoBase64();
-    const logoImg = b64
-      ? `<img src="data:image/png;base64,${b64}" alt="Techno World" style="height: 52px; width: 52px; margin-bottom: 10px; display: inline-block; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));" />`
-      : '';
+    const logoUrl = 'https://res.cloudinary.com/tcsmyxe2/image/upload/v1789254075/techno_world_white_logo.png';
+    const logoImg = `<img src="${logoUrl}" alt="Techno World Books" width="56" height="56" style="height: 56px; width: 56px; margin: 0 auto 10px; display: block; border: 0; outline: none; text-decoration: none;" />`;
 
     return `
       <div style="background: linear-gradient(135deg, #042419 0%, #064e3b 50%, #047857 100%); padding: 24px 20px; border-radius: 14px; text-align: center; color: #ffffff;">

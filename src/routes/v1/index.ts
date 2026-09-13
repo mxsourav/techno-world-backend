@@ -59,6 +59,7 @@ router.use('/analytics', analyticsRoutes);
 router.use('/contact', contactRoutes);
 router.use('/book-requests', bookRequestRoutes);
 router.use('/hero', heroRoutes);
+router.use('/hero-config', heroRoutes);
 router.use('/admin/hero', heroRoutes);
 router.use('/site-media', siteMediaRoutes);
 

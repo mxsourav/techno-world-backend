@@ -20,6 +20,7 @@ const upload = multer({
 
 // Public route to fetch active hero config & cover
 router.get('/', getHeroConfig);
+router.get('/config', getHeroConfig);
 
 // Protected admin routes: Model updates
 router.put(

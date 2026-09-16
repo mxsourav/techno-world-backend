@@ -17,6 +17,9 @@ dotenv.config();
 
 const app = express();
 
+// Trust reverse proxy (Cloudflare, Render, Vercel, Nginx) so req.ip and secure cookies work reliably
+app.set('trust proxy', 1);
+
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -31,6 +34,20 @@ const allowedOrigins = [
   ...env.CORS_ORIGIN.split(',').map(url => url.trim()).filter(Boolean)
 ];
 
+const trustedProductionDomains = [
+  'https://technoworldbooks.in',
+  'https://www.technoworldbooks.in',
+  'https://admin.technoworldbooks.in',
+];
+
+const isAllowedVercelOrRender = (origin: string): boolean => {
+  return (
+    /^https:\/\/techno-world[a-z0-9-]*\.vercel\.app$/.test(origin) ||
+    /^https:\/\/[a-z0-9-]+-mxsouravs-projects\.vercel\.app$/.test(origin) ||
+    /^https:\/\/techno-world[a-z0-9-]*\.onrender\.com$/.test(origin)
+  );
+};
+
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -44,14 +61,10 @@ app.use(
       // Explicit match or local / cloud domain patterns
       const isAllowed =
         allowedOrigins.includes(origin) ||
-        origin.startsWith('http://localhost:') ||
-        origin.startsWith('https://localhost:') ||
-        origin.includes('vercel.app') ||
-        origin.includes('onrender.com') ||
-        origin.includes('technoworld') ||
-        origin.includes('techno-world') ||
-        origin.includes('hostingersite.com') ||
-        origin.includes('hostinger');
+        trustedProductionDomains.includes(origin) ||
+        /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+        /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
+        isAllowedVercelOrRender(origin);
 
       if (isAllowed) {
         return callback(null, true);

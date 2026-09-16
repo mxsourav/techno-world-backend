@@ -89,7 +89,7 @@ router.post('/import/execute', executeImportBookCatalog);
 // Book Management
 router.get('/books/catalog', getAdminCatalog);
 router.patch('/books/:id/stock', quickUpdateStock);
-router.delete('/books/all', deleteAllBooks);
+router.delete('/books/all', requireRole(['SUPER_ADMIN']), deleteAllBooks);
 router.post('/books', createBook);
 router.delete('/books/:id', deleteBook);
 router.patch('/books/:id', updateBook);

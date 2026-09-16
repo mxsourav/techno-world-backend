@@ -12,6 +12,6 @@ const pricingLimiter = rateLimit({
   message: { success: false, message: 'Too many pricing requests, please try again later.' }
 });
 
-router.post('/calculate', optionalAuth, calculatePricing);
+router.post('/calculate', pricingLimiter, optionalAuth, calculatePricing);
 
 export default router;

@@ -407,27 +407,160 @@ export const updatePaymentStatus = async (req: Request, res: Response, next: Nex
 };
 
 /**
+ * POST /api/v1/payments/verify
+ * Cryptographic payment verification for Razorpay online transactions.
+ * Verifies razorpay_signature against razorpay_order_id and razorpay_payment_id using HMAC SHA256.
+ */
+export const verifyPayment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    const userId = (req as any).user?.userId || (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+
+    if (!orderId || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      res.status(400).json({
+        success: false,
+        message: 'Missing required payment verification parameters (orderId, razorpay_order_id, razorpay_payment_id, razorpay_signature).',
+      });
+      return;
+    }
+
+    const razorpaySecret = env.RAZORPAY_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET;
+    if (!razorpaySecret) {
+      logger.error('RAZORPAY_KEY_SECRET is not configured on server');
+      res.status(500).json({ success: false, message: 'Payment gateway secret not configured on server.' });
+      return;
+    }
+
+    // 1. Verify cryptographic HMAC signature
+    const body = `${razorpay_order_id}|${razorpay_payment_id}`;
+    const expectedSignature = crypto
+      .createHmac('sha256', razorpaySecret)
+      .update(body)
+      .digest('hex');
+
+    const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+    const providedBuffer = Buffer.from(String(razorpay_signature), 'utf8');
+
+    if (expectedBuffer.length !== providedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
+      logger.warn(`Invalid Razorpay signature for order ${orderId}: provided ${razorpay_signature}`);
+      res.status(400).json({ success: false, message: 'Cryptographic payment signature verification failed.' });
+      return;
+    }
+
+    // 2. Fetch target order and check ownership
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [{ id: orderId }, { orderNumber: orderId }],
+      },
+      include: {
+        address: true,
+        user: true,
+        items: { include: { book: true } },
+      },
+    });
+
+    if (!order) {
+      res.status(404).json({ success: false, message: 'Order not found.' });
+      return;
+    }
+
+    // BOLA/IDOR protection
+    if (order.userId && order.userId !== userId && userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN') {
+      res.status(403).json({ success: false, message: 'Unauthorized to verify payment for this order.' });
+      return;
+    }
+
+    // Check if auto-accept orders is enabled
+    let isAutoAccept = true;
+    try {
+      const autoSetting = await prisma.systemSetting.findUnique({ where: { key: 'AUTO_ACCEPT_ORDERS' } });
+      if (autoSetting) {
+        isAutoAccept = autoSetting.value === 'true';
+      }
+    } catch {
+      isAutoAccept = true;
+    }
+
+    const newStatus = isAutoAccept ? 'CONFIRMED' : 'PENDING';
+    const notesUpdate = order.notes
+      ? `${order.notes}\n[${new Date().toISOString()}] Verified Online Payment: ${razorpay_payment_id}`
+      : `[${new Date().toISOString()}] Verified Online Payment: ${razorpay_payment_id}`;
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: order.id },
+      data: {
+        paymentStatus: PaymentStatus.PAID,
+        paymentId: razorpay_payment_id,
+        status: newStatus,
+        notes: notesUpdate,
+      },
+      include: { address: true, user: true, items: { include: { book: true } } },
+    });
+
+    logger.info(`Order #${order.orderNumber} successfully verified as PAID (${razorpay_payment_id})`);
+
+    // 3. Send notifications and SMS for confirmed order
+    if (newStatus === 'CONFIRMED' && order.userId) {
+      try {
+        await prisma.notification.create({
+          data: {
+            userId: order.userId,
+            title: `✅ Payment Received: Order #${order.orderNumber}`,
+            message: `Your payment of ₹${order.totalAmount} has been verified and your order is confirmed for packing!`,
+            type: 'order_confirmed',
+            link: `/account?order=${order.id}`,
+          },
+        });
+      } catch {}
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Payment verified and order confirmed successfully.',
+      data: {
+        orderId: updatedOrder.id,
+        orderNumber: updatedOrder.orderNumber,
+        status: updatedOrder.status,
+        paymentStatus: updatedOrder.paymentStatus,
+        paymentId: updatedOrder.paymentId,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error verifying payment:', error);
+    next(error);
+  }
+};
+
+/**
  * POST /api/v1/payments/razorpay/webhook
  * Webhook handler ready for live Razorpay events.
  */
 export const razorpayWebhook = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const webhookSecret = (env as any).RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_WEBHOOK_SECRET;
+    const webhookSecret = env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_WEBHOOK_SECRET;
 
-    if (webhookSecret) {
-      const signature = req.headers['x-razorpay-signature'] as string;
-      if (!signature) {
-        res.status(400).json({ success: false, message: 'Missing Razorpay webhook signature header' });
-        return;
-      }
-      const shasum = crypto.createHmac('sha256', webhookSecret);
-      shasum.update(JSON.stringify(req.body));
-      const digest = shasum.digest('hex');
+    if (!webhookSecret) {
+      logger.error('RAZORPAY_WEBHOOK_SECRET is not configured on server');
+      res.status(500).json({ success: false, message: 'Webhook secret not configured on server' });
+      return;
+    }
 
-      if (digest !== signature) {
-        res.status(400).json({ success: false, message: 'Invalid webhook signature' });
-        return;
-      }
+    const signature = req.headers['x-razorpay-signature'] as string;
+    if (!signature) {
+      res.status(400).json({ success: false, message: 'Missing Razorpay webhook signature header' });
+      return;
+    }
+
+    const shasum = crypto.createHmac('sha256', webhookSecret);
+    shasum.update(JSON.stringify(req.body));
+    const digest = shasum.digest('hex');
+
+    const digestBuf = Buffer.from(digest, 'utf8');
+    const sigBuf = Buffer.from(signature, 'utf8');
+    if (digestBuf.length !== sigBuf.length || !crypto.timingSafeEqual(digestBuf, sigBuf)) {
+      res.status(400).json({ success: false, message: 'Invalid webhook signature' });
+      return;
     }
 
     const event = req.body.event;

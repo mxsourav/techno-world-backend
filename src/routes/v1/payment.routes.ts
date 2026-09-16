@@ -3,11 +3,15 @@ import {
   getPaymentOverview,
   getPaymentTransactions,
   updatePaymentStatus,
+  verifyPayment,
   razorpayWebhook,
 } from '../../controllers/payment.controller.js';
 import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
 
 const router = Router();
+
+// Customer & Admin payment verification
+router.post('/verify', requireAuth, verifyPayment);
 
 // Admin routes
 router.get('/overview', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), getPaymentOverview);

@@ -262,13 +262,16 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       const rawPayMethod = String(paymentMethod || '').trim();
       const isCodRequested = rawPayMethod.toUpperCase() === 'COD' || rawPayMethod.toLowerCase().includes('cash on delivery');
 
+      const isOnlinePayment = !isFullyCovered && !isCodRequested;
+
       const effectivePaymentMethod = isFullyCovered
         ? 'REWARDS_AND_WALLET'
         : (isCodRequested ? 'COD' : (paymentMethod || 'UPI'));
 
+      // SECURITY CRITICAL: Online orders MUST remain PENDING until cryptographically verified via Razorpay webhook or verify endpoint
       const effectivePaymentStatus = isFullyCovered
         ? 'PAID'
-        : (isCodRequested ? 'PENDING' : 'PAID');
+        : 'PENDING';
 
       const notesParts: string[] = [];
       if (pricingResult.pointsUsed) {
@@ -289,12 +292,13 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         isAutoAccept = true;
       }
 
-      if (isAutoAccept) {
+      if (isAutoAccept && !isOnlinePayment) {
         notesParts.push('Auto-Accepted: Order confirmed for packing');
       }
 
       const orderNotes = notesParts.length > 0 ? `[Notes: ${notesParts.join(' | ')}]` : null;
-      const initialStatus = isAutoAccept ? 'CONFIRMED' : 'PENDING';
+      // Online orders MUST remain PENDING until payment verification; COD/fully covered obey isAutoAccept
+      const initialStatus = isOnlinePayment ? 'PENDING' : (isAutoAccept ? 'CONFIRMED' : 'PENDING');
 
       const created = await tx.order.create({
         data: {
@@ -466,7 +470,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       req.body.phone ||
       address?.phone;
 
-    if (customerPhone) {
+    if (customerPhone && order.status === 'CONFIRMED') {
       await sendOrderSMS(
         customerPhone,
         order.orderNumber,

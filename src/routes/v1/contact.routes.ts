@@ -5,11 +5,12 @@ import {
   updateContactMessageStatus,
 } from '../../controllers/contact.controller.js';
 import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
+import { formSubmissionLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = Router();
 
-// Public: Submit a message/query
-router.post('/', submitContactMessage);
+// Public: Submit a message/query (Throttled to prevent spam)
+router.post('/', formSubmissionLimiter, submitContactMessage);
 
 // Admin: View & manage contact inquiries
 router.get('/', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), getContactMessages);

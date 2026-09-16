@@ -235,6 +235,15 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
 // TODO: [OAUTH_REAL_KEYS_INJECTED] Transition to real Google OAuth token exchange once live Google Client ID & Secret are configured
 export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise<void> => {
   try {
+    // SECURITY CRITICAL: Strict block against developer OAuth bypass in production to prevent account takeover
+    if (env.NODE_ENV === 'production') {
+      res.status(403).json({
+        success: false,
+        message: 'Developer OAuth bypass is strictly disabled in production. Please sign in with Google Identity Services.',
+      });
+      return;
+    }
+
     const devGoogleEmail = (req.body.email || '').trim().toLowerCase();
     if (!devGoogleEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(devGoogleEmail)) {
       res.status(400).json({ success: false, message: 'Valid email address is required to sign in' });

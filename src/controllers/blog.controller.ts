@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database.js';
+import { notifyBlogUpdated } from '../services/indexnow.service.js';
 
 
 function slugify(text: string): string {
@@ -277,6 +278,12 @@ export const createBlogPost = async (req: Request, res: Response, next: NextFunc
       },
     });
 
+    if (newPost.isActive) {
+      notifyBlogUpdated(newPost.slug).catch((err) =>
+        console.error('[IndexNow blog create error]:', err?.message || err)
+      );
+    }
+
     res.status(201).json({
       success: true,
       message: 'Blog post created successfully',
@@ -345,6 +352,12 @@ export const updateBlogPost = async (req: Request, res: Response, next: NextFunc
         ...(authorName !== undefined && { authorName }),
       },
     });
+
+    if (updated.isActive) {
+      notifyBlogUpdated(updated.slug).catch((err) =>
+        console.error('[IndexNow blog update error]:', err?.message || err)
+      );
+    }
 
     res.status(200).json({
       success: true,

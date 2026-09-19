@@ -1,4 +1,6 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import helmet from 'helmet';
 import cors from 'cors';
 import compression from 'compression';
@@ -11,6 +13,8 @@ import { generalLimiter } from './middlewares/rateLimiter.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import routes from './routes/index.js';
 import { generateSitemap } from './controllers/sitemap.controller.js';
+import { botSeoMiddleware } from './middlewares/botSeo.middleware.js';
+import { INDEXNOW_KEY } from './services/indexnow.service.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -93,15 +97,14 @@ app.use(cookieParser());
 app.use(requestIdMiddleware);
 app.use(generalLimiter);
 
-// Anti-caching headers for API responses to guarantee immediate frontend reflection
+// Anti-caching and noindex headers for API responses to guarantee immediate frontend reflection
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
+  res.set('X-Robots-Tag', 'noindex, nofollow');
   next();
 });
-
-import path from 'path';
 
 // ...
 app.use(
@@ -125,7 +128,35 @@ app.use(
     },
   })
 );
+// Bot SEO: intercept known crawler User-Agents and return server-rendered OG HTML
+// This must be mounted BEFORE static serving and SPA routes.
+app.use(botSeoMiddleware);
 app.get('/sitemap.xml', generateSitemap);
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain');
+  res.send("# Techno World Books API Server\nUser-agent: *\nDisallow: /\n");
+});
+app.get('/llms.txt', (_req, res) => {
+  const filePath = path.resolve('../app/public/llms.txt');
+  if (fs.existsSync(filePath)) {
+    res.type('text/plain; charset=utf-8');
+    return res.sendFile(filePath);
+  }
+  res.status(404).send('Not Found');
+});
+app.get('/llms-full.txt', (_req, res) => {
+  const filePath = path.resolve('../app/public/llms-full.txt');
+  if (fs.existsSync(filePath)) {
+    res.type('text/plain; charset=utf-8');
+    return res.sendFile(filePath);
+  }
+  res.status(404).send('Not Found');
+});
+// IndexNow protocol token verification endpoint
+app.get(`/${INDEXNOW_KEY}.txt`, (_req, res) => {
+  res.type('text/plain; charset=utf-8');
+  res.send(INDEXNOW_KEY);
+});
 app.use(routes);
 
 app.use(errorHandler);

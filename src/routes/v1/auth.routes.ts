@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { login, refresh, logout, devGoogleOAuthBypass, googleAuthCallback, googleAuth } from '../../controllers/auth.controller.js';
+import { login, refresh, logout, devGoogleOAuthBypass, googleAuthCallback, googleAuth, sendOtp, verifyOtp } from '../../controllers/auth.controller.js';
 import { validateRequest } from '../../middlewares/validate.middleware.js';
 import { authLimiter } from '../../middlewares/rateLimiter.js';
 import { loginSchema, devGoogleOAuthBypassSchema, googleAuthSchema } from '../../schemas/auth.schema.js';
@@ -10,6 +10,10 @@ const router = Router();
 router.post('/login', authLimiter, validateRequest(loginSchema), login);
 router.post('/refresh', authLimiter, refresh);
 router.post('/logout', logout);
+
+// Mobile OTP Authentication (for Customers and Admins)
+router.post('/otp/send', authLimiter, sendOtp);
+router.post('/otp/verify', authLimiter, verifyOtp);
 
 // Google Identity Services (GIS) Official Token Verification
 router.post('/google', authLimiter, validateRequest(googleAuthSchema), googleAuth);

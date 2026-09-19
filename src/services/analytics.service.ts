@@ -57,6 +57,7 @@ class AnalyticsService {
       this.currentDay = today;
       this.todayUniqueVisitors.clear();
       this.todayPageviews = 0;
+      this.dailyDevices = { desktop: 0, mobile: 0, tablet: 0 };
     }
   }
 
@@ -70,9 +71,9 @@ class AnalyticsService {
   }
 
   private dailyDevices = {
-    desktop: 18,
-    mobile: 42,
-    tablet: 3,
+    desktop: 0,
+    mobile: 0,
+    tablet: 0,
   };
 
   private detectDevice(ua: string, clientHint?: string, screenWidth?: number): 'mobile' | 'desktop' | 'tablet' {
@@ -110,8 +111,10 @@ class AnalyticsService {
 
     const isNewVisitor = !this.todayUniqueVisitors.has(sessionId);
     if (isNewVisitor) {
+      this.todayUniqueVisitors.add(sessionId);
       this.dailyDevices[deviceType] += 1;
     }
+    this.todayPageviews += 1;
 
     this.visitors.set(sessionId, {
       sessionId,
@@ -204,32 +207,28 @@ class AnalyticsService {
       }))
       .sort((a, b) => b.viewers - a.viewers);
 
-    // Provide realistic baseline if server just restarted so admin sees sensible data
-    const activeNow = Math.max(activeList.length, 1);
-    const todayVisitors = Math.max(this.todayUniqueVisitors.size, 14);
-    const todayPageviews = Math.max(this.todayPageviews, 48);
+    const activeNow = activeList.length;
+    const todayVisitors = this.todayUniqueVisitors.size;
+    const todayPageviews = this.todayPageviews;
 
     const cumulativeMobile = Math.max(this.dailyDevices.mobile, mobile);
     const cumulativeDesktop = Math.max(this.dailyDevices.desktop, desktop);
     const cumulativeTablet = Math.max(this.dailyDevices.tablet, tablet);
-    const totalDevices = Math.max(cumulativeMobile + cumulativeDesktop + cumulativeTablet, 1);
+    const totalDevices = cumulativeMobile + cumulativeDesktop + cumulativeTablet;
 
-    const mobilePercent = Math.round((cumulativeMobile / totalDevices) * 100);
-    const desktopPercent = Math.round((cumulativeDesktop / totalDevices) * 100);
-    const tabletPercent = Math.max(100 - mobilePercent - desktopPercent, 0);
+    const mobilePercent = totalDevices > 0 ? Math.round((cumulativeMobile / totalDevices) * 100) : (mobile > 0 ? 100 : 0);
+    const desktopPercent = totalDevices > 0 ? Math.round((cumulativeDesktop / totalDevices) * 100) : (desktop > 0 ? 100 : 0);
+    const tabletPercent = totalDevices > 0 ? Math.max(100 - mobilePercent - desktopPercent, 0) : 0;
 
     return {
       activeNow,
       todayVisitors,
       todayPageviews,
-      livePages: livePages.length > 0 ? livePages : [
-        { path: '/', title: 'Home — Techno World Books', viewers: 1, isBlog: false, isCheckout: false },
-        { path: '/blog', title: 'Book Lists & Study Guides', viewers: 1, isBlog: true, isCheckout: false },
-      ],
+      livePages,
       deviceDistribution: {
-        desktop: activeList.length > 0 ? desktop : 1,
-        mobile: activeList.length > 0 ? mobile : 0,
-        tablet: activeList.length > 0 ? tablet : 0,
+        desktop,
+        mobile,
+        tablet,
         cumulativeDesktop,
         cumulativeMobile,
         cumulativeTablet,

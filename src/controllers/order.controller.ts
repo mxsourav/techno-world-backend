@@ -4,6 +4,7 @@ import Razorpay from 'razorpay';
 import { env } from '../config/env.js';
 import { PricingEngine } from '../services/pricing.service.js';
 import { emailService } from '../services/email.service.js';
+import { generateInvoicePDF, assignInvoiceNumber, generateMergedInvoicesPDF } from '../services/invoice.service.js';
 import { logger } from '../config/logger.js';
 
 import dotenv from "dotenv"
@@ -489,6 +490,50 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       }
     }
 
+    // Trigger customer email notification on order placement
+    try {
+      const recipientEmail = (order as any).customerEmail || order.address?.email || order.user?.email || orderEmail;
+      const recipientName = order.address?.fullName || order.user?.name || (address as any)?.fullName || 'Valued Customer';
+      if (recipientEmail && recipientEmail.includes('@')) {
+        const itemsSummary = (order.items || []).map((it: any) => ({
+          title: it.book?.title || 'Academic Book',
+          quantity: it.quantity,
+          price: Number(it.priceAtPurchase),
+          sku: it.book?.sku || it.book?.bookCode || undefined,
+        }));
+
+        const addrStr = order.address
+          ? `${order.address.addressLine1}${order.address.city ? `, ${order.address.city}` : ''}${order.address.pincode ? ` - ${order.address.pincode}` : ''}`
+          : null;
+
+        const emailContent = emailService.generateLifecycleEmailHtml({
+          status: order.status === 'CONFIRMED' ? 'CONFIRMED' : 'PENDING',
+          orderNumber: order.orderNumber,
+          customerName: recipientName,
+          items: itemsSummary,
+          totalAmount: Number(order.totalAmount),
+          subtotal: Number(order.subtotal),
+          shippingCharge: Number(order.shippingCharge),
+          discountAmount: Number(order.discountAmount),
+          deliveryAddress: addrStr,
+          paymentMethod: order.paymentMethod,
+          shippingMethod: order.shippingMethod,
+        });
+
+        emailService.sendOrderNotification({
+          recipientEmail,
+          recipientName,
+          orderNumber: order.orderNumber,
+          subject: emailContent.subject,
+          message: emailContent.text,
+        }, emailContent.html).catch((e: any) => {
+          logger.warn(`[CREATE_ORDER_EMAIL_WARN] Failed to send order receipt email: ${e.message}`);
+        });
+      }
+    } catch (mailErr: any) {
+      logger.warn(`[CREATE_ORDER_EMAIL_ERR] ${mailErr.message}`);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Order placed successfully',
@@ -680,11 +725,8 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
       console.error('[IN_APP_NOTIF_ERROR]', notifErr);
     }
 
-    // If order was cancelled / rejected, revoke points if previously credited
+    // Revoke loyalty points if order was cancelled
     if (status === 'CANCELLED') {
-      const recipientEmail = (order as any).customerEmail || order.address?.email || order.user?.email || 'customer@example.com';
-      const recipientName = order.address?.fullName || order.user?.name || 'Valued Customer';
-
       const pointsToRevoke = Math.floor(order.totalAmount / 100);
       if (pointsToRevoke > 0 && order.userId) {
         await prisma.user.update({
@@ -692,16 +734,76 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
           data: { technoPoints: { decrement: Math.min(pointsToRevoke, order.user?.technoPoints || 0) } }
         });
       }
+    }
 
-      await emailService.sendOrderEmail({
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        recipientEmail,
-        recipientName,
-        subject: `Order #${order.orderNumber} Status Update - Cancelled`,
-        message: `Dear ${recipientName},\n\nYour order #${order.orderNumber} has been cancelled.\nReason: ${reason || 'Fulfillment unavailable'}\n\nIf payment was deducted, a full refund will be processed to your original payment source within 3–5 business days.\n\nSincerely,\nTechno World Books`,
-        templateType: 'REJECT_NOTICE'
-      });
+    // Trigger lifecycle customer email for every status update until delivery
+    try {
+      const recipientEmail = (order as any).customerEmail || order.address?.email || order.user?.email || null;
+      const recipientName = order.address?.fullName || order.user?.name || 'Valued Customer';
+
+      if (recipientEmail && recipientEmail.includes('@') && !recipientEmail.includes('@example.com') && !recipientEmail.includes('@technoworld.com')) {
+        const itemsSummary = (order.items || []).map((it: any) => ({
+          title: it.book?.title || 'Academic Book',
+          quantity: it.quantity,
+          price: Number(it.priceAtPurchase),
+          sku: it.book?.sku || it.book?.bookCode || undefined,
+        }));
+
+        let invoiceAttachment: any = undefined;
+        // Attach invoice for SHIPPED and DELIVERED statuses
+        if (['SHIPPED', 'DELIVERED'].includes(status)) {
+          try {
+            const invNum = order.invoiceNumber || await assignInvoiceNumber(order.id);
+            const pdfBuffer = await generateInvoicePDF(order.id);
+            if (pdfBuffer && pdfBuffer.length > 0) {
+              invoiceAttachment = [{
+                filename: `Tax-Invoice-${invNum || order.orderNumber}.pdf`,
+                content: pdfBuffer,
+                contentType: 'application/pdf',
+              }];
+            }
+          } catch (invErr: any) {
+            logger.warn(`[INVOICE_ATTACH_WARN] Could not generate invoice for email: ${invErr.message}`);
+          }
+        }
+
+        const addrStr = order.address
+          ? `${order.address.addressLine1}${order.address.city ? `, ${order.address.city}` : ''}${order.address.pincode ? ` - ${order.address.pincode}` : ''}`
+          : null;
+
+        const emailContent = emailService.generateLifecycleEmailHtml({
+          status: status as any,
+          orderNumber: order.orderNumber,
+          customerName: recipientName,
+          items: itemsSummary,
+          totalAmount: Number(order.totalAmount),
+          subtotal: Number(order.subtotal),
+          shippingCharge: Number(order.shippingCharge),
+          discountAmount: Number(order.discountAmount),
+          trackingNumber: order.trackingNumber,
+          shippingCarrier: order.shippingCarrier,
+          shippingMethod: order.shippingMethod,
+          cancelReason: reason || undefined,
+          deliveryAddress: addrStr,
+          paymentMethod: order.paymentMethod,
+          hasInvoiceAttachment: Boolean(invoiceAttachment),
+        });
+
+        emailService.sendOrderNotification({
+          recipientEmail,
+          recipientName,
+          orderNumber: order.orderNumber,
+          subject: emailContent.subject,
+          message: emailContent.text,
+          attachments: invoiceAttachment,
+        }, emailContent.html).catch((e: any) => {
+          logger.warn(`[STATUS_UPDATE_EMAIL_WARN] Failed to send status email: ${e.message}`);
+        });
+      } else {
+        logger.info(`[STATUS_UPDATE_EMAIL_SKIP] No valid customer email for order #${order.orderNumber}`);
+      }
+    } catch (mailErr: any) {
+      logger.warn(`[STATUS_UPDATE_EMAIL_ERR] ${mailErr.message}`);
     }
 
     res.status(200).json({ success: true, message: `Order status updated to ${status}`, data: order });
@@ -731,8 +833,13 @@ export const sendOrderCustomEmail = async (req: Request, res: Response, next: Ne
       return;
     }
 
-    const emailTo = recipientEmail || (order as any).customerEmail || order.address?.email || order.user?.email || 'customer@example.com';
+    const emailTo = recipientEmail || (order as any).customerEmail || order.address?.email || order.user?.email || null;
     const nameTo = recipientName || order.address?.fullName || order.user?.name || 'Customer';
+
+    if (!emailTo || !emailTo.includes('@') || emailTo.includes('@example.com') || emailTo.includes('@technoworld.com')) {
+      res.status(400).json({ success: false, message: 'Cannot send email: Order has no valid customer email address' });
+      return;
+    }
 
     const dispatchResult = await emailService.sendOrderEmail({
       orderId: order.id,
@@ -742,7 +849,6 @@ export const sendOrderCustomEmail = async (req: Request, res: Response, next: Ne
       subject,
       message,
       templateType: templateType || 'CUSTOM',
-      adminSender: 'admin@technoworld.com'
     });
 
     // Create in-app Customer Notification for Admin Delay Notice or Custom message
@@ -911,8 +1017,12 @@ export const batchSendOrderEmail = async (req: Request, res: Response, next: Nex
 
       if (!order) continue;
 
-      const emailTo = order.user?.email || 'customer@example.com';
+      const emailTo = (order as any).customerEmail || order.address?.email || order.user?.email || null;
       const nameTo = order.address?.fullName || order.user?.name || 'Valued Customer';
+
+      if (!emailTo || !emailTo.includes('@') || emailTo.includes('@example.com') || emailTo.includes('@technoworld.com')) {
+        continue;
+      }
 
       const dispatchResult = await emailService.sendOrderEmail({
         orderId: order.id,
@@ -922,7 +1032,6 @@ export const batchSendOrderEmail = async (req: Request, res: Response, next: Nex
         subject,
         message,
         templateType: templateType || 'DELAY_NOTICE',
-        adminSender: 'admin@technoworld.com'
       });
 
       try {
@@ -1328,19 +1437,36 @@ export const mergeChildOrder = async (req: Request, res: Response, next: NextFun
       }).catch(err => console.warn('[MERGE_NOTIF_ERROR]', err.message));
     }
 
-    // Send email notification
+    // Send email notification with combined invoice attachment
     const customerEmail = childOrder.pickupEmail || childOrder.customerEmail || childOrder.address?.email || childOrder.user?.email || parentOrder.customerEmail;
     const customerName = childOrder.pickupName || childOrder.address?.fullName || childOrder.user?.name || parentOrder.address?.fullName || 'Valued Customer';
 
-    if (customerEmail) {
-      emailService.sendOrderMergeRefundEmail({
-        recipientEmail: customerEmail,
-        customerName,
-        childOrderNumber: childOrder.orderNumber,
-        parentOrderNumber: parentOrder.orderNumber,
-        refundAmount,
-        newWalletBalance: result.updatedWalletBalance
-      }).catch(err => console.warn('[MERGE_EMAIL_ERROR]', err.message));
+    if (customerEmail && customerEmail.includes('@') && !customerEmail.includes('@example.com') && !customerEmail.includes('@technoworld.com')) {
+      (async () => {
+        let attachments: any = undefined;
+        try {
+          const mergedPdfBuffer = await generateMergedInvoicesPDF([parentOrder.id, childOrder.id]);
+          if (mergedPdfBuffer && mergedPdfBuffer.length > 0) {
+            attachments = [{
+              filename: `Combined-Invoice-${parentOrder.orderNumber}-${childOrder.orderNumber}.pdf`,
+              content: mergedPdfBuffer,
+              contentType: 'application/pdf',
+            }];
+          }
+        } catch (mErr: any) {
+          logger.warn(`[MERGE_INVOICE_ATTACH_WARN] Could not generate combined invoice: ${mErr.message}`);
+        }
+
+        return emailService.sendOrderMergeRefundEmail({
+          recipientEmail: customerEmail,
+          customerName,
+          childOrderNumber: childOrder.orderNumber,
+          parentOrderNumber: parentOrder.orderNumber,
+          refundAmount,
+          newWalletBalance: result.updatedWalletBalance,
+          attachments,
+        });
+      })().catch(err => console.warn('[MERGE_EMAIL_ERROR]', err.message));
     }
 
     res.status(200).json({

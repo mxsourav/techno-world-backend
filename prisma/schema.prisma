@@ -55,73 +55,77 @@ model Session {
 }
 
 model Book {
-  id               String             @id @default(uuid())
-  title            String
-  subtitle         String?
-  slug             String             @unique
-  isbn10           String?            @unique
-  isbn13           String?            @unique
-  edition          String?
-  language         String             @default("English")
-  description      String             @db.Text
-  shortDescription String?            @db.Text
-  price            Float
-  mrp              Float
-  costPrice        Float?
-  discount         Float              @default(0)
-  stock            Int                @default(0)
-  reservedStock    Int                @default(0)
-  reorderLevel     Int                @default(20)
-  warehouse        String?            @default("Main Warehouse")
-  lifetimeSales    Int                @default(0)
-  weight           Float?
-  dimensions       String?
-  pages            Int?
-  publicationDate  DateTime?
-  publicationYear  Int?
-  printYear        Int?
-  reprintNumber    Int?
-  bindingType      String?
-  coverType        String?
-  barcode          String?
-  series           String?
-  volume           String?
-  sku              String?            @unique
-  bookCode         String?            @unique
-  university       String?
-  semester         String?
-  course           String?
-  examination      String?
-  classStandard    String?
-  coverUrl         String?
-  galleryUrls      String?            @default("[]")
-  previewPdfUrl    String?
-  status           BookStatus         @default(DRAFT)
-  visibility       Boolean            @default(true)
-  isFeatured       Boolean            @default(false)
-  isTrending       Boolean            @default(false)
-  isNewArrival     Boolean            @default(false)
-  isBestseller     Boolean            @default(false)
-  seoTitle         String?
-  seoDescription   String?
-  seoKeywords      String?            @default("[]")
-  tags             String?            @default("[]")
-  categoryId       String?
-  bookTypeId       String?
-  publisherId      String?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  bookType         BookType?          @relation(fields: [bookTypeId], references: [id])
-  category         Category?          @relation(fields: [categoryId], references: [id])
-  publisher        Publisher?         @relation(fields: [publisherId], references: [id])
-  cartItems        CartItem[]
-  inventoryHistory InventoryHistory[]
-  orderItems       OrderItem[]
-  reviews          Review[]
-  questions        BookQuestion[]
-  wishlistItems    WishlistItem[]
-  authors          Author[]           @relation("AuthorToBook")
-  subjects         Subject[]          @relation("BookToSubject")
+  id                     String             @id @default(uuid())
+  title                  String
+  subtitle               String?
+  slug                   String             @unique
+  isbn10                 String?            @unique
+  isbn13                 String?            @unique
+  edition                String?
+  language               String             @default("English")
+  description            String             @db.Text
+  shortDescription       String?            @db.Text
+  price                  Float
+  mrp                    Float
+  costPrice              Float?
+  discount               Float              @default(0)
+  stock                  Int                @default(0)
+  reservedStock          Int                @default(0)
+  reorderLevel           Int                @default(20)
+  warehouse              String?            @default("Main Warehouse")
+  lifetimeSales          Int                @default(0)
+  weight                 Float?
+  dimensions             String?
+  pages                  Int?
+  publicationDate        DateTime?
+  publicationYear        Int?
+  printYear              Int?
+  reprintNumber          Int?
+  bindingType            String?
+  coverType              String?
+  barcode                String?
+  series                 String?
+  volume                 String?
+  sku                    String?            @unique
+  bookCode               String?            @unique
+  university             String?
+  semester               String?
+  course                 String?
+  examination            String?
+  classStandard          String?
+  coverUrl               String?
+  coverPublicId          String?
+  galleryUrls            String?            @default("[]")
+  previewPdfUrl          String?
+  previewPdfPublicId     String?
+  previewPdfResourceType String?            @default("raw")
+  status                 BookStatus         @default(DRAFT)
+  visibility             Boolean            @default(true)
+  isFeatured             Boolean            @default(false)
+  isTrending             Boolean            @default(false)
+  isNewArrival           Boolean            @default(false)
+  isBestseller           Boolean            @default(false)
+  seoTitle               String?
+  seoDescription         String?
+  seoKeywords            String?            @default("[]")
+  tags                   String?            @default("[]")
+  categoryId             String?
+  bookTypeId             String?
+  publisherId            String?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  bookType               BookType?          @relation(fields: [bookTypeId], references: [id])
+  category               Category?          @relation(fields: [categoryId], references: [id])
+  publisher              Publisher?         @relation(fields: [publisherId], references: [id])
+  cartItems              CartItem[]
+  inventoryHistory       InventoryHistory[]
+  orderItems             OrderItem[]
+  reviews                Review[]
+  questions              BookQuestion[]
+  wishlistItems          WishlistItem[]
+  images                 BookImage[]
+  authors                Author[]           @relation("AuthorToBook")
+  subjects               Subject[]          @relation("BookToSubject")
 
   @@index([categoryId])
   @@index([bookTypeId])
@@ -236,32 +240,40 @@ model Address {
 }
 
 model Order {
-  id              String        @id @default(uuid())
-  orderNumber     String        @unique
-  userId          String
-  addressId       String?
-  status          OrderStatus   @default(PENDING)
-  paymentStatus   PaymentStatus @default(PENDING)
-  paymentId       String?
-  paymentMethod   String?
-  subtotal        Float
-  shippingCharge  Float         @default(0)
-  taxAmount       Float         @default(0)
-  discountAmount  Float         @default(0)
-  totalAmount     Float
-  promotionId     String?
-  trackingNumber  String?
-  shippingCarrier String?
-  shippingMethod  String?
-  customerEmail   String?
-  pickupName      String?
-  pickupPhone     String?
-  pickupEmail     String?
-  pickupSlots     String?       @db.Text
+  id                 String        @id @default(uuid())
+  orderNumber        String        @unique
+  userId             String
+  addressId          String?
+  status             OrderStatus   @default(PENDING)
+  paymentStatus      PaymentStatus @default(PENDING)
+  paymentId          String?
+  paymentMethod      String?
+  paymentGateway     String?       @default("RAZORPAY")
+
+  // Razorpay specific fields
+  razorpayOrderId   String?     @unique
+  razorpayPaymentId String?     @unique
+  razorpaySignature String?
+  razorpayVerifiedAt DateTime?
+
+  subtotal           Float
+  shippingCharge     Float         @default(0)
+  taxAmount          Float         @default(0)
+  discountAmount     Float         @default(0)
+  totalAmount        Float
+  promotionId        String?
+  trackingNumber     String?
+  shippingCarrier    String?
+  shippingMethod     String?
+  customerEmail      String?
+  pickupName         String?
+  pickupPhone        String?
+  pickupEmail        String?
+  pickupSlots        String?       @db.Text
   selectedPickupSlot String?
-  pickupStatus    String?       @default("NONE")
-  notes           String?       @db.Text
-  invoiceNumber      String?   @unique
+  pickupStatus       String?       @default("NONE")
+  notes              String?       @db.Text
+  invoiceNumber      String?       @unique
   invoiceGeneratedAt DateTime?
   parentOrderId      String?
   isMerged           Boolean       @default(false)
@@ -282,6 +294,25 @@ model Order {
   @@index([parentOrderId])
   @@index([addressId], map: "Order_addressId_fkey")
   @@index([promotionId], map: "Order_promotionId_fkey")
+}
+
+// New: idempotent webhook processing + audit trail
+model PaymentWebhookEvent {
+  id          String   @id @default(uuid())
+  eventId     String   @unique   // Razorpay's x-razorpay-event-id header value
+  eventType   String              // e.g. "payment.captured", "payment.failed", "refund.processed"
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  orderId     String?             // your internal Order.id, once resolved
+  payload     String   @db.Text   // raw JSON body, for debugging/disputes
+  signatureValid Boolean @default(false)
+  processed   Boolean  @default(false)
+  processingError String? @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([eventType])
+  @@index([razorpayOrderId])
 }
 
 model OrderItem {
@@ -547,7 +578,7 @@ model WalletTransaction {
   userId      String
   orderId     String?
   amount      Float
-  type        String   // "CREDIT" | "DEBIT"
+  type        String // "CREDIT" | "DEBIT"
   status      String   @default("COMPLETED")
   description String?  @db.Text
   createdAt   DateTime @default(now())
@@ -670,8 +701,6 @@ model BlogPost {
   @@index([expiresAt])
 }
 
-
-
 model ContactMessage {
   id          String    @id @default(uuid())
   name        String
@@ -689,6 +718,60 @@ model ContactMessage {
   @@index([createdAt])
 }
 
+model BookImage {
+  id           String   @id @default(uuid())
+  bookId       String
+  publicId     String
+  secureUrl    String   @db.Text
+  resourceType String   @default("image")
+  format       String?
+  width        Int?
+  height       Int?
+  bytes        Int?
+  sortOrder    Int      @default(0)
+  isCover      Boolean  @default(false)
+  altText      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@index([sortOrder])
+}
+
+enum SiteMediaType {
+  BANNER
+  PROMOTIONAL
+  FIXED
+  VIDEO
+}
+
+model SiteMedia {
+  id           String        @id @default(uuid())
+  type         SiteMediaType @default(BANNER)
+  name         String
+  publicId     String        @unique
+  secureUrl    String        @db.Text
+  resourceType String        @default("image")
+  format       String?
+  width        Int?
+  height       Int?
+  bytes        Int?
+  duration     Float?
+  isActive     Boolean       @default(true)
+  sortOrder    Int           @default(0)
+  altText      String?
+  targetUrl    String?
+  metadata     String?       @db.Text
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([type])
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
 model HeroConfig {
   id                         String    @id @default("default")
   hero_book_cover_url        String?   @db.Text
@@ -699,20 +782,20 @@ model HeroConfig {
 }
 
 model BookRequest {
-  id         String    @id @default(uuid())
+  id         String   @id @default(uuid())
   title      String
   author     String
   email      String
   phone      String?
   publisher  String?
   edition    String?
-  notes      String?   @db.Text
-  imageUrl   String?   @db.Text
-  status     String    @default("PENDING")
-  adminNotes String?   @db.Text
+  notes      String?  @db.Text
+  imageUrl   String?  @db.Text
+  status     String   @default("PENDING")
+  adminNotes String?  @db.Text
   ipAddress  String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([status])
   @@index([createdAt])

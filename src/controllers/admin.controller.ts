@@ -6,6 +6,7 @@ import { ImportService } from '../services/import.service.js';
 import { ExecutionService } from '../services/import/execution.service.js';
 import { CloudinaryService } from '../services/cloudinary.service.js';
 import { emailService } from '../services/email.service.js';
+import { notifyBookUpdated, submitToIndexNow } from '../services/indexnow.service.js';
 
 
 export const getAdminStats = async (req: Request, res: Response, next: NextFunction) => {
@@ -361,6 +362,13 @@ export const updateBook = async (req: Request, res: Response, next: NextFunction
         }
       });
     }
+
+    // Ping search engines via IndexNow if published and visible
+    if (book.status === 'PUBLISHED' && book.visibility) {
+      notifyBookUpdated(book.slug).catch((err) =>
+        console.error('[IndexNow update error]:', err?.message || err)
+      );
+    }
     
     res.status(200).json({ success: true, message: 'Book updated successfully', data: book });
   } catch (error) {
@@ -450,6 +458,13 @@ export const createBook = async (req: Request, res: Response, next: NextFunction
         ipAddress: req.ip
       }
     });
+
+    // Ping search engines via IndexNow if published and visible
+    if (book.status === 'PUBLISHED' && book.visibility) {
+      notifyBookUpdated(book.slug).catch((err) =>
+        console.error('[IndexNow create error]:', err?.message || err)
+      );
+    }
 
     res.status(201).json({ success: true, message: 'Book created successfully', data: book });
   } catch (error) {
@@ -1471,3 +1486,310 @@ export const updateAutoAcceptSetting = async (req: Request, res: Response, next:
     next(error);
   }
 };
+
+// GET /api/v1/admin/abandoned-carts
+export const getAbandonedCarts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const cartItems = await prisma.cartItem.findMany({
+      include: {
+        user: {
+          select: { id: true, name: true, email: true, phone: true, createdAt: true },
+        },
+        book: {
+          select: { id: true, title: true, price: true, mrp: true, coverUrl: true, sku: true, stock: true },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const userCartMap = new Map<string, {
+      user: any;
+      items: any[];
+      totalAmount: number;
+      lastActivityAt: Date;
+    }>();
+
+    for (const item of (cartItems as any[])) {
+      if (!item.user) continue;
+      const existing = userCartMap.get(item.userId);
+      const itemPrice = item.book ? item.book.price : 0;
+      const itemTotal = itemPrice * item.quantity;
+
+      if (!existing) {
+        userCartMap.set(item.userId, {
+          user: item.user,
+          items: [item],
+          totalAmount: itemTotal,
+          lastActivityAt: item.updatedAt,
+        });
+      } else {
+        existing.items.push(item);
+        existing.totalAmount += itemTotal;
+        if (item.updatedAt > existing.lastActivityAt) {
+          existing.lastActivityAt = item.updatedAt;
+        }
+      }
+    }
+
+    const now = new Date();
+    const abandonedCarts = Array.from(userCartMap.values()).map(entry => {
+      const diffMs = now.getTime() - entry.lastActivityAt.getTime();
+      const diffMinutes = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+      let timeAgo = '';
+      if (diffMinutes < 60) {
+        timeAgo = `${diffMinutes} min ago`;
+      } else if (diffHours < 24) {
+        timeAgo = `${diffHours} hr${diffHours > 1 ? 's' : ''} ago`;
+      } else {
+        timeAgo = `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+      }
+
+      const primaryBook = entry.items[0]?.book?.title || 'Selected Books';
+      const cleanPhone = (entry.user.phone || '').replace(/\D/g, '').slice(-10);
+      const whatsappText = encodeURIComponent(
+        `Hello ${entry.user.name || 'there'}! We noticed you left "${primaryBook}" in your cart at Techno World Books. Complete your order today to reserve your copy with fast India Post delivery: https://technoworldbooks.in/cart`
+      );
+
+      return {
+        userId: entry.user.id,
+        customerName: entry.user.name || 'Customer',
+        customerEmail: entry.user.email,
+        customerPhone: entry.user.phone || '',
+        cleanPhone,
+        whatsappUrl: cleanPhone ? `https://wa.me/91${cleanPhone}?text=${whatsappText}` : null,
+        itemCount: entry.items.reduce((s: number, i: any) => s + i.quantity, 0),
+        totalAmount: entry.totalAmount,
+        lastActivityAt: entry.lastActivityAt.toISOString(),
+        timeAgo,
+        items: entry.items.map((i: any) => ({
+          id: i.id,
+          bookId: i.bookId,
+          title: i.book?.title || 'Unknown Book',
+          coverImage: i.book?.coverUrl,
+          price: i.book?.price || 0,
+          quantity: i.quantity,
+          inStock: (i.book?.stock || 0) > 0,
+        })),
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      count: abandonedCarts.length,
+      data: abandonedCarts,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/v1/admin/orders/:id/rto
+export const processRtoRestock = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+
+    if (!order) {
+      res.status(404).json({ success: false, message: 'Order not found' });
+      return;
+    }
+
+    if (order.status === 'CANCELLED' && order.notes?.includes('RTO RESTOCKED')) {
+      res.status(400).json({ success: false, message: 'Order has already been processed for RTO Restock' });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const item of order.items) {
+        await tx.book.update({
+          where: { id: item.bookId },
+          data: {
+            stock: { increment: item.quantity },
+          },
+        });
+      }
+
+      const rtoNote = `\n[RTO RESTOCKED: ${new Date().toLocaleString('en-IN')}] Reason: ${reason || 'Consignment returned undelivered by India Post / RTO'}. Restocked ${order.items.length} items.`;
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          status: 'CANCELLED',
+          notes: (order.notes || '') + rtoNote,
+        },
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Order #${order.orderNumber} successfully marked as RTO and ${order.items.length} item(s) restocked to inventory.`,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/v1/admin/reports/gstr1
+export const exportGstr1Report = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { month, year } = req.query;
+
+    const queryYear = year ? Number(year) : new Date().getFullYear();
+    const queryMonth = month ? Number(month) - 1 : new Date().getMonth();
+
+    const startDate = new Date(queryYear, queryMonth, 1);
+    const endDate = new Date(queryYear, queryMonth + 1, 0, 23, 59, 59, 999);
+
+    const orders = await prisma.order.findMany({
+      where: {
+        createdAt: { gte: startDate, lte: endDate },
+        status: { in: ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED'] },
+      },
+      include: {
+        address: true,
+        user: { select: { name: true, email: true, phone: true } },
+        items: {
+          include: {
+            book: { select: { title: true, price: true, sku: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const headers = [
+      'Order Number',
+      'Invoice Number',
+      'Invoice Date',
+      'Recipient Name',
+      'Recipient State',
+      'Place of Supply',
+      'Customer Phone',
+      'Payment Mode',
+      'Book Sales (HSN 4901 - Exempt 0%)',
+      'Shipping Value (Taxable 18%)',
+      'CGST (9%)',
+      'SGST (9%)',
+      'IGST (18%)',
+      'Total Tax',
+      'Total Invoice Value',
+      'Fulfillment Status',
+    ];
+
+    const rows = orders.map((ord) => {
+      const state = ord.address?.state || 'West Bengal';
+      const isIntraState = state.toLowerCase().includes('bengal') || state.toLowerCase().includes('wb');
+      const invoiceNo = ord.invoiceNumber || `TW-${ord.orderNumber}`;
+      const invDate = ord.createdAt.toISOString().slice(0, 10);
+      const recipientName = (ord.address?.fullName || ord.user?.name || 'Customer').replace(/,/g, ' ');
+      const phone = ord.address?.phone || ord.user?.phone || '';
+      
+      const bookExemptValue = ord.subtotal;
+      const shippingTaxable = ord.shippingCharge;
+      
+      let cgst = 0;
+      let sgst = 0;
+      let igst = 0;
+
+      if (shippingTaxable > 0) {
+        if (isIntraState) {
+          cgst = Number((shippingTaxable * 0.09).toFixed(2));
+          sgst = Number((shippingTaxable * 0.09).toFixed(2));
+        } else {
+          igst = Number((shippingTaxable * 0.18).toFixed(2));
+        }
+      }
+
+      const totalTax = Number((cgst + sgst + igst).toFixed(2));
+      const totalInv = Number((ord.totalAmount).toFixed(2));
+
+      return [
+        ord.orderNumber,
+        invoiceNo,
+        invDate,
+        `"${recipientName}"`,
+        `"${state}"`,
+        `"${state}"`,
+        `"${phone}"`,
+        ord.paymentMethod || 'PREPAID',
+        bookExemptValue.toFixed(2),
+        shippingTaxable.toFixed(2),
+        cgst.toFixed(2),
+        sgst.toFixed(2),
+        igst.toFixed(2),
+        totalTax.toFixed(2),
+        totalInv.toFixed(2),
+        ord.status,
+      ].join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="GSTR1_Report_${queryYear}_${queryMonth + 1}.csv"`);
+    res.status(200).send(csvContent);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/admin/indexnow/submit
+ * Triggers on-demand IndexNow ping for specific URLs or entire catalog.
+ */
+export const triggerIndexNowSubmission = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const { urls } = req.body;
+    if (Array.isArray(urls) && urls.length > 0) {
+      const result = await submitToIndexNow(urls);
+      res.status(200).json(result);
+      return;
+    }
+
+    // Default: Batch submit all published books + active categories + active blogs + core pages
+    const [books, categories, blogPosts] = await Promise.all([
+      prisma.book.findMany({
+        where: { status: 'PUBLISHED', visibility: true },
+        select: { slug: true },
+        take: 10000,
+      }),
+      prisma.category.findMany({
+        where: { isActive: true },
+        select: { slug: true },
+      }),
+      prisma.blogPost.findMany({
+        where: { isActive: true },
+        select: { slug: true },
+      }),
+    ]);
+
+    const urlList: string[] = [
+      'https://technoworldbooks.in/',
+      'https://technoworldbooks.in/search',
+      'https://technoworldbooks.in/blog',
+      'https://technoworldbooks.in/about',
+      'https://technoworldbooks.in/contact',
+      'https://technoworldbooks.in/llms.txt',
+      ...categories.map((c) => `https://technoworldbooks.in/category/${c.slug}`),
+      ...blogPosts.map((b) => `https://technoworldbooks.in/blog/${b.slug}`),
+      ...books.map((b) => `https://technoworldbooks.in/book/${b.slug}`),
+    ];
+
+    const result = await submitToIndexNow(urlList);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+

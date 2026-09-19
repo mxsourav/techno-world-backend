@@ -28,7 +28,11 @@ import {
   getActivityLogs,
   getSearchAndSalesAnalytics,
   getAutoAcceptSetting,
-  updateAutoAcceptSetting
+  updateAutoAcceptSetting,
+  getAbandonedCarts,
+  processRtoRestock,
+  exportGstr1Report,
+  triggerIndexNowSubmission
 } from '../../controllers/admin.controller.js';
 
 import {
@@ -79,6 +83,11 @@ router.put('/smtp', updateSmtpSettings);
 router.post('/smtp/test', testSmtpSettings);
 router.get('/emails', getEmailLogs);
 
+// Abandoned Carts, RTO, and Tax Reports
+router.get('/abandoned-carts', getAbandonedCarts);
+router.post('/orders/:id/rto', processRtoRestock);
+router.get('/reports/gstr1', exportGstr1Report);
+
 // Logs
 router.get('/books/:id/logs', getActivityLogs);
 
@@ -89,7 +98,7 @@ router.post('/import/execute', executeImportBookCatalog);
 // Book Management
 router.get('/books/catalog', getAdminCatalog);
 router.patch('/books/:id/stock', quickUpdateStock);
-router.delete('/books/all', deleteAllBooks);
+router.delete('/books/all', requireRole(['SUPER_ADMIN']), deleteAllBooks);
 router.post('/books', createBook);
 router.delete('/books/:id', deleteBook);
 router.patch('/books/:id', updateBook);
@@ -116,6 +125,9 @@ router.delete('/site-media/:id', deleteSiteMedia);
 router.get('/categories', getAllCategoriesAdmin);
 router.patch('/categories/reorder', reorderCategories);
 router.patch('/categories/:id', updateCategory);
+
+// Search Visibility & Machine Indexing Handshake
+router.post('/indexnow/submit', triggerIndexNowSubmission);
 
 export default router;
 

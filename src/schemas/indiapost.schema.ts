@@ -29,16 +29,30 @@ export const barcodeSchema = z.string()
   .trim()
   .regex(/^[A-Z]{2}\d{9}[A-Z]{2}$/, 'Barcode must be a valid 13-character India Post format (e.g. EB468827991IN)');
 
-export const articleTypeEnum = z.enum([
+export const articleTypeEnum = z.preprocess((val) => {
+  if (typeof val === 'string') {
+    const upper = val.toUpperCase().trim();
+    if (upper === 'NORMAL_POST' || upper === 'BOOK_POST' || upper === 'BP_INLAND_DOC') return 'BP';
+    if (upper === 'BP_INLAND_PARCEL') return 'BUSINESS_PARCEL';
+    if (upper === 'SPEED_POST') return 'SP_INLAND_PARCEL';
+    return upper;
+  }
+  return val;
+}, z.enum([
   'SP_INLAND_DOC',
   'SP_INLAND_PARCEL',
   'SP',
   'BUSINESS_PARCEL',
   'BP',
+  'BP_INLAND_DOC',
+  'BP_INLAND_PARCEL',
   '24_SPEEDPOST_DOC',
   '24_SPP_PARSPL',
   '48_SPEEDPOST_DOC',
-]);
+  'NORMAL_POST',
+  'SPEED_POST',
+  'BOOK_POST',
+]));
 
 // Single Article Booking Schema
 export const indiaPostArticleSchema = z.object({

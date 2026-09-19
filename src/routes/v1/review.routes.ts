@@ -10,12 +10,13 @@ import {
   toggleReviewVerified,
 } from '../../controllers/review.controller.js';
 import { requireAuth, requireRole, optionalAuth } from '../../middlewares/auth.middleware.js';
+import { formSubmissionLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = Router();
 
 // Storefront routes
 router.get('/', getReviews);
-router.post('/', optionalAuth, createReview);
+router.post('/', formSubmissionLimiter, optionalAuth, createReview);
 
 // Admin moderation routes
 router.get('/admin', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), getAdminReviews);

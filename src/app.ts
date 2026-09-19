@@ -1,4 +1,6 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import helmet from 'helmet';
 import cors from 'cors';
 import compression from 'compression';
@@ -11,11 +13,16 @@ import { generalLimiter } from './middlewares/rateLimiter.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import routes from './routes/index.js';
 import { generateSitemap } from './controllers/sitemap.controller.js';
+import { botSeoMiddleware } from './middlewares/botSeo.middleware.js';
+import { INDEXNOW_KEY } from './services/indexnow.service.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const app = express();
+
+// Trust reverse proxy (Cloudflare, Render, Vercel, Nginx) so req.ip and secure cookies work reliably
+app.set('trust proxy', 1);
 
 app.use(
   helmet({
@@ -31,6 +38,20 @@ const allowedOrigins = [
   ...env.CORS_ORIGIN.split(',').map(url => url.trim()).filter(Boolean)
 ];
 
+const trustedProductionDomains = [
+  'https://technoworldbooks.in',
+  'https://www.technoworldbooks.in',
+  'https://admin.technoworldbooks.in',
+];
+
+const isAllowedVercelOrRender = (origin: string): boolean => {
+  return (
+    /^https:\/\/techno-world[a-z0-9-]*\.vercel\.app$/.test(origin) ||
+    /^https:\/\/[a-z0-9-]+-mxsouravs-projects\.vercel\.app$/.test(origin) ||
+    /^https:\/\/techno-world[a-z0-9-]*\.onrender\.com$/.test(origin)
+  );
+};
+
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -44,14 +65,10 @@ app.use(
       // Explicit match or local / cloud domain patterns
       const isAllowed =
         allowedOrigins.includes(origin) ||
-        origin.startsWith('http://localhost:') ||
-        origin.startsWith('https://localhost:') ||
-        origin.includes('vercel.app') ||
-        origin.includes('onrender.com') ||
-        origin.includes('technoworld') ||
-        origin.includes('techno-world') ||
-        origin.includes('hostingersite.com') ||
-        origin.includes('hostinger');
+        trustedProductionDomains.includes(origin) ||
+        /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+        /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
+        isAllowedVercelOrRender(origin);
 
       if (isAllowed) {
         return callback(null, true);
@@ -80,15 +97,14 @@ app.use(cookieParser());
 app.use(requestIdMiddleware);
 app.use(generalLimiter);
 
-// Anti-caching headers for API responses to guarantee immediate frontend reflection
+// Anti-caching and noindex headers for API responses to guarantee immediate frontend reflection
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.set('Pragma', 'no-cache');
   res.set('Expires', '0');
+  res.set('X-Robots-Tag', 'noindex, nofollow');
   next();
 });
-
-import path from 'path';
 
 // ...
 app.use(
@@ -112,7 +128,35 @@ app.use(
     },
   })
 );
+// Bot SEO: intercept known crawler User-Agents and return server-rendered OG HTML
+// This must be mounted BEFORE static serving and SPA routes.
+app.use(botSeoMiddleware);
 app.get('/sitemap.xml', generateSitemap);
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain');
+  res.send("# Techno World Books API Server\nUser-agent: *\nDisallow: /\n");
+});
+app.get('/llms.txt', (_req, res) => {
+  const filePath = path.resolve('../app/public/llms.txt');
+  if (fs.existsSync(filePath)) {
+    res.type('text/plain; charset=utf-8');
+    return res.sendFile(filePath);
+  }
+  res.status(404).send('Not Found');
+});
+app.get('/llms-full.txt', (_req, res) => {
+  const filePath = path.resolve('../app/public/llms-full.txt');
+  if (fs.existsSync(filePath)) {
+    res.type('text/plain; charset=utf-8');
+    return res.sendFile(filePath);
+  }
+  res.status(404).send('Not Found');
+});
+// IndexNow protocol token verification endpoint
+app.get(`/${INDEXNOW_KEY}.txt`, (_req, res) => {
+  res.type('text/plain; charset=utf-8');
+  res.send(INDEXNOW_KEY);
+});
 app.use(routes);
 
 app.use(errorHandler);

@@ -14,5 +14,9 @@ router.get('/track/:identifier', shippingController.trackShipment);
 router.post('/book/:orderId', requireAuth, requireAdmin, shippingController.bookOrderShipment);
 router.post('/book-batch', requireAuth, requireAdmin, shippingController.bookBatchShipments);
 router.get('/label/:orderId', requireAuth, requireAdmin, shippingController.getShippingLabel);
+router.get('/manifest', requireAuth, requireAdmin, shippingController.getDailyManifest);
+router.get('/barcode-pool', requireAuth, requireAdmin, shippingController.getBarcodePoolStatus);
+router.post('/barcode-pool/load', requireAuth, requireAdmin, shippingController.loadBarcodePool);
 
 export default router;
+

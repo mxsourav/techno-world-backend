@@ -131,16 +131,17 @@ export const bookOrderShipment = async (req: Request, res: Response, next: NextF
     const totalWeight = Number(weightGrams) || Math.max(250, order.items.length * 350);
 
     // Determine article type based on shipping method
-    let articleType = serviceType;
+    const reqMethod = (serviceType || orderShippingMethod || 'SPEED_POST').toUpperCase();
+    const isDoc = totalWeight <= 500;
+    let articleType: string;
     let carrierLabel = 'India Post Speed Post';
-    if (!articleType) {
-      if (orderShippingMethod === 'NORMAL_POST') {
-        articleType = totalWeight <= 500 ? 'BP_INLAND_DOC' : 'BP_INLAND_PARCEL';
-        carrierLabel = 'India Post Book Post';
-      } else {
-        articleType = totalWeight <= 500 ? 'SP_INLAND_DOC' : 'SP_INLAND_PARCEL';
-        carrierLabel = 'India Post Speed Post';
-      }
+
+    if (reqMethod.includes('NORMAL') || reqMethod.includes('BOOK') || reqMethod === 'BP') {
+      articleType = isDoc ? 'BP' : 'BUSINESS_PARCEL';
+      carrierLabel = 'India Post Book Post';
+    } else {
+      articleType = isDoc ? 'SP_INLAND_DOC' : 'SP_INLAND_PARCEL';
+      carrierLabel = 'India Post Speed Post';
     }
 
     const articlePayload = {
@@ -349,16 +350,17 @@ export const bookBatchShipments = async (req: Request, res: Response, next: Next
       const barcode = order.trackingNumber || indiaPostService.generateBarcode(orderMethod === 'NORMAL_POST' ? 'BP' : 'EB', 'IN');
       const totalWeight = Math.max(250, order.items.length * 350);
 
-      let articleType = serviceType;
+      const reqMethod = (serviceType || orderMethod || 'SPEED_POST').toUpperCase();
+      const isDoc = totalWeight <= 500;
+      let articleType: string;
       let carrierLabel = 'India Post Speed Post';
-      if (!articleType) {
-        if (orderMethod === 'NORMAL_POST') {
-          articleType = totalWeight <= 500 ? 'BP_INLAND_DOC' : 'BP_INLAND_PARCEL';
-          carrierLabel = 'India Post Book Post';
-        } else {
-          articleType = totalWeight <= 500 ? 'SP_INLAND_DOC' : 'SP_INLAND_PARCEL';
-          carrierLabel = 'India Post Speed Post';
-        }
+
+      if (reqMethod.includes('NORMAL') || reqMethod.includes('BOOK') || reqMethod === 'BP') {
+        articleType = isDoc ? 'BP' : 'BUSINESS_PARCEL';
+        carrierLabel = 'India Post Book Post';
+      } else {
+        articleType = isDoc ? 'SP_INLAND_DOC' : 'SP_INLAND_PARCEL';
+        carrierLabel = 'India Post Speed Post';
       }
 
       articles.push({
@@ -422,4 +424,153 @@ export const bookBatchShipments = async (req: Request, res: Response, next: Next
     res.status(500).json({ success: false, message: error.message || 'Batch shipment booking failed' });
   }
 };
+
+/**
+ * Get Barcode Pool Status (Admin only)
+ * GET /api/v1/shipping/barcode-pool
+ */
+export const getBarcodePoolStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const status = indiaPostService.getBarcodePoolStatus();
+    res.json({ success: true, data: status });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to fetch barcode pool status' });
+  }
+};
+
+/**
+ * Load Barcodes into Pool (Admin only)
+ * POST /api/v1/shipping/barcode-pool/load
+ */
+export const loadBarcodePool = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { barcodes, range } = req.body;
+    if (Array.isArray(barcodes) && barcodes.length > 0) {
+      const result = indiaPostService.loadBarcodeSeries(barcodes);
+      res.json({ success: true, message: `Loaded ${result.added} barcodes into pool`, data: result });
+      return;
+    }
+    if (range && range.prefix && range.start && range.count) {
+      const result = indiaPostService.loadBarcodeRange(range.prefix, Number(range.start), Number(range.count));
+      res.json({ success: true, message: `Generated and loaded ${result.added} barcodes into pool`, data: result });
+      return;
+    }
+    res.status(400).json({ success: false, message: 'Provide either a barcodes array or range specification { prefix, start, count }' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to load barcodes into pool' });
+  }
+};
+
+/**
+ * Daily India Post Despatch Manifest / Handover Journal (Admin only)
+ * GET /api/v1/shipping/manifest
+ */
+export const getDailyManifest = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { date, status, service } = req.query;
+
+    const queryDate = date ? new Date(date as string) : new Date();
+    const startOfDay = new Date(queryDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(queryDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const whereClause: any = {
+      trackingNumber: { not: null },
+    };
+
+    if (req.query.date) {
+      whereClause.updatedAt = {
+        gte: startOfDay,
+        lte: endOfDay,
+      };
+    }
+
+    if (status && typeof status === 'string') {
+      whereClause.status = status;
+    } else {
+      whereClause.status = { in: ['PROCESSING', 'SHIPPED', 'CONFIRMED', 'DELIVERED'] };
+    }
+
+    if (service && typeof service === 'string') {
+      whereClause.shippingCarrier = { contains: service };
+    }
+
+    const orders = await prisma.order.findMany({
+      where: whereClause,
+      include: {
+        address: true,
+        user: {
+          select: { name: true, email: true, phone: true },
+        },
+        items: {
+          include: {
+            book: {
+              select: { title: true, weight: true, price: true, sku: true },
+            },
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+    });
+
+    const manifestItems = orders.map((order, index) => {
+      const parcelWeight = Math.max(
+        250,
+        order.items.reduce((sum, item) => sum + Math.round((item.book?.weight || 0.45) * 1000 * item.quantity), 0)
+      );
+
+      const recipientName = order.address?.fullName || order.user?.name || 'Customer';
+      const destinationPincode = order.address?.pincode || 'N/A';
+      const destinationCity = order.address?.city || 'N/A';
+      const destinationState = order.address?.state || 'West Bengal';
+
+      return {
+        serialNo: index + 1,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        barcode: order.trackingNumber || 'N/A',
+        serviceType: order.shippingCarrier?.includes('Book Post') ? 'Book Post' : 'Speed Post',
+        bookingDate: order.updatedAt.toISOString(),
+        consigneeName: recipientName,
+        consigneePhone: order.address?.phone || order.user?.phone || 'N/A',
+        destinationPincode,
+        destinationCity,
+        destinationState,
+        weightGrams: parcelWeight,
+        declaredValue: order.totalAmount,
+        shippingCharge: order.shippingCharge,
+        paymentMode: order.paymentMethod === 'COD' ? 'COD' : 'PREPAID',
+        codAmount: order.paymentMethod === 'COD' ? order.totalAmount : 0,
+      };
+    });
+
+    const totalWeightGrams = manifestItems.reduce((acc, item) => acc + item.weightGrams, 0);
+    const totalDeclaredValue = manifestItems.reduce((acc, item) => acc + item.declaredValue, 0);
+    const totalPostage = manifestItems.reduce((acc, item) => acc + item.shippingCharge, 0);
+
+    res.json({
+      success: true,
+      data: {
+        manifestDate: queryDate.toISOString(),
+        bookingOffice: 'College Street SO / Kolkata GPO (700006)',
+        bnplAccountId: 'BNPL-KOL-TW-700006',
+        consignorName: 'Techno World Books Hub',
+        consignorAddress: 'College Street (Bidhan Sarani), Kolkata - 700006, WB',
+        consignorPhone: '+91 98300 00000',
+        totalArticles: manifestItems.length,
+        totalWeightGrams,
+        totalWeightKg: Number((totalWeightGrams / 1000).toFixed(2)),
+        totalDeclaredValue,
+        totalPostage,
+        items: manifestItems,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Failed to generate India Post manifest: ' + error.message);
+    res.status(500).json({ success: false, message: error.message || 'Failed to generate manifest' });
+  }
+};
+
 

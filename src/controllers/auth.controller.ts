@@ -7,6 +7,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { env } from '../config/env.js';
 import { generateTokens, verifyToken } from '../utils/jwt.js';
 import { ensureUserTestingBonus } from '../services/loyalty.service.js';
+import { otpService } from '../services/otp.service.js';
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME_MS = 15 * 60 * 1000; // 15 minutes
@@ -235,6 +236,15 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
 // TODO: [OAUTH_REAL_KEYS_INJECTED] Transition to real Google OAuth token exchange once live Google Client ID & Secret are configured
 export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise<void> => {
   try {
+    // SECURITY CRITICAL: Strict block against developer OAuth bypass in production to prevent account takeover
+    if (env.NODE_ENV === 'production') {
+      res.status(403).json({
+        success: false,
+        message: 'Developer OAuth bypass is strictly disabled in production. Please sign in with Google Identity Services.',
+      });
+      return;
+    }
+
     const devGoogleEmail = (req.body.email || '').trim().toLowerCase();
     if (!devGoogleEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(devGoogleEmail)) {
       res.status(400).json({ success: false, message: 'Valid email address is required to sign in' });
@@ -515,4 +525,127 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
     res.status(500).json({ success: false, message: 'Google authentication failed' });
   }
 };
+
+/**
+ * Dispatches an authentication OTP to the user's mobile number.
+ * Supports sandbox mode with instant dev codes when live SMS service is unconfigured.
+ */
+export const sendOtp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      res.status(400).json({ success: false, message: 'Mobile phone number is required' });
+      return;
+    }
+    const result = await otpService.sendOtp(phone);
+    res.status(200).json(result);
+  } catch (error: any) {
+    res.status(400).json({ success: false, message: error.message || 'Failed to send OTP' });
+  }
+};
+
+/**
+ * Verifies mobile OTP, authenticates user, and creates/resumes active session.
+ */
+export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phone, otp, name } = req.body;
+    if (!phone || !otp) {
+      res.status(400).json({ success: false, message: 'Phone number and OTP are required' });
+      return;
+    }
+
+    const verifyRes = otpService.verifyOtp(phone, otp);
+    if (!verifyRes.valid) {
+      res.status(400).json({ success: false, message: verifyRes.message });
+      return;
+    }
+
+    const cleanPhone = otpService.normalizePhone(phone);
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { phone: cleanPhone },
+          { phone: `+91${cleanPhone}` },
+          { email: `${cleanPhone}@technoworldbooks.in` },
+          { email: `user${cleanPhone}@technoworldbooks.in` },
+        ],
+      },
+    });
+
+    if (!user) {
+      const defaultName = name?.trim() || `Reader ${cleanPhone.slice(-4)}`;
+      const defaultEmail = `${cleanPhone}@technoworldbooks.in`;
+      const dummyHash = await argon2.hash(`OTP_AUTH_${cleanPhone}_${Date.now()}`);
+      user = await prisma.user.create({
+        data: {
+          name: defaultName,
+          email: defaultEmail,
+          phone: cleanPhone,
+          password: dummyHash,
+          role: Role.CUSTOMER,
+          isActive: true,
+        },
+      });
+    } else if (!user.isActive) {
+      res.status(403).json({ success: false, message: 'Account is deactivated. Please contact support.' });
+      return;
+    }
+
+    const { accessToken, refreshToken } = generateTokens(user.id, user.role);
+
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        refreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        userAgent: req.headers['user-agent'] || 'Unknown',
+        ipAddress: req.ip || 'Unknown',
+      },
+    });
+
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: (env.NODE_ENV as string) === 'production',
+      sameSite: (env.NODE_ENV as string) === 'production' ? 'strict' : 'lax',
+      maxAge: 15 * 60 * 1000,
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: (env.NODE_ENV as string) === 'production',
+      sameSite: (env.NODE_ENV as string) === 'production' ? 'strict' : 'lax',
+      path: '/api/v1/auth/refresh',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    const bonus = await ensureUserTestingBonus(user.id);
+
+    const userPayload = {
+      id: user.id,
+      email: user.email,
+      phone: user.phone || cleanPhone,
+      role: user.role,
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+      technoPoints: bonus.technoPoints,
+      technoWallet: bonus.technoWallet,
+    };
+
+    res.status(200).json({
+      success: true,
+      message: 'Logged in successfully via Mobile OTP',
+      data: {
+        accessToken,
+        refreshToken,
+        user: userPayload,
+      },
+      user: userPayload,
+    });
+  } catch (error: any) {
+    console.error('[OTP_VERIFY_ERROR]', error instanceof Error ? error.message : 'Unknown');
+    res.status(500).json({ success: false, message: 'OTP verification failed' });
+  }
+};
+
 

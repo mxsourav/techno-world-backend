@@ -16,6 +16,9 @@ export class IndiaPostService {
   private accessToken: string | null = null;
   private tokenExpiry: number = 0;
   private isAuthenticating: boolean = false;
+  private barcodePool: string[] = [];
+  private issuedBarcodes: Set<string> = new Set();
+  private localCounter: number = 10000001;
 
   constructor() {
     this.baseUrl = (env.INDIAPOST_BASE_URL || 'https://test.cept.gov.in').replace(/\/+$/, '');
@@ -204,13 +207,106 @@ export class IndiaPostService {
     return barcodes.map((barcode) => this.mockTrackingData(barcode));
   }
 
+  /**
+   * Calculates the official UPU S10 mod-11 check digit for an 8-digit serial number.
+   * Multipliers: [8, 6, 4, 2, 3, 5, 9, 7]
+   */
+  public calculateUpuS10CheckDigit(digits8: string): number {
+    const weights = [8, 6, 4, 2, 3, 5, 9, 7];
+    const clean = digits8.replace(/\D/g, '').padStart(8, '0').slice(-8);
+    let sum = 0;
+    for (let i = 0; i < 8; i++) {
+      sum += parseInt(clean[i], 10) * weights[i];
+    }
+    const remainder = sum % 11;
+    if (remainder === 0) return 5;
+    if (remainder === 1) return 0;
+    return 11 - remainder;
+  }
+
+  /**
+   * Generates a fully compliant 13-character UPU S10 India Post barcode.
+   * E.g. SP100000010IN, EB100000024IN
+   */
+  public generateBarcode(prefix = 'SP', suffix = 'IN'): string {
+    const nextNum = this.localCounter++;
+    const digits8 = nextNum.toString().padStart(8, '0');
+    const checkDigit = this.calculateUpuS10CheckDigit(digits8);
+    return `${prefix.toUpperCase()}${digits8}${checkDigit}${suffix.toUpperCase()}`;
+  }
+
+  /**
+   * Claims the next barcode from the pre-allocated pool (e.g. 5,000 BNPL barcodes)
+   * or falls back to algorithmic UPU S10 barcode generation.
+   */
+  public claimNextBarcode(prefix = 'SP'): string {
+    while (this.barcodePool.length > 0) {
+      const next = this.barcodePool.shift()!;
+      if (!this.issuedBarcodes.has(next)) {
+        this.issuedBarcodes.add(next);
+        return next;
+      }
+    }
+    const generated = this.generateBarcode(prefix);
+    this.issuedBarcodes.add(generated);
+    return generated;
+  }
+
+  /**
+   * Loads pre-allocated barcodes into the active pool (e.g. 5,000 from India Post).
+   */
+  public loadBarcodeSeries(barcodes: string[]): { added: number; totalRemaining: number } {
+    let added = 0;
+    for (const raw of barcodes) {
+      const b = String(raw || '').trim().toUpperCase();
+      if (b.length === 13 && !this.issuedBarcodes.has(b) && !this.barcodePool.includes(b)) {
+        this.barcodePool.push(b);
+        added++;
+      }
+    }
+    logger.info(`Loaded ${added} barcodes into India Post Electronic Pool. Total available: ${this.barcodePool.length}`);
+    return { added, totalRemaining: this.barcodePool.length };
+  }
+
+  /**
+   * Generates and pre-loads a contiguous numeric batch range (e.g. SP100000010IN to SP100050000IN).
+   */
+  public loadBarcodeRange(prefix: string, startNumber: number, count: number): { added: number; totalRemaining: number } {
+    const generatedList: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const num = startNumber + i;
+      const digits8 = num.toString().padStart(8, '0');
+      const cd = this.calculateUpuS10CheckDigit(digits8);
+      generatedList.push(`${prefix.toUpperCase()}${digits8}${cd}IN`);
+    }
+    return this.loadBarcodeSeries(generatedList);
+  }
+
+  /**
+   * Returns current pool inventory and issued metrics.
+   */
+  public getBarcodePoolStatus(): {
+    remaining: number;
+    issuedCount: number;
+    isPreloadedPoolActive: boolean;
+    poolPreview: string[];
+  } {
+    return {
+      remaining: this.barcodePool.length,
+      issuedCount: this.issuedBarcodes.size,
+      isPreloadedPoolActive: this.barcodePool.length > 0,
+      poolPreview: this.barcodePool.slice(0, 5),
+    };
+  }
+
   public async generateLabel(articleData: any): Promise<any> {
+    const barcode = articleData.barcode_no || this.claimNextBarcode('SP');
     return {
       success: true,
-      barcode: articleData.barcode_no || 'EB468827991IN',
+      barcode,
       printableData: {
-        barcode_no: articleData.barcode_no,
-        service_type: articleData.article_type || 'Speed Post (Domestic)',
+        barcode_no: barcode,
+        service_type: articleData.article_type || 'SPEED POST (DOMESTIC)',
         recipient_name: articleData.receiver_name,
         recipient_mobile: articleData.receiver_mobile_no,
         recipient_address: `${articleData.receiver_add_line_1} ${articleData.receiver_add_line_2 || ''}`.trim(),
@@ -218,22 +314,19 @@ export class IndiaPostService {
         recipient_state: articleData.receiver_state || '',
         recipient_pin: articleData.receiver_pincode,
         sender_name: articleData.sender_name || 'Techno World Books Hub',
-        sender_mobile: articleData.sender_mobile_no || '9876543210',
-        sender_address: articleData.sender_add_line_1 || 'College Street Book Market',
+        sender_company: 'M/s Techno World (College Street)',
+        sender_mobile: articleData.sender_mobile_no || '9830000000',
+        sender_address: articleData.sender_add_line_1 || 'College Street Book Market (Bidhan Sarani)',
         sender_city: articleData.sender_city || 'Kolkata',
         sender_pin: articleData.sender_pincode || '700006',
-        weight: articleData.physical_weight,
+        weight: articleData.physical_weight || 450,
         dimensions: `${articleData.length || 20}x${articleData.breadth_diameter || 15}x${articleData.height || 3} cm`,
         booking_datetime: new Date().toLocaleString('en-IN'),
         booking_office_name: 'Kolkata GPO BNPL Centre',
         booking_office_pin: '700001',
+        bnpl_account_no: 'BNPL/KOL-GPO/2026/TW',
       },
     };
-  }
-
-  public generateBarcode(prefix = 'EB', suffix = 'IN'): string {
-    const random9 = Math.floor(100000000 + Math.random() * 900000000);
-    return `${prefix}${random9}${suffix}`;
   }
 
   private mockPincodeLookup(pincode: string): PostOfficeDetail[] {
@@ -377,7 +470,7 @@ export class IndiaPostService {
 
   private mockBookingProcess(articles: any[]): any {
     const bookedArticles = articles.map((art) => {
-      const barcode = art.barcode_no || this.generateBarcode();
+      const barcode = art.barcode_no || this.claimNextBarcode(art.article_type?.startsWith('BP') ? 'EB' : 'SP');
       return {
         article_number: barcode,
         status: 'ACCEPTED_FOR_DISPATCH',

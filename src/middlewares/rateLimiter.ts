@@ -31,3 +31,11 @@ export const adminLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+export const formSubmissionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: 'Too many submissions from this connection. Please wait 15 minutes before trying again.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

@@ -66,8 +66,8 @@ export const handleRazorpayWebhook = async (req: Request, res: Response): Promis
  */
 export const handleIndiaPostWebhook = async (req: Request, res: Response): Promise<void> => {
   try {
-    // 1. IP Whitelisting & Subnet Verification
-    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
+    // 1. IP Whitelisting Verification (using sanitized req.ip via trusted reverse proxy)
+    const clientIp = req.ip || '';
     const allowedIps = env.INDIAPOST_ALLOWED_IPS.split(',').map((ip) => ip.trim()).filter(Boolean);
 
     const isIpAllowed =
@@ -75,8 +75,7 @@ export const handleIndiaPostWebhook = async (req: Request, res: Response): Promi
       allowedIps.includes(clientIp) ||
       clientIp === '127.0.0.1' ||
       clientIp === '::1' ||
-      clientIp.startsWith('192.168.') ||
-      clientIp.startsWith('10.');
+      clientIp === '::ffff:127.0.0.1';
 
     if (!isIpAllowed) {
       logger.warn('Unauthorized India Post Webhook IP attempt: ' + clientIp);
@@ -84,10 +83,19 @@ export const handleIndiaPostWebhook = async (req: Request, res: Response): Promi
       return;
     }
 
-    // 2. Optional Webhook Secret Verification
+    // 2. Cryptographic Timing-Safe Secret Verification (if secret configured)
     if (env.INDIAPOST_WEBHOOK_SECRET) {
-      const secretHeader = req.headers['x-indiapost-secret'] || req.headers['x-webhook-secret'];
-      if (secretHeader !== env.INDIAPOST_WEBHOOK_SECRET) {
+      const secretHeader = (req.headers['x-indiapost-secret'] || req.headers['x-webhook-secret']) as string;
+      const expectedSecret = env.INDIAPOST_WEBHOOK_SECRET;
+      if (!secretHeader || typeof secretHeader !== 'string') {
+        logger.warn('Missing or invalid India Post Webhook Secret Header');
+        res.status(401).json({ success: false, message: 'Invalid webhook authentication secret' });
+        return;
+      }
+
+      const expectedBuf = Buffer.from(expectedSecret, 'utf8');
+      const providedBuf = Buffer.from(secretHeader, 'utf8');
+      if (expectedBuf.length !== providedBuf.length || !crypto.timingSafeEqual(expectedBuf, providedBuf)) {
         logger.warn('Invalid India Post Webhook Secret Header');
         res.status(401).json({ success: false, message: 'Invalid webhook authentication secret' });
         return;

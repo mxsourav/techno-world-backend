@@ -343,8 +343,8 @@ model Order {
   @@index([status])
   @@index([orderNumber])
   @@index([parentOrderId])
-  @@index([addressId], map: "Order_addressId_fkey")
-  @@index([promotionId], map: "Order_promotionId_fkey")
+  @@index([addressId])
+  @@index([promotionId])
 }
 
 model PaymentWebhookEvent {
@@ -453,7 +453,7 @@ model WishlistItem {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, bookId])
-  @@index([bookId], map: "WishlistItem_bookId_fkey")
+  @@index([bookId])
 }
 
 model CartItem {
@@ -469,7 +469,7 @@ model CartItem {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, bookId])
-  @@index([bookId], map: "CartItem_bookId_fkey")
+  @@index([bookId])
 }
 
 // ============================================================
@@ -623,7 +623,7 @@ model Promotion {
 
   @@index([code])
   @@index([categoryId])
-  @@index([campaignId], map: "Promotion_campaignId_fkey")
+  @@index([campaignId])
 }
 
 model PromotionUsage {

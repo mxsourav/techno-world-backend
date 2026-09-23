@@ -3,9 +3,13 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ============================================================
+// USER & AUTHENTICATION
+// ============================================================
 
 model User {
   id                  String               @id @default(uuid())
@@ -19,13 +23,14 @@ model User {
   phone               String?
   technoPoints        Int                  @default(0)
   pendingPoints       Int                  @default(0)
-  technoWallet        Float                @default(0)
+  technoWallet        Decimal              @default(0) @db.Decimal(12, 2)
   tokenVersion        Int                  @default(1)
   failedLogins        Int                  @default(0)
   lockedUntil         DateTime?
   lastLoginAt         DateTime?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
+
   activityLogs        ActivityLog[]
   addresses           Address[]
   cartItems           CartItem[]
@@ -48,11 +53,16 @@ model Session {
   ipAddress    String?
   expiresAt    DateTime
   createdAt    DateTime @default(now())
+
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([refreshToken])
 }
+
+// ============================================================
+// BOOKS
+// ============================================================
 
 model Book {
   id                     String             @id @default(uuid())
@@ -65,15 +75,18 @@ model Book {
   language               String             @default("English")
   description            String             @db.Text
   shortDescription       String?            @db.Text
-  price                  Float
-  mrp                    Float
-  costPrice              Float?
-  discount               Float              @default(0)
+
+  price                  Decimal            @db.Decimal(12, 2)
+  mrp                    Decimal            @db.Decimal(12, 2)
+  costPrice              Decimal?           @db.Decimal(12, 2)
+  discount               Decimal            @default(0) @db.Decimal(5, 2)
+
   stock                  Int                @default(0)
   reservedStock          Int                @default(0)
   reorderLevel           Int                @default(20)
   warehouse              String?            @default("Main Warehouse")
   lifetimeSales          Int                @default(0)
+
   weight                 Float?
   dimensions             String?
   pages                  Int?
@@ -88,35 +101,43 @@ model Book {
   volume                 String?
   sku                    String?            @unique
   bookCode               String?            @unique
+
   university             String?
   semester               String?
   course                 String?
   examination            String?
   classStandard          String?
+
   coverUrl               String?
   coverPublicId          String?
   galleryUrls            String?            @default("[]")
   previewPdfUrl          String?
   previewPdfPublicId     String?
   previewPdfResourceType String?            @default("raw")
+
   status                 BookStatus         @default(DRAFT)
   visibility             Boolean            @default(true)
   isFeatured             Boolean            @default(false)
   isTrending             Boolean            @default(false)
   isNewArrival           Boolean            @default(false)
   isBestseller           Boolean            @default(false)
+
   seoTitle               String?
   seoDescription         String?
   seoKeywords            String?            @default("[]")
   tags                   String?            @default("[]")
+
   categoryId             String?
   bookTypeId             String?
   publisherId            String?
+
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
+
   bookType               BookType?          @relation(fields: [bookTypeId], references: [id])
   category               Category?          @relation(fields: [categoryId], references: [id])
   publisher              Publisher?         @relation(fields: [publisherId], references: [id])
+
   cartItems              CartItem[]
   inventoryHistory       InventoryHistory[]
   orderItems             OrderItem[]
@@ -124,6 +145,7 @@ model Book {
   questions              BookQuestion[]
   wishlistItems          WishlistItem[]
   images                 BookImage[]
+
   authors                Author[]           @relation("AuthorToBook")
   subjects               Subject[]          @relation("BookToSubject")
 
@@ -146,8 +168,10 @@ model Category {
   seoTitle       String?
   seoDescription String?
   parentId       String?
+
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
+
   books          Book[]
   parent         Category?   @relation("CategoryTree", fields: [parentId], references: [id])
   children       Category[]  @relation("CategoryTree")
@@ -165,6 +189,7 @@ model BookType {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
   books       Book[]
 
   @@index([slug])
@@ -178,6 +203,7 @@ model Subject {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
   books       Book[]   @relation("BookToSubject")
 
   @@index([slug])
@@ -190,9 +216,10 @@ model Author {
   bio         String?  @db.Text
   imageUrl    String?
   socialLinks String?
+  biography   String?  @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  biography   String?  @db.Text
+
   books       Book[]   @relation("AuthorToBook")
 
   @@index([slug])
@@ -210,10 +237,15 @@ model Publisher {
   address      String?  @db.Text
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
   books        Book[]
 
   @@index([slug])
 }
+
+// ============================================================
+// ADDRESS
+// ============================================================
 
 model Address {
   id           String   @id @default(uuid())
@@ -233,59 +265,78 @@ model Address {
   isDefault    Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   orders       Order[]
 
   @@index([userId])
 }
 
+// ============================================================
+// ORDERS & PAYMENTS
+// ============================================================
+
 model Order {
   id                 String        @id @default(uuid())
   orderNumber        String        @unique
   userId             String
   addressId          String?
+
   status             OrderStatus   @default(PENDING)
   paymentStatus      PaymentStatus @default(PENDING)
+
   paymentId          String?
   paymentMethod      String?
   paymentGateway     String?       @default("RAZORPAY")
 
   // Razorpay specific fields
-  razorpayOrderId   String?     @unique
-  razorpayPaymentId String?     @unique
-  razorpaySignature String?
+  razorpayOrderId    String?       @unique
+  razorpayPaymentId  String?       @unique
+  razorpaySignature  String?
   razorpayVerifiedAt DateTime?
 
-  subtotal           Float
-  shippingCharge     Float         @default(0)
-  taxAmount          Float         @default(0)
-  discountAmount     Float         @default(0)
-  totalAmount        Float
+  subtotal           Decimal       @db.Decimal(12, 2)
+  shippingCharge     Decimal       @default(0) @db.Decimal(12, 2)
+  taxAmount          Decimal       @default(0) @db.Decimal(12, 2)
+  discountAmount     Decimal       @default(0) @db.Decimal(12, 2)
+  totalAmount        Decimal       @db.Decimal(12, 2)
+
   promotionId        String?
+
   trackingNumber     String?
   shippingCarrier    String?
   shippingMethod     String?
+
   customerEmail      String?
+
   pickupName         String?
   pickupPhone        String?
   pickupEmail        String?
   pickupSlots        String?       @db.Text
   selectedPickupSlot String?
   pickupStatus       String?       @default("NONE")
+
   notes              String?       @db.Text
+
   invoiceNumber      String?       @unique
   invoiceGeneratedAt DateTime?
+
   parentOrderId      String?
   isMerged           Boolean       @default(false)
   mergedAt           DateTime?
-  shippingRefunded   Float         @default(0)
+
+  shippingRefunded   Decimal       @default(0) @db.Decimal(12, 2)
+
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
+
   address            Address?      @relation(fields: [addressId], references: [id])
   promotion          Promotion?    @relation(fields: [promotionId], references: [id])
   user               User          @relation(fields: [userId], references: [id])
+
   parentOrder        Order?        @relation("OrderHierarchy", fields: [parentOrderId], references: [id])
   childOrders        Order[]       @relation("OrderHierarchy")
+
   items              OrderItem[]
 
   @@index([userId])
@@ -296,19 +347,21 @@ model Order {
   @@index([promotionId], map: "Order_promotionId_fkey")
 }
 
-// New: idempotent webhook processing + audit trail
 model PaymentWebhookEvent {
-  id          String   @id @default(uuid())
-  eventId     String   @unique   // Razorpay's x-razorpay-event-id header value
-  eventType   String              // e.g. "payment.captured", "payment.failed", "refund.processed"
+  id                String   @id @default(uuid())
+  eventId           String   @unique
+  eventType         String
+
   razorpayOrderId   String?
   razorpayPaymentId String?
-  orderId     String?             // your internal Order.id, once resolved
-  payload     String   @db.Text   // raw JSON body, for debugging/disputes
-  signatureValid Boolean @default(false)
-  processed   Boolean  @default(false)
-  processingError String? @db.Text
-  createdAt   DateTime @default(now())
+  orderId           String?
+
+  payload           String   @db.Text
+  signatureValid    Boolean  @default(false)
+  processed         Boolean  @default(false)
+  processingError   String?  @db.Text
+
+  createdAt         DateTime @default(now())
 
   @@index([orderId])
   @@index([eventType])
@@ -320,8 +373,9 @@ model OrderItem {
   orderId         String
   bookId          String
   quantity        Int
-  priceAtPurchase Float
+  priceAtPurchase Decimal  @db.Decimal(12, 2)
   createdAt       DateTime @default(now())
+
   book            Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
   order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -329,19 +383,28 @@ model OrderItem {
   @@index([bookId])
 }
 
+// ============================================================
+// REVIEWS & QUESTIONS
+// ============================================================
+
 model Review {
   id         String   @id @default(uuid())
   userId     String?
   bookId     String
+
   userName   String?
   userEmail  String?
+
   rating     Int
   title      String?
   content    String   @db.Text
+
   isVerified Boolean  @default(false)
   isApproved Boolean  @default(true)
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
   book       Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
   user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -353,16 +416,22 @@ model BookQuestion {
   id         String    @id @default(uuid())
   bookId     String
   userId     String?
+
   userName   String?
   userEmail  String?
+
   question   String    @db.Text
   answer     String?   @db.Text
+
   answeredBy String?
   answeredAt DateTime?
+
   status     String    @default("PENDING")
   isApproved Boolean   @default(true)
+
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+
   book       Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
   user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -370,11 +439,16 @@ model BookQuestion {
   @@index([status])
 }
 
+// ============================================================
+// CART & WISHLIST
+// ============================================================
+
 model WishlistItem {
   id        String   @id @default(uuid())
   userId    String
   bookId    String
   createdAt DateTime @default(now())
+
   book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -387,14 +461,20 @@ model CartItem {
   userId    String
   bookId    String
   quantity  Int      @default(1)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, bookId])
   @@index([bookId], map: "CartItem_bookId_fkey")
 }
+
+// ============================================================
+// CMS
+// ============================================================
 
 model HomepageCMS {
   id         String   @id @default(uuid())
@@ -403,6 +483,7 @@ model HomepageCMS {
   isEnabled  Boolean  @default(true)
   sortOrder  Int      @default(0)
   configData String   @db.Text
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -417,6 +498,7 @@ model Media {
   folder       String    @default("/")
   type         MediaType @default(IMAGE)
   altText      String?
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -429,12 +511,17 @@ model Settings {
   key       String   @unique
   value     String   @db.Text
   group     String   @default("general")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([group])
   @@index([key])
 }
+
+// ============================================================
+// ACTIVITY & NOTIFICATIONS
+// ============================================================
 
 model ActivityLog {
   id        String         @id @default(uuid())
@@ -445,7 +532,9 @@ model ActivityLog {
   details   String?        @db.Text
   ipAddress String?
   userAgent String?
+
   createdAt DateTime       @default(now())
+
   user      User?          @relation(fields: [userId], references: [id])
 
   @@index([userId])
@@ -462,12 +551,18 @@ model Notification {
   isRead    Boolean  @default(false)
   type      String   @default("info")
   link      String?
+
   createdAt DateTime @default(now())
+
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([isRead])
 }
+
+// ============================================================
+// CAMPAIGNS & PROMOTIONS
+// ============================================================
 
 model Campaign {
   id             String      @id @default(uuid())
@@ -476,37 +571,51 @@ model Campaign {
   status         String      @default("DRAFT")
   startDate      DateTime?
   endDate        DateTime?
-  budget         Float?
+
+  budget         Decimal?    @db.Decimal(12, 2)
+
   priority       Int         @default(0)
   marketingNotes String?
+
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
+
   promotions     Promotion[]
 }
 
 model Promotion {
   id                String           @id @default(uuid())
   campaignId        String?
+
   name              String
   code              String?          @unique
   description       String?          @db.Text
+
   promotionType     String           @default("UNIVERSAL")
   discountType      String           @default("PERCENTAGE")
-  discountValue     Float            @default(0)
+  discountValue     Decimal          @default(0) @db.Decimal(12, 2)
+
   isTemplate        Boolean          @default(false)
   status            String           @default("DRAFT")
+
   validFrom         DateTime?
   validUntil        DateTime?
+
   priority          Int              @default(0)
   allowCombination  Boolean          @default(false)
   autoApply         Boolean          @default(false)
+
   rules             String           @default("{}") @db.Text
+
   usageLimit        Int?
   usageLimitPerUser Int              @default(1)
   usedCount         Int              @default(0)
+
   categoryId        String?
+
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
+
   orders            Order[]
   campaign          Campaign?        @relation(fields: [campaignId], references: [id])
   category          Category?        @relation(fields: [categoryId], references: [id])
@@ -522,7 +631,9 @@ model PromotionUsage {
   promotionId String
   userId      String
   orderId     String?
+
   usedAt      DateTime  @default(now())
+
   promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
 
   @@unique([promotionId, userId, orderId])
@@ -530,18 +641,28 @@ model PromotionUsage {
   @@index([userId])
 }
 
+// ============================================================
+// INVENTORY
+// ============================================================
+
 model InventoryHistory {
   id        String   @id @default(uuid())
   bookId    String
   change    Int
   reason    String
   reference String?
+
   createdAt DateTime @default(now())
+
   book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
 
   @@index([bookId])
   @@index([createdAt])
 }
+
+// ============================================================
+// PAYMENT METHODS
+// ============================================================
 
 model SavedPaymentMethod {
   id         String   @id @default(uuid())
@@ -551,23 +672,33 @@ model SavedPaymentMethod {
   maskedData String?
   holderName String?
   isDefault  Boolean  @default(false)
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
+// ============================================================
+// POINTS & WALLET
+// ============================================================
+
 model PointTransaction {
   id          String   @id @default(uuid())
   userId      String
   orderId     String?
+
   points      Int
   type        String
   status      String   @default("CREDITED")
+
   description String?  @db.Text
   expiresAt   DateTime
+
   createdAt   DateTime @default(now())
+
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -577,23 +708,37 @@ model WalletTransaction {
   id          String   @id @default(uuid())
   userId      String
   orderId     String?
-  amount      Float
-  type        String // "CREDIT" | "DEBIT"
+
+  amount      Decimal  @db.Decimal(12, 2)
+
+  type        String
   status      String   @default("COMPLETED")
+
   description String?  @db.Text
+
   createdAt   DateTime @default(now())
+
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([orderId])
 }
 
+// ============================================================
+// SYSTEM SETTINGS
+// ============================================================
+
 model SystemSetting {
   id        String   @id @default(uuid())
   key       String   @unique
   value     String   @db.Text
+
   updatedAt DateTime @updatedAt
 }
+
+// ============================================================
+// EMAIL
+// ============================================================
 
 model EmailLog {
   id           String   @id @default(uuid())
@@ -601,17 +746,223 @@ model EmailLog {
   senderEmail  String
   senderName   String?
   subject      String
+
   message      String   @db.Text
-  htmlContent  String?  @db.LongText
+  htmlContent  String?  @db.Text
+
   orderNumber  String?
+
   provider     String   @default("SMTP")
   status       String   @default("SENT")
+
   errorMessage String?  @db.Text
+
   createdAt    DateTime @default(now())
 
   @@index([toEmail])
   @@index([orderNumber])
 }
+
+// ============================================================
+// SEARCH
+// ============================================================
+
+model SearchLog {
+  id             String   @id @default(uuid())
+  query          String
+  userId         String?
+  resultsCount   Int      @default(0)
+  source         String?  @default("instant")
+  matchedBookIds String?  @db.Text
+
+  createdAt      DateTime @default(now())
+
+  @@index([query])
+  @@index([createdAt])
+}
+
+// ============================================================
+// BLOG
+// ============================================================
+
+model BlogPost {
+  id              String    @id @default(uuid())
+  title           String
+  slug            String    @unique
+  excerpt         String?   @db.Text
+  content         String    @db.Text
+
+  category        String
+  thumbnailUrl    String?   @db.Text
+
+  readTime        String?   @default("5 min read")
+  hue             Int?      @default(160)
+  relatedCategory String?
+  relatedBookIds  Json?
+
+  scheduledAt     DateTime?
+  expiresAt       DateTime?
+
+  isActive        Boolean   @default(true)
+  views           Int       @default(0)
+
+  authorName      String?   @default("Techno World Editorial")
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+  @@index([scheduledAt])
+  @@index([expiresAt])
+}
+
+// ============================================================
+// CONTACT
+// ============================================================
+
+model ContactMessage {
+  id          String    @id @default(uuid())
+  name        String
+  email       String
+  orderNumber String?
+
+  message     String    @db.Text
+
+  status      String    @default("UNREAD")
+
+  reply       String?   @db.Text
+  repliedAt   DateTime?
+
+  ipAddress   String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================
+// BOOK IMAGES
+// ============================================================
+
+model BookImage {
+  id           String   @id @default(uuid())
+  bookId       String
+
+  publicId     String
+  secureUrl    String   @db.Text
+  resourceType String   @default("image")
+
+  format       String?
+  width        Int?
+  height       Int?
+  bytes        Int?
+
+  sortOrder    Int      @default(0)
+  isCover      Boolean  @default(false)
+
+  altText      String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  book         Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@index([sortOrder])
+}
+
+// ============================================================
+// SITE MEDIA
+// ============================================================
+
+enum SiteMediaType {
+  BANNER
+  PROMOTIONAL
+  FIXED
+  VIDEO
+}
+
+model SiteMedia {
+  id           String        @id @default(uuid())
+  type         SiteMediaType @default(BANNER)
+
+  name         String
+  publicId     String        @unique
+  secureUrl    String        @db.Text
+
+  resourceType String        @default("image")
+  format       String?
+
+  width        Int?
+  height       Int?
+  bytes        Int?
+  duration     Float?
+
+  isActive     Boolean       @default(true)
+  sortOrder    Int           @default(0)
+
+  altText      String?
+  targetUrl    String?
+  metadata     String?       @db.Text
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([type])
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+// ============================================================
+// HERO CONFIG
+// ============================================================
+
+model HeroConfig {
+  id                         String    @id @default("default")
+  hero_book_cover_url        String?   @db.Text
+  hero_book_cover_updated_at DateTime?
+  hero_book_model            String?   @default("academic")
+
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+}
+
+// ============================================================
+// BOOK REQUESTS
+// ============================================================
+
+model BookRequest {
+  id         String   @id @default(uuid())
+
+  title      String
+  author     String
+  email      String
+  phone      String?
+
+  publisher  String?
+  edition    String?
+
+  notes      String?  @db.Text
+  imageUrl   String?  @db.Text
+
+  status     String   @default("PENDING")
+  adminNotes String?  @db.Text
+
+  ipAddress  String?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
 
 enum Role {
   SUPER_ADMIN
@@ -660,143 +1011,4 @@ enum ActivityAction {
   IMPORT
   EXPORT
   SETTINGS_CHANGE
-}
-
-model SearchLog {
-  id             String   @id @default(uuid())
-  query          String
-  userId         String?
-  resultsCount   Int      @default(0)
-  source         String?  @default("instant")
-  matchedBookIds String?  @db.Text
-  createdAt      DateTime @default(now())
-
-  @@index([query])
-  @@index([createdAt])
-}
-
-model BlogPost {
-  id              String    @id @default(uuid())
-  title           String
-  slug            String    @unique
-  excerpt         String?   @db.Text
-  content         String    @db.Text
-  category        String
-  thumbnailUrl    String?   @db.Text
-  readTime        String?   @default("5 min read")
-  hue             Int?      @default(160)
-  relatedCategory String?
-  relatedBookIds  Json?
-  scheduledAt     DateTime?
-  expiresAt       DateTime?
-  isActive        Boolean   @default(true)
-  views           Int       @default(0)
-  authorName      String?   @default("Techno World Editorial")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([category])
-  @@index([isActive])
-  @@index([scheduledAt])
-  @@index([expiresAt])
-}
-
-model ContactMessage {
-  id          String    @id @default(uuid())
-  name        String
-  email       String
-  orderNumber String?
-  message     String    @db.Text
-  status      String    @default("UNREAD")
-  reply       String?   @db.Text
-  repliedAt   DateTime?
-  ipAddress   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@index([status])
-  @@index([createdAt])
-}
-
-model BookImage {
-  id           String   @id @default(uuid())
-  bookId       String
-  publicId     String
-  secureUrl    String   @db.Text
-  resourceType String   @default("image")
-  format       String?
-  width        Int?
-  height       Int?
-  bytes        Int?
-  sortOrder    Int      @default(0)
-  isCover      Boolean  @default(false)
-  altText      String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
-
-  @@index([bookId])
-  @@index([sortOrder])
-}
-
-enum SiteMediaType {
-  BANNER
-  PROMOTIONAL
-  FIXED
-  VIDEO
-}
-
-model SiteMedia {
-  id           String        @id @default(uuid())
-  type         SiteMediaType @default(BANNER)
-  name         String
-  publicId     String        @unique
-  secureUrl    String        @db.Text
-  resourceType String        @default("image")
-  format       String?
-  width        Int?
-  height       Int?
-  bytes        Int?
-  duration     Float?
-  isActive     Boolean       @default(true)
-  sortOrder    Int           @default(0)
-  altText      String?
-  targetUrl    String?
-  metadata     String?       @db.Text
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-
-  @@index([type])
-  @@index([isActive])
-  @@index([sortOrder])
-}
-
-model HeroConfig {
-  id                         String    @id @default("default")
-  hero_book_cover_url        String?   @db.Text
-  hero_book_cover_updated_at DateTime?
-  hero_book_model            String?   @default("academic")
-  createdAt                  DateTime  @default(now())
-  updatedAt                  DateTime  @updatedAt
-}
-
-model BookRequest {
-  id         String   @id @default(uuid())
-  title      String
-  author     String
-  email      String
-  phone      String?
-  publisher  String?
-  edition    String?
-  notes      String?  @db.Text
-  imageUrl   String?  @db.Text
-  status     String   @default("PENDING")
-  adminNotes String?  @db.Text
-  ipAddress  String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([status])
-  @@index([createdAt])
 }

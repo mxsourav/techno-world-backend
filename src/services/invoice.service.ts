@@ -19,7 +19,6 @@ function getBlackLogoPath(): string | null {
   return candidates.find(p => fs.existsSync(p)) || null;
 }
 
-
 // ─── Seller Details ─────────────────────────────────────────────
 const SELLER = {
   name: 'TECHNO WORLD BOOKS',
@@ -71,8 +70,10 @@ export async function assignInvoiceNumber(orderId: string): Promise<string> {
 }
 
 // ─── Helpers ────────────────────────────────────────────────────
+// Uses clean 'Rs. ' prefix instead of raw '₹' to prevent PDFKit WinAnsiEncoding glitches (which renders '¹')
 function formatINR(amount: number): string {
-  return '₹' + amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const val = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
+  return 'Rs. ' + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function formatDate(d: Date | string): string {
@@ -88,7 +89,258 @@ function getShippingLabel(method?: string | null): string {
   }
 }
 
-// ─── PDF Generation ─────────────────────────────────────────────
+// ─── Render Clean Multipage Invoice Sheet ───────────────────────
+function renderInvoiceSheet(doc: PDFKit.PDFDocument, invoiceData: {
+  invoiceNumber: string;
+  isConsolidated: boolean;
+  orderNumbers: string[];
+  createdAt: Date | string;
+  paymentMethod: string;
+  paymentStatus: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  isPickup: boolean;
+  pickupSlot?: string | null;
+  deliveryAddress?: string;
+  items: Array<{
+    title: string;
+    authors?: string;
+    sku: string;
+    quantity: number;
+    priceAtPurchase: number;
+    weightGrams?: number;
+    orderNumber?: string;
+  }>;
+  subtotal: number;
+  shippingCharge: number;
+  discountAmount: number;
+  totalAmount: number;
+  shippingMethod: string;
+}) {
+  const pageW = doc.page.width - 80; // 40 margin each side
+  const leftX = 40;
+  const rightX = doc.page.width - 40;
+  let y = 40;
+
+  // ─── HEADER ──────────────────────────────────────────────
+  const blackLogo = getBlackLogoPath();
+  if (blackLogo) {
+    try {
+      doc.image(blackLogo, leftX, y, { width: 140 });
+      y += 34;
+    } catch {
+      doc.fontSize(16).font('Helvetica-Bold').fillColor('#0f172a').text(SELLER.name, leftX, y);
+      y += 18;
+    }
+  } else {
+    doc.fontSize(16).font('Helvetica-Bold').fillColor('#0f172a').text(SELLER.name, leftX, y);
+    y += 18;
+  }
+  doc.fontSize(8).font('Helvetica').fillColor('#64748b').text(SELLER.tagline, leftX, y);
+  y += 12;
+  doc.fontSize(7.5).fillColor('#475569').text(SELLER.address.replace('\n', ', '), leftX, y, { width: 280 });
+  y += 18;
+  doc.text(`WhatsApp Support: ${SELLER.phone}`, leftX, y);
+
+  // Invoice title (right side)
+  const titleText = invoiceData.isConsolidated ? 'CONSOLIDATED TAX INVOICE' : 'TAX INVOICE';
+  doc.fontSize(14).font('Helvetica-Bold').fillColor('#0f172a')
+     .text(titleText, rightX - 220, 40, { width: 220, align: 'right' });
+  doc.fontSize(10).font('Helvetica-Bold').fillColor('#047857')
+     .text(`${invoiceData.invoiceNumber}`, rightX - 220, 58, { width: 220, align: 'right' });
+  doc.fontSize(8).font('Helvetica').fillColor('#64748b')
+     .text(`Date: ${formatDate(invoiceData.createdAt)}`, rightX - 220, 73, { width: 220, align: 'right' });
+
+  const orderDisplay = invoiceData.orderNumbers.length > 1
+    ? `Orders (${invoiceData.orderNumbers.length}): #${invoiceData.orderNumbers[0]} +${invoiceData.orderNumbers.length - 1} more`
+    : `Order: #${invoiceData.orderNumbers[0] || 'N/A'}`;
+  doc.text(orderDisplay, rightX - 240, 85, { width: 240, align: 'right' });
+
+  // Payment badge
+  const payMethod = (invoiceData.paymentMethod || 'PREPAID').toUpperCase();
+  const payStatus = invoiceData.paymentStatus === 'PAID' ? 'PAID' : invoiceData.paymentStatus || 'PENDING';
+  doc.fontSize(8).font('Helvetica-Bold').fillColor('#065f46')
+     .text(`${payMethod} · ${payStatus}`, rightX - 220, 98, { width: 220, align: 'right' });
+
+  // ─── SEPARATOR ───────────────────────────────────────────
+  y += 20;
+  doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#e2e8f0').lineWidth(1).stroke();
+  y += 14;
+
+  // ─── CUSTOMER INFO ───────────────────────────────────────
+  doc.fontSize(8).font('Helvetica-Bold').fillColor('#1e293b').text('BILL TO:', leftX, y);
+  y += 12;
+  doc.fontSize(9).font('Helvetica-Bold').fillColor('#0f172a').text(invoiceData.customerName, leftX, y);
+  y += 12;
+  doc.fontSize(8).font('Helvetica').fillColor('#475569')
+     .text(`Phone: ${invoiceData.customerPhone} | Email: ${invoiceData.customerEmail}`, leftX, y);
+  y += 11;
+
+  if (invoiceData.isPickup) {
+    doc.text(`Pickup: College Street Dispatch Desk`, leftX, y);
+    if (invoiceData.pickupSlot) {
+      y += 11;
+      doc.text(`Slot: ${invoiceData.pickupSlot}`, leftX, y);
+    }
+  } else if (invoiceData.deliveryAddress) {
+    doc.text(`Deliver to: ${invoiceData.deliveryAddress}`, leftX, y, { width: pageW });
+  }
+
+  // ─── SEPARATOR ───────────────────────────────────────────
+  y += 16;
+  doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#e2e8f0').lineWidth(1).stroke();
+  y += 10;
+
+  // ─── ITEMS TABLE ─────────────────────────────────────────
+  const colX = {
+    num: leftX,
+    desc: leftX + 24,
+    sku: leftX + 245,
+    hsn: leftX + 315,
+    qty: leftX + 355,
+    rate: leftX + 390,
+    total: rightX - 65
+  };
+
+  const drawTableHeader = (atY: number) => {
+    doc.rect(leftX, atY, pageW, 16).fill('#f8fafc');
+    doc.fontSize(7).font('Helvetica-Bold').fillColor('#475569');
+    doc.text('#', colX.num + 3, atY + 4);
+    doc.text('DESCRIPTION', colX.desc, atY + 4);
+    doc.text('SKU', colX.sku, atY + 4);
+    doc.text('HSN', colX.hsn, atY + 4);
+    doc.text('QTY', colX.qty, atY + 4);
+    doc.text('RATE', colX.rate, atY + 4);
+    doc.text('TOTAL', colX.total, atY + 4, { width: 60, align: 'right' });
+    return atY + 18;
+  };
+
+  y = drawTableHeader(y);
+
+  let totalConsignmentWeightGrams = 0;
+
+  invoiceData.items.forEach((item, idx) => {
+    const title = item.title || 'Book';
+    const authors = item.authors || '';
+    const sku = item.sku || '—';
+    const qty = item.quantity || 1;
+    const rate = item.priceAtPurchase || 0;
+    const total = qty * rate;
+    const unitWeightGrams = item.weightGrams || 450;
+    totalConsignmentWeightGrams += unitWeightGrams * qty;
+
+    // Check if we need to paginate to a new page
+    if (y > 690) {
+      doc.addPage({ size: 'A4', margin: 40 });
+      y = 40;
+      y = drawTableHeader(y);
+    }
+
+    doc.fontSize(7.5).font('Helvetica').fillColor('#0f172a');
+    doc.text(`${idx + 1}`, colX.num + 3, y + 2);
+    doc.font('Helvetica-Bold').text(title, colX.desc, y + 2, { width: 215 });
+    const titleH = doc.heightOfString(title, { width: 215 });
+
+    if (authors) {
+      doc.fontSize(6.5).font('Helvetica').fillColor('#64748b')
+         .text(authors, colX.desc, y + 2 + titleH, { width: 215 });
+    }
+
+    doc.fontSize(7).font('Helvetica').fillColor('#475569');
+    doc.text(sku, colX.sku, y + 2, { width: 65 });
+    doc.text(SELLER.hsn, colX.hsn, y + 2);
+    doc.text(`${qty}`, colX.qty, y + 2);
+    doc.text(formatINR(rate), colX.rate, y + 2);
+    doc.font('Helvetica-Bold').fillColor('#0f172a')
+       .text(formatINR(total), colX.total, y + 2, { width: 60, align: 'right' });
+
+    const rowH = Math.max(titleH + (authors ? 9 : 0) + 4, 17);
+    y += rowH;
+
+    doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#f1f5f9').lineWidth(0.5).stroke();
+    y += 3;
+  });
+
+  // Check if totals fit on this page
+  if (y > 640) {
+    doc.addPage({ size: 'A4', margin: 40 });
+    y = 40;
+  }
+
+  // ─── TOTALS ──────────────────────────────────────────────
+  y += 10;
+  const totalsX = rightX - 220;
+  const totalsValX = rightX - 65;
+
+  doc.fontSize(8).font('Helvetica').fillColor('#475569');
+  doc.text('Subtotal:', totalsX, y);
+  doc.text(formatINR(invoiceData.subtotal), totalsValX, y, { width: 65, align: 'right' });
+  y += 14;
+
+  const shipLabel = invoiceData.shippingCharge === 0 ? 'FREE' : formatINR(invoiceData.shippingCharge);
+  doc.text(`Shipping (SAC ${SELLER.sacShipping}):`, totalsX, y);
+  doc.font('Helvetica-Bold').fillColor(invoiceData.shippingCharge === 0 ? '#047857' : '#475569')
+     .text(shipLabel, totalsValX, y, { width: 65, align: 'right' });
+  y += 14;
+
+  if (invoiceData.discountAmount > 0) {
+    doc.font('Helvetica').fillColor('#047857');
+    doc.text('Discount:', totalsX, y);
+    doc.text(`- ${formatINR(invoiceData.discountAmount)}`, totalsValX, y, { width: 65, align: 'right' });
+    y += 14;
+  }
+
+  doc.font('Helvetica').fillColor('#475569');
+  doc.text(`Tax on Books (HSN ${SELLER.hsn} - 0%):`, totalsX, y);
+  doc.text('Rs. 0.00', totalsValX, y, { width: 65, align: 'right' });
+  y += 16;
+
+  // Grand Total
+  doc.moveTo(totalsX, y).lineTo(rightX, y).strokeColor('#cbd5e1').lineWidth(1).stroke();
+  y += 6;
+  doc.fontSize(11).font('Helvetica-Bold').fillColor('#0f172a');
+  doc.text('GRAND TOTAL:', totalsX, y);
+  doc.text(formatINR(invoiceData.totalAmount), totalsValX - 5, y, { width: 70, align: 'right' });
+  y += 20;
+
+  // ─── DELIVERY METHOD & WEIGHT ────────────────────────────
+  doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
+  y += 10;
+  const totalWeightKg = (totalConsignmentWeightGrams / 1000).toFixed(2);
+  const totalWeightStr = `${totalWeightKg} kg (${totalConsignmentWeightGrams}g)`;
+
+  doc.fontSize(8).font('Helvetica-Bold').fillColor('#1e293b')
+     .text(`Delivery Method: ${getShippingLabel(invoiceData.shippingMethod)}  |  Total Parcel Weight: ${totalWeightStr}`, leftX, y);
+  y += 14;
+
+  if (invoiceData.orderNumbers.length > 1) {
+    doc.fontSize(7).font('Helvetica').fillColor('#4338ca')
+       .text(`Consolidated Consignment Package for ${invoiceData.orderNumbers.length} merged orders: ${invoiceData.orderNumbers.map(n => '#' + n).join(', ')}`, leftX, y, { width: pageW });
+    y += 14;
+  }
+
+  // ─── FOOTER NOTICE ───────────────────────────────────────
+  doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#cbd5e1').lineWidth(0.5).dash(3, { space: 3 }).stroke();
+  doc.undash();
+  y += 10;
+
+  doc.fontSize(6.5).font('Helvetica').fillColor('#94a3b8')
+     .text(
+       'Note: Printed books (HSN 4901) are exempt from GST under Indian tax law. ' +
+       'This is a computer-generated invoice and does not require a physical signature.',
+       leftX, y, { width: pageW, lineGap: 2 }
+     );
+  y += 20;
+  doc.text(
+    'Techno World Books Online and the College Street offline retail bookstore operate under the same parent brand ' +
+    'trademark, but are managed as independent business entities with distinct inventory and accounting. ' +
+    'Offline counter exchanges or retail returns are strictly prohibited.',
+    leftX, y, { width: pageW, lineGap: 2 }
+  );
+}
+
+// ─── Generate Invoice for a Single Order (With Child Orders Merged) ──
 export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
   const order = await prisma.order.findFirst({
     where: { OR: [{ id: orderId }, { orderNumber: orderId }] },
@@ -97,8 +349,22 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
         include: {
           book: {
             select: {
-              id: true, title: true, sku: true, isbn13: true, isbn10: true,
+              id: true, title: true, sku: true, isbn13: true, isbn10: true, weight: true, pages: true,
               authors: { select: { name: true } }
+            }
+          }
+        }
+      },
+      childOrders: {
+        include: {
+          items: {
+            include: {
+              book: {
+                select: {
+                  id: true, title: true, sku: true, isbn13: true, isbn10: true, weight: true, pages: true,
+                  authors: { select: { name: true } }
+                }
+              }
             }
           }
         }
@@ -113,6 +379,54 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
   // Ensure invoice number is assigned
   const invoiceNumber = order.invoiceNumber || await assignInvoiceNumber(order.id);
 
+  // Gather ALL items (parent order + any merged child orders)
+  const allRawItems: any[] = [...(order.items || [])];
+  const allOrderNumbers: string[] = [order.orderNumber];
+
+  if (Array.isArray(order.childOrders) && order.childOrders.length > 0) {
+    for (const child of order.childOrders) {
+      allOrderNumbers.push(child.orderNumber);
+      if (Array.isArray(child.items)) {
+        allRawItems.push(...child.items);
+      }
+    }
+  }
+
+  const items = allRawItems.map((item: any) => {
+    const bk = item.book || {};
+    let unitWeightGrams = 450;
+    if (bk.weight && typeof bk.weight === 'number' && bk.weight > 0) {
+      unitWeightGrams = bk.weight < 10 ? Math.round(bk.weight * 1000) : Math.round(bk.weight);
+    } else if (bk.pages && typeof bk.pages === 'number' && bk.pages > 0) {
+      unitWeightGrams = Math.round(bk.pages * 1.25 + 50);
+    }
+
+    return {
+      title: bk.title || 'Book',
+      authors: bk.authors?.map((a: any) => a.name).join(', ') || '',
+      sku: bk.sku || bk.isbn13 || bk.isbn10 || '—',
+      quantity: item.quantity || 1,
+      priceAtPurchase: item.priceAtPurchase || 0,
+      weightGrams: unitWeightGrams,
+    };
+  });
+
+  // Calculate consolidated subtotal across all items
+  const computedSubtotal = items.reduce((sum, it) => sum + (it.priceAtPurchase * it.quantity), 0);
+  const subtotal = Math.max(order.subtotal || 0, computedSubtotal);
+  const totalAmount = Math.max(order.totalAmount || 0, subtotal + (order.shippingCharge || 0) - (order.discountAmount || 0));
+
+  const isPickup = order.shippingMethod === 'SELF_PICKUP' || order.shippingCarrier === 'STORE_TAKEAWAY';
+  const custName = order.pickupName || order.address?.fullName || order.user?.name || 'Valued Customer';
+  const custPhone = order.pickupPhone || order.address?.phone || order.user?.phone || 'N/A';
+  const custEmail = order.pickupEmail || order.customerEmail || order.address?.email || order.user?.email || 'N/A';
+
+  let deliveryAddress = '';
+  if (order.address) {
+    const addr = order.address;
+    deliveryAddress = [addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ');
+  }
+
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
@@ -121,230 +435,26 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    const pageW = doc.page.width - 80; // 40 margin each side
-    const leftX = 40;
-    const rightX = doc.page.width - 40;
-    let y = 40;
-
-    // ─── HEADER ──────────────────────────────────────────────
-    const blackLogo = getBlackLogoPath();
-    if (blackLogo) {
-      try {
-        doc.image(blackLogo, leftX, y, { width: 140 });
-        y += 34;
-      } catch {
-        doc.fontSize(16).font('Helvetica-Bold').fillColor('#0f172a')
-           .text(SELLER.name, leftX, y);
-        y += 18;
-      }
-    } else {
-      doc.fontSize(16).font('Helvetica-Bold').fillColor('#0f172a')
-         .text(SELLER.name, leftX, y);
-      y += 18;
-    }
-    doc.fontSize(8).font('Helvetica').fillColor('#64748b')
-       .text(SELLER.tagline, leftX, y);
-    y += 12;
-    doc.fontSize(7.5).fillColor('#475569')
-       .text(SELLER.address.replace('\n', ', '), leftX, y, { width: 280 });
-    y += 18;
-    doc.text(`WhatsApp Support: ${SELLER.phone}`, leftX, y);
-
-    // Invoice title (right side)
-    doc.fontSize(16).font('Helvetica-Bold').fillColor('#0f172a')
-       .text('TAX INVOICE', rightX - 200, 40, { width: 200, align: 'right' });
-    doc.fontSize(10).font('Helvetica-Bold').fillColor('#047857')
-       .text(`${invoiceNumber}`, rightX - 200, 60, { width: 200, align: 'right' });
-    doc.fontSize(8).font('Helvetica').fillColor('#64748b')
-       .text(`Date: ${formatDate(order.invoiceGeneratedAt || order.createdAt)}`, rightX - 200, 75, { width: 200, align: 'right' });
-    doc.text(`Order: #${order.orderNumber}`, rightX - 200, 87, { width: 200, align: 'right' });
-
-    // Payment badge
-    const payMethod = (order.paymentMethod || 'PREPAID').toUpperCase();
-    const payStatus = order.paymentStatus === 'PAID' ? 'PAID' : order.paymentStatus || 'PENDING';
-    doc.fontSize(8).font('Helvetica-Bold').fillColor('#065f46')
-       .text(`${payMethod} · ${payStatus}`, rightX - 200, 101, { width: 200, align: 'right' });
-
-    // ─── SEPARATOR ───────────────────────────────────────────
-    y += 20;
-    doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#e2e8f0').lineWidth(1).stroke();
-    y += 15;
-
-    // ─── CUSTOMER INFO ───────────────────────────────────────
-    const isPickup = order.shippingMethod === 'SELF_PICKUP' || order.shippingCarrier === 'STORE_TAKEAWAY';
-    const custName = order.pickupName || order.address?.fullName || order.user?.name || 'Valued Customer';
-    const custPhone = order.pickupPhone || order.address?.phone || order.user?.phone || 'N/A';
-    const custEmail = order.pickupEmail || order.customerEmail || order.address?.email || order.user?.email || 'N/A';
-
-    doc.fontSize(8).font('Helvetica-Bold').fillColor('#1e293b')
-       .text('BILL TO:', leftX, y);
-    y += 12;
-    doc.fontSize(9).font('Helvetica-Bold').fillColor('#0f172a')
-       .text(custName, leftX, y);
-    y += 12;
-    doc.fontSize(8).font('Helvetica').fillColor('#475569')
-       .text(`Phone: ${custPhone}`, leftX, y);
-    y += 11;
-    doc.text(`Email: ${custEmail}`, leftX, y);
-    y += 11;
-
-    if (isPickup) {
-      doc.text(`Pickup: College Street Dispatch Desk`, leftX, y);
-      if (order.selectedPickupSlot) {
-        y += 11;
-        doc.text(`Slot: ${order.selectedPickupSlot}`, leftX, y);
-      }
-    } else if (order.address) {
-      const addr = order.address;
-      const addrLine = [addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ');
-      doc.text(`Deliver to: ${addrLine}`, leftX, y, { width: pageW });
-    }
-
-    // ─── SEPARATOR ───────────────────────────────────────────
-    y += 18;
-    doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#e2e8f0').lineWidth(1).stroke();
-    y += 10;
-
-    // ─── ITEMS TABLE ─────────────────────────────────────────
-    const colX = {
-      num: leftX,
-      desc: leftX + 30,
-      sku: leftX + 260,
-      hsn: leftX + 330,
-      qty: leftX + 375,
-      rate: leftX + 410,
-      total: rightX - 60
-    };
-
-    // Table header
-    doc.rect(leftX, y, pageW, 18).fill('#f8fafc');
-    doc.fontSize(7).font('Helvetica-Bold').fillColor('#475569');
-    doc.text('#', colX.num + 4, y + 5);
-    doc.text('ITEM DESCRIPTION', colX.desc, y + 5);
-    doc.text('SKU', colX.sku, y + 5);
-    doc.text('HSN', colX.hsn, y + 5);
-    doc.text('QTY', colX.qty, y + 5);
-    doc.text('RATE', colX.rate, y + 5);
-    doc.text('TOTAL', colX.total, y + 5, { width: 55, align: 'right' });
-    y += 20;
-
-    // Table rows
-    let itemTotal = 0;
-    let totalConsignmentWeightGrams = 0;
-    order.items.forEach((item, idx) => {
-      const title = item.book?.title || 'Book';
-      const authors = item.book?.authors?.map((a: any) => a.name).join(', ') || '';
-      const sku = item.book?.sku || item.book?.isbn13 || '—';
-      const qty = item.quantity;
-      const rate = item.priceAtPurchase;
-      const total = qty * rate;
-      itemTotal += total;
-
-      const bookWeight = (item.book as any)?.weight;
-      const bookPages = (item.book as any)?.pages;
-      let unitWeightGrams = 450;
-      if (bookWeight && typeof bookWeight === 'number' && bookWeight > 0) {
-        unitWeightGrams = bookWeight < 10 ? Math.round(bookWeight * 1000) : Math.round(bookWeight);
-      } else if (bookPages && typeof bookPages === 'number' && bookPages > 0) {
-        unitWeightGrams = Math.round(bookPages * 1.25 + 50);
-      }
-      totalConsignmentWeightGrams += unitWeightGrams * qty;
-
-      // Check if we need a new page
-      if (y > 700) {
-        doc.addPage();
-        y = 40;
-      }
-
-      doc.fontSize(8).font('Helvetica').fillColor('#0f172a');
-      doc.text(`${idx + 1}`, colX.num + 4, y + 2);
-      doc.font('Helvetica-Bold').text(title, colX.desc, y + 2, { width: 225 });
-      const titleH = doc.heightOfString(title, { width: 225 });
-      if (authors) {
-        doc.fontSize(7).font('Helvetica').fillColor('#64748b')
-           .text(authors, colX.desc, y + 2 + titleH, { width: 225 });
-      }
-      doc.fontSize(7.5).font('Helvetica').fillColor('#475569');
-      doc.text(sku, colX.sku, y + 2, { width: 65 });
-      doc.text(SELLER.hsn, colX.hsn, y + 2);
-      doc.text(`${qty}`, colX.qty, y + 2);
-      doc.text(formatINR(rate), colX.rate, y + 2);
-      doc.font('Helvetica-Bold').fillColor('#0f172a')
-         .text(formatINR(total), colX.total, y + 2, { width: 55, align: 'right' });
-
-      const rowH = Math.max(titleH + (authors ? 10 : 0) + 4, 18);
-      y += rowH;
-
-      // Row separator
-      doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
-      y += 4;
+    renderInvoiceSheet(doc, {
+      invoiceNumber,
+      isConsolidated: allOrderNumbers.length > 1,
+      orderNumbers: allOrderNumbers,
+      createdAt: order.invoiceGeneratedAt || order.createdAt,
+      paymentMethod: order.paymentMethod || 'PREPAID',
+      paymentStatus: order.paymentStatus || 'PAID',
+      customerName: custName,
+      customerPhone: custPhone,
+      customerEmail: custEmail,
+      isPickup,
+      pickupSlot: order.selectedPickupSlot,
+      deliveryAddress,
+      items,
+      subtotal,
+      shippingCharge: order.shippingCharge || 0,
+      discountAmount: order.discountAmount || 0,
+      totalAmount,
+      shippingMethod: order.shippingMethod || 'NORMAL_POST',
     });
-
-    // ─── TOTALS ──────────────────────────────────────────────
-    y += 10;
-    const totalsX = rightX - 200;
-    const totalsValX = rightX - 60;
-
-    doc.fontSize(8).font('Helvetica').fillColor('#475569');
-    doc.text('Subtotal:', totalsX, y);
-    doc.text(formatINR(order.subtotal), totalsValX, y, { width: 55, align: 'right' });
-    y += 14;
-
-    const shippingLabel = order.shippingCharge === 0 ? 'FREE' : formatINR(order.shippingCharge);
-    doc.text(`Shipping (SAC ${SELLER.sacShipping}):`, totalsX, y);
-    doc.font('Helvetica-Bold').fillColor(order.shippingCharge === 0 ? '#047857' : '#475569')
-       .text(shippingLabel, totalsValX, y, { width: 55, align: 'right' });
-    y += 14;
-
-    if (order.discountAmount && order.discountAmount > 0) {
-      doc.font('Helvetica').fillColor('#047857');
-      doc.text('Discount:', totalsX, y);
-      doc.text(`- ${formatINR(order.discountAmount)}`, totalsValX, y, { width: 55, align: 'right' });
-      y += 14;
-    }
-
-    // Tax line (books are 0% GST)
-    doc.font('Helvetica').fillColor('#475569');
-    doc.text(`Tax on Books (HSN ${SELLER.hsn} — 0%):`, totalsX, y);
-    doc.text(formatINR(0), totalsValX, y, { width: 55, align: 'right' });
-    y += 16;
-
-    // Grand Total
-    doc.moveTo(totalsX, y).lineTo(rightX, y).strokeColor('#cbd5e1').lineWidth(1).stroke();
-    y += 6;
-    doc.fontSize(11).font('Helvetica-Bold').fillColor('#0f172a');
-    doc.text('GRAND TOTAL:', totalsX, y);
-    doc.text(formatINR(order.totalAmount), totalsValX - 5, y, { width: 60, align: 'right' });
-    y += 20;
-
-    // ─── DELIVERY METHOD & WEIGHT ────────────────────────────
-    doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
-    y += 10;
-    const totalWeightKg = (totalConsignmentWeightGrams / 1000).toFixed(2);
-    const totalWeightStr = `${totalWeightKg} kg (${totalConsignmentWeightGrams}g)`;
-
-    doc.fontSize(8).font('Helvetica-Bold').fillColor('#1e293b')
-       .text(`Delivery Method: ${getShippingLabel(order.shippingMethod)}  |  Total Parcel Weight: ${totalWeightStr}`, leftX, y);
-    y += 18;
-
-    // ─── FOOTER NOTICE ───────────────────────────────────────
-    doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#cbd5e1').lineWidth(0.5).dash(3, { space: 3 }).stroke();
-    doc.undash();
-    y += 10;
-
-    doc.fontSize(6.5).font('Helvetica').fillColor('#94a3b8')
-       .text(
-         'Note: Printed books (HSN 4901) are exempt from GST under Indian tax law. ' +
-         'This is a computer-generated invoice and does not require a physical signature.',
-         leftX, y, { width: pageW, lineGap: 2 }
-       );
-    y += 22;
-    doc.text(
-      'Techno World Books Online and the College Street offline retail bookstore operate under the same parent brand ' +
-      'trademark, but are managed as independent business entities with distinct inventory and accounting. ' +
-      'Offline counter exchanges or retail returns are strictly prohibited.',
-      leftX, y, { width: pageW, lineGap: 2 }
-    );
 
     doc.end();
   });
@@ -352,10 +462,6 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
 
 // ─── Batch Invoice Generation ───────────────────────────────────
 export async function generateBatchInvoices(): Promise<{ generated: number; errors: string[] }> {
-  // Find all orders that need invoices:
-  // - Status is CONFIRMED, PROCESSING, SHIPPED, or DELIVERED
-  // - No invoiceNumber assigned yet
-  // - Not CANCELLED / REFUNDED
   const orders = await prisma.order.findMany({
     where: {
       invoiceNumber: null,
@@ -380,15 +486,11 @@ export async function generateBatchInvoices(): Promise<{ generated: number; erro
   return { generated, errors };
 }
 
-// ─── Merge Multiple PDFs into One ───────────────────────────────
-// pdfkit can't merge existing PDFs, so we generate all invoices sequentially
-// into one multi-page document
+// ─── Merge Multiple Orders into Consolidated or Sequential Invoices ─
 export async function generateMergedInvoicesPDF(orderIds: string[]): Promise<Buffer> {
   if (orderIds.length === 0) throw new Error('No orders specified');
   if (orderIds.length === 1) return generateInvoicePDF(orderIds[0]);
 
-  // For merged PDFs, we generate each invoice as a separate buffer then concatenate pages
-  // Since pdfkit can't merge, we generate all invoices into one doc
   const allOrders = await prisma.order.findMany({
     where: {
       OR: [
@@ -401,8 +503,22 @@ export async function generateMergedInvoicesPDF(orderIds: string[]): Promise<Buf
         include: {
           book: {
             select: {
-              id: true, title: true, sku: true, isbn13: true, isbn10: true,
+              id: true, title: true, sku: true, isbn13: true, isbn10: true, weight: true, pages: true,
               authors: { select: { name: true } }
+            }
+          }
+        }
+      },
+      childOrders: {
+        include: {
+          items: {
+            include: {
+              book: {
+                select: {
+                  id: true, title: true, sku: true, isbn13: true, isbn10: true, weight: true, pages: true,
+                  authors: { select: { name: true } }
+                }
+              }
             }
           }
         }
@@ -415,23 +531,16 @@ export async function generateMergedInvoicesPDF(orderIds: string[]): Promise<Buf
 
   if (allOrders.length === 0) throw new Error('No orders found');
 
-  // Generate individual PDFs and concatenate them
-  // Since pdfkit can't merge, we generate them individually for download
-  const buffers: Buffer[] = [];
-  for (const order of allOrders) {
-    const buf = await generateInvoicePDF(order.id);
-    buffers.push(buf);
-  }
+  // Check if all orders belong to the same customer/delivery parcel group
+  const firstPhone = (allOrders[0].pickupPhone || allOrders[0].address?.phone || allOrders[0].user?.phone || '').replace(/\D/g, '').slice(-10);
+  const firstPin = (allOrders[0].address?.pincode || '').trim();
+  const isSingleCustomerBundle = allOrders.every(o => {
+    const ph = (o.pickupPhone || o.address?.phone || o.user?.phone || '').replace(/\D/g, '').slice(-10);
+    const pin = (o.address?.pincode || '').trim();
+    return (!ph || !firstPhone || ph === firstPhone) && (!pin || !firstPin || pin === firstPin);
+  });
 
-  // For true PDF merging we'd need pdf-lib, but for now return the first order's PDF
-  // with a note. In practice, admins will download a zip or iterate.
-  // Let's install-free approach: generate all into one doc sequentially
-  return generateMultiOrderPDF(allOrders);
-}
-
-// Generate a single PDF document containing invoices for multiple orders (one per page)
-async function generateMultiOrderPDF(orders: any[]): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const chunks: Buffer[] = [];
     const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
 
@@ -439,160 +548,146 @@ async function generateMultiOrderPDF(orders: any[]): Promise<Buffer> {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    orders.forEach((order, orderIdx) => {
-      if (orderIdx > 0) doc.addPage({ size: 'A4', margin: 40 });
+    if (isSingleCustomerBundle) {
+      // ── CONSOLIDATED INVOICE FOR THIS PARCEL BUNDLE ──────────────
+      // Combine ALL books from ALL merged orders into ONE comprehensive bill
+      const primaryOrder = allOrders[0];
+      const invoiceNumber = primaryOrder.invoiceNumber || await assignInvoiceNumber(primaryOrder.id);
 
-      const pageW = doc.page.width - 80;
-      const leftX = 40;
-      const rightX = doc.page.width - 40;
-      let y = 40;
+      const allRawItems: any[] = [];
+      const allOrderNumbers: string[] = [];
 
-      const invoiceNumber = order.invoiceNumber || 'PENDING';
-      const isPickup = order.shippingMethod === 'SELF_PICKUP' || order.shippingCarrier === 'STORE_TAKEAWAY';
-      const custName = order.pickupName || order.address?.fullName || order.user?.name || 'Valued Customer';
-      const custPhone = order.pickupPhone || order.address?.phone || order.user?.phone || 'N/A';
-      const custEmail = order.pickupEmail || order.customerEmail || order.address?.email || order.user?.email || 'N/A';
-
-      // HEADER
-      const blackLogo = getBlackLogoPath();
-      if (blackLogo) {
-        try {
-          doc.image(blackLogo, leftX, y, { width: 130 });
-          y += 30;
-        } catch {
-          doc.fontSize(14).font('Helvetica-Bold').fillColor('#0f172a')
-             .text(SELLER.name, leftX, y);
-          y += 16;
+      allOrders.forEach(ord => {
+        allOrderNumbers.push(ord.orderNumber);
+        if (Array.isArray(ord.items)) allRawItems.push(...ord.items);
+        if (Array.isArray(ord.childOrders)) {
+          ord.childOrders.forEach((child: any) => {
+            allOrderNumbers.push(child.orderNumber);
+            if (Array.isArray(child.items)) allRawItems.push(...child.items);
+          });
         }
-      } else {
-        doc.fontSize(14).font('Helvetica-Bold').fillColor('#0f172a')
-           .text(SELLER.name, leftX, y);
-        y += 16;
-      }
-      doc.fontSize(7).font('Helvetica').fillColor('#64748b')
-         .text(SELLER.tagline, leftX, y);
-      y += 10;
-      doc.fontSize(7).fillColor('#475569')
-         .text(SELLER.address.replace('\n', ', '), leftX, y, { width: 260 });
-      y += 18;
-      doc.text(`WhatsApp: ${SELLER.phone}`, leftX, y);
-
-      // Invoice title (right)
-      doc.fontSize(14).font('Helvetica-Bold').fillColor('#0f172a')
-         .text('TAX INVOICE', rightX - 180, 40, { width: 180, align: 'right' });
-      doc.fontSize(9).font('Helvetica-Bold').fillColor('#047857')
-         .text(invoiceNumber, rightX - 180, 58, { width: 180, align: 'right' });
-      doc.fontSize(7).font('Helvetica').fillColor('#64748b')
-         .text(`Date: ${formatDate(order.invoiceGeneratedAt || order.createdAt)}`, rightX - 180, 70, { width: 180, align: 'right' });
-      doc.text(`Order: #${order.orderNumber}`, rightX - 180, 80, { width: 180, align: 'right' });
-      const payMethod = (order.paymentMethod || 'PREPAID').toUpperCase();
-      const payStatus = order.paymentStatus === 'PAID' ? 'PAID' : order.paymentStatus || 'PENDING';
-      doc.fontSize(7).font('Helvetica-Bold').fillColor('#065f46')
-         .text(`${payMethod} · ${payStatus}`, rightX - 180, 92, { width: 180, align: 'right' });
-
-      y += 16;
-      doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#e2e8f0').lineWidth(1).stroke();
-      y += 12;
-
-      // CUSTOMER
-      doc.fontSize(7).font('Helvetica-Bold').fillColor('#1e293b').text('BILL TO:', leftX, y);
-      y += 10;
-      doc.fontSize(8).font('Helvetica-Bold').fillColor('#0f172a').text(custName, leftX, y);
-      y += 11;
-      doc.fontSize(7).font('Helvetica').fillColor('#475569')
-         .text(`Phone: ${custPhone} | Email: ${custEmail}`, leftX, y);
-      y += 10;
-      if (isPickup) {
-        doc.text('Pickup: College Street Dispatch Desk', leftX, y);
-      } else if (order.address) {
-        const addr = order.address;
-        doc.text([addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', '), leftX, y, { width: pageW });
-      }
-      y += 14;
-      doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
-      y += 8;
-
-      // ITEMS TABLE
-      const colX = { num: leftX, desc: leftX + 25, sku: leftX + 240, hsn: leftX + 310, qty: leftX + 350, rate: leftX + 385, total: rightX - 55 };
-      doc.rect(leftX, y, pageW, 15).fill('#f8fafc');
-      doc.fontSize(6.5).font('Helvetica-Bold').fillColor('#475569');
-      doc.text('#', colX.num + 3, y + 4);
-      doc.text('DESCRIPTION', colX.desc, y + 4);
-      doc.text('SKU', colX.sku, y + 4);
-      doc.text('HSN', colX.hsn, y + 4);
-      doc.text('QTY', colX.qty, y + 4);
-      doc.text('RATE', colX.rate, y + 4);
-      doc.text('TOTAL', colX.total, y + 4, { width: 50, align: 'right' });
-      y += 17;
-
-      order.items.forEach((item: any, idx: number) => {
-        const title = item.book?.title || 'Book';
-        const sku = item.book?.sku || item.book?.isbn13 || '—';
-        const qty = item.quantity;
-        const rate = item.priceAtPurchase;
-        const total = qty * rate;
-
-        doc.fontSize(7).font('Helvetica-Bold').fillColor('#0f172a');
-        doc.text(`${idx + 1}`, colX.num + 3, y + 2);
-        doc.text(title, colX.desc, y + 2, { width: 210 });
-        doc.fontSize(6.5).font('Helvetica').fillColor('#475569');
-        doc.text(sku, colX.sku, y + 2, { width: 65 });
-        doc.text(SELLER.hsn, colX.hsn, y + 2);
-        doc.text(`${qty}`, colX.qty, y + 2);
-        doc.text(formatINR(rate), colX.rate, y + 2);
-        doc.font('Helvetica-Bold').fillColor('#0f172a')
-           .text(formatINR(total), colX.total, y + 2, { width: 50, align: 'right' });
-        y += 16;
-        doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#e2e8f0').lineWidth(0.3).stroke();
-        y += 3;
       });
 
-      // TOTALS
-      y += 8;
-      const tX = rightX - 180;
-      const tVX = rightX - 55;
-      doc.fontSize(7.5).font('Helvetica').fillColor('#475569');
-      doc.text('Subtotal:', tX, y);
-      doc.text(formatINR(order.subtotal), tVX, y, { width: 50, align: 'right' });
-      y += 12;
-      doc.text(`Shipping (SAC ${SELLER.sacShipping}):`, tX, y);
-      const shipLabel = order.shippingCharge === 0 ? 'FREE' : formatINR(order.shippingCharge);
-      doc.font('Helvetica-Bold').fillColor(order.shippingCharge === 0 ? '#047857' : '#475569')
-         .text(shipLabel, tVX, y, { width: 50, align: 'right' });
-      y += 12;
-      if (order.discountAmount > 0) {
-        doc.font('Helvetica').fillColor('#047857');
-        doc.text('Discount:', tX, y);
-        doc.text(`- ${formatINR(order.discountAmount)}`, tVX, y, { width: 50, align: 'right' });
-        y += 12;
-      }
-      doc.font('Helvetica').fillColor('#475569');
-      doc.text(`Tax (HSN ${SELLER.hsn} — 0%):`, tX, y);
-      doc.text(formatINR(0), tVX, y, { width: 50, align: 'right' });
-      y += 14;
-      doc.moveTo(tX, y).lineTo(rightX, y).strokeColor('#cbd5e1').lineWidth(1).stroke();
-      y += 5;
-      doc.fontSize(10).font('Helvetica-Bold').fillColor('#0f172a');
-      doc.text('GRAND TOTAL:', tX, y);
-      doc.text(formatINR(order.totalAmount), tVX - 5, y, { width: 55, align: 'right' });
-      y += 18;
+      const uniqueOrderNumbers = Array.from(new Set(allOrderNumbers));
 
-      // DELIVERY + FOOTER
-      doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
-      y += 8;
-      doc.fontSize(7).font('Helvetica-Bold').fillColor('#1e293b')
-         .text(`Delivery: ${getShippingLabel(order.shippingMethod)}`, leftX, y);
-      y += 14;
-      doc.moveTo(leftX, y).lineTo(rightX, y).strokeColor('#cbd5e1').lineWidth(0.5).dash(3, { space: 3 }).stroke();
-      doc.undash();
-      y += 8;
-      doc.fontSize(6).font('Helvetica').fillColor('#94a3b8')
-         .text(
-           'Printed books (HSN 4901) are exempt from GST under Indian tax law. Computer-generated invoice — no physical signature required. ' +
-           'Techno World Books Online and College Street offline retail bookstore are independent entities with distinct inventory and accounting.',
-           leftX, y, { width: pageW, lineGap: 1.5 }
-         );
-    });
+      const items = allRawItems.map((item: any) => {
+        const bk = item.book || {};
+        let unitWeightGrams = 450;
+        if (bk.weight && typeof bk.weight === 'number' && bk.weight > 0) {
+          unitWeightGrams = bk.weight < 10 ? Math.round(bk.weight * 1000) : Math.round(bk.weight);
+        } else if (bk.pages && typeof bk.pages === 'number' && bk.pages > 0) {
+          unitWeightGrams = Math.round(bk.pages * 1.25 + 50);
+        }
+
+        return {
+          title: bk.title || 'Book',
+          authors: bk.authors?.map((a: any) => a.name).join(', ') || '',
+          sku: bk.sku || bk.isbn13 || bk.isbn10 || '—',
+          quantity: item.quantity || 1,
+          priceAtPurchase: item.priceAtPurchase || 0,
+          weightGrams: unitWeightGrams,
+        };
+      });
+
+      const subtotal = items.reduce((sum, it) => sum + (it.priceAtPurchase * it.quantity), 0);
+      const shippingCharge = allOrders.reduce((sum, o) => sum + (o.shippingCharge || 0), 0);
+      const discountAmount = allOrders.reduce((sum, o) => sum + (o.discountAmount || 0), 0);
+      const totalAmount = subtotal + shippingCharge - discountAmount;
+
+      // Determine highest shipping method
+      let highestMethod = primaryOrder.shippingMethod || 'NORMAL_POST';
+      if (allOrders.some(o => o.shippingMethod === 'EXPRESS_LOCAL')) highestMethod = 'EXPRESS_LOCAL';
+      else if (allOrders.some(o => o.shippingMethod === 'SPEED_POST')) highestMethod = 'SPEED_POST';
+
+      const isPickup = allOrders.some(o => o.shippingMethod === 'SELF_PICKUP' || o.shippingCarrier === 'STORE_TAKEAWAY');
+      const custName = primaryOrder.pickupName || primaryOrder.address?.fullName || primaryOrder.user?.name || 'Valued Customer';
+      const custPhone = primaryOrder.pickupPhone || primaryOrder.address?.phone || primaryOrder.user?.phone || 'N/A';
+      const custEmail = primaryOrder.pickupEmail || primaryOrder.customerEmail || primaryOrder.address?.email || primaryOrder.user?.email || 'N/A';
+
+      let deliveryAddress = '';
+      if (primaryOrder.address) {
+        const addr = primaryOrder.address;
+        deliveryAddress = [addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ');
+      }
+
+      renderInvoiceSheet(doc, {
+        invoiceNumber,
+        isConsolidated: true,
+        orderNumbers: uniqueOrderNumbers,
+        createdAt: primaryOrder.invoiceGeneratedAt || primaryOrder.createdAt,
+        paymentMethod: primaryOrder.paymentMethod || 'PREPAID',
+        paymentStatus: primaryOrder.paymentStatus || 'PAID',
+        customerName: custName,
+        customerPhone: custPhone,
+        customerEmail: custEmail,
+        isPickup,
+        pickupSlot: primaryOrder.selectedPickupSlot,
+        deliveryAddress,
+        items,
+        subtotal,
+        shippingCharge,
+        discountAmount,
+        totalAmount,
+        shippingMethod: highestMethod,
+      });
+    } else {
+      // ── MULTI-CUSTOMER BATCH INVOICES ────────────────────────────
+      // Generate one sheet per order/customer
+      allOrders.forEach((order, idx) => {
+        if (idx > 0) doc.addPage({ size: 'A4', margin: 40 });
+
+        const items = (order.items || []).map((item: any) => {
+          const bk = item.book || {};
+          let unitWeightGrams = 450;
+          if (bk.weight && typeof bk.weight === 'number' && bk.weight > 0) {
+            unitWeightGrams = bk.weight < 10 ? Math.round(bk.weight * 1000) : Math.round(bk.weight);
+          } else if (bk.pages && typeof bk.pages === 'number' && bk.pages > 0) {
+            unitWeightGrams = Math.round(bk.pages * 1.25 + 50);
+          }
+
+          return {
+            title: bk.title || 'Book',
+            authors: bk.authors?.map((a: any) => a.name).join(', ') || '',
+            sku: bk.sku || bk.isbn13 || bk.isbn10 || '—',
+            quantity: item.quantity || 1,
+            priceAtPurchase: item.priceAtPurchase || 0,
+            weightGrams: unitWeightGrams,
+          };
+        });
+
+        const isPickup = order.shippingMethod === 'SELF_PICKUP' || order.shippingCarrier === 'STORE_TAKEAWAY';
+        const custName = order.pickupName || order.address?.fullName || order.user?.name || 'Valued Customer';
+        const custPhone = order.pickupPhone || order.address?.phone || order.user?.phone || 'N/A';
+        const custEmail = order.pickupEmail || order.customerEmail || order.address?.email || order.user?.email || 'N/A';
+
+        let deliveryAddress = '';
+        if (order.address) {
+          const addr = order.address;
+          deliveryAddress = [addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ');
+        }
+
+        renderInvoiceSheet(doc, {
+          invoiceNumber: order.invoiceNumber || 'PENDING',
+          isConsolidated: false,
+          orderNumbers: [order.orderNumber],
+          createdAt: order.invoiceGeneratedAt || order.createdAt,
+          paymentMethod: order.paymentMethod || 'PREPAID',
+          paymentStatus: order.paymentStatus || 'PAID',
+          customerName: custName,
+          customerPhone: custPhone,
+          customerEmail: custEmail,
+          isPickup,
+          pickupSlot: order.selectedPickupSlot,
+          deliveryAddress,
+          items,
+          subtotal: order.subtotal || 0,
+          shippingCharge: order.shippingCharge || 0,
+          discountAmount: order.discountAmount || 0,
+          totalAmount: order.totalAmount || 0,
+          shippingMethod: order.shippingMethod || 'NORMAL_POST',
+        });
+      });
+    }
 
     doc.end();
   });

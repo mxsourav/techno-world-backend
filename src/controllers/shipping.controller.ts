@@ -539,16 +539,16 @@ export const getDailyManifest = async (req: Request, res: Response): Promise<voi
         destinationCity,
         destinationState,
         weightGrams: parcelWeight,
-        declaredValue: order.totalAmount,
-        shippingCharge: order.shippingCharge,
+        declaredValue: Number(order.totalAmount),
+        shippingCharge: Number(order.shippingCharge || 0),
         paymentMode: order.paymentMethod === 'COD' ? 'COD' : 'PREPAID',
-        codAmount: order.paymentMethod === 'COD' ? order.totalAmount : 0,
+        codAmount: order.paymentMethod === 'COD' ? Number(order.totalAmount) : 0,
       };
     });
 
     const totalWeightGrams = manifestItems.reduce((acc, item) => acc + item.weightGrams, 0);
-    const totalDeclaredValue = manifestItems.reduce((acc, item) => acc + item.declaredValue, 0);
-    const totalPostage = manifestItems.reduce((acc, item) => acc + item.shippingCharge, 0);
+    const totalDeclaredValue = manifestItems.reduce((acc, item) => acc + Number(item.declaredValue), 0);
+    const totalPostage = manifestItems.reduce((acc, item) => acc + Number(item.shippingCharge), 0);
 
     res.json({
       success: true,

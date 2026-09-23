@@ -414,7 +414,7 @@ class AnalyticsService {
       select: { totalAmount: true },
     });
 
-    const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const todayRevenue = todayOrders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
 
     return {
       live,

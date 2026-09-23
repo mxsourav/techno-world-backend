@@ -154,6 +154,8 @@ export class PricingEngine {
       }
 
       const itemWeight = ((book as any).weightGrams || 450) * qty;
+      const unitPrice = Number(book.price);
+      const unitMrp = Number(book.mrp);
       totalWeightGrams += itemWeight;
 
       result.items.push({
@@ -163,17 +165,17 @@ export class PricingEngine {
         coverUrl: book.coverUrl,
         author: book.authors?.[0]?.name || null,
         quantity: qty,
-        unitPrice: book.price,
-        unitMrp: book.mrp,
-        totalPrice: book.price * qty,
-        totalMrp: book.mrp * qty,
+        unitPrice,
+        unitMrp,
+        totalPrice: unitPrice * qty,
+        totalMrp: unitMrp * qty,
         categoryId: book.categoryId,
         weightGrams: itemWeight,
       });
 
-      result.subtotal += book.price * qty;
-      result.mrpTotal += book.mrp * qty;
-      result.itemDiscountTotal += Math.max(0, (book.mrp - book.price) * qty);
+      result.subtotal += unitPrice * qty;
+      result.mrpTotal += unitMrp * qty;
+      result.itemDiscountTotal += Math.max(0, (unitMrp - unitPrice) * qty);
     }
 
     // 2. Promotions & Coupons
@@ -197,15 +199,16 @@ export class PricingEngine {
           const isPersonal = promotion.promotionType === 'PERSONAL';
           const configuredMin = Number(rules.minOrderAmount) || 0;
           
+          const discountValue = Number(promotion.discountValue);
           const failSafeMin = (!isPersonal && promotion.discountType === 'FIXED')
-            ? (promotion.discountValue * 2)
-            : (promotion.discountType === 'FIXED' ? (promotion.discountValue + 1) : 0);
+            ? (discountValue * 2)
+            : (promotion.discountType === 'FIXED' ? (discountValue + 1) : 0);
 
           const effectiveMinOrder = Math.max(configuredMin, failSafeMin);
 
           if (effectiveMinOrder > 0 && result.subtotal < effectiveMinOrder) {
             result.promotionError = !isPersonal && promotion.discountType === 'FIXED'
-              ? `Minimum cart subtotal of ₹${effectiveMinOrder} required to apply ₹${promotion.discountValue} coupon (Max 50% cart discount policy)`
+              ? `Minimum cart subtotal of ₹${effectiveMinOrder} required to apply ₹${discountValue} coupon (Max 50% cart discount policy)`
               : `Minimum cart subtotal of ₹${effectiveMinOrder} required to apply this coupon`;
           } else {
             let userPassed = true;
@@ -251,12 +254,12 @@ export class PricingEngine {
               let discount = 0;
               if (promotion.discountType === 'PERCENTAGE') {
                 const maxAllowedPct = isPersonal ? 90 : 50;
-                const effectivePct = Math.min(promotion.discountValue, maxAllowedPct);
+                const effectivePct = Math.min(discountValue, maxAllowedPct);
                 discount = Math.round((result.subtotal * effectivePct) / 100);
                 if (rules.maxDiscount && discount > rules.maxDiscount) discount = rules.maxDiscount;
               } else if (promotion.discountType === 'FIXED') {
                 const maxAllowedDiscount = isPersonal ? (result.subtotal - 1) : Math.floor(result.subtotal * 0.5);
-                discount = Math.min(promotion.discountValue, Math.max(0, maxAllowedDiscount));
+                discount = Math.min(discountValue, Math.max(0, maxAllowedDiscount));
               }
               
               result.promotionCode = code;
@@ -373,7 +376,7 @@ export class PricingEngine {
           result.isAddonBundle = true;
           result.bundledWithOrderNumber = ord.orderNumber;
           result.parentShippingMethod = ord.shippingMethod || 'NORMAL_POST';
-          result.parentShippingCharge = ord.shippingCharge || 0;
+          result.parentShippingCharge = Number(ord.shippingCharge || 0);
           break;
         }
       }

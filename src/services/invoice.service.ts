@@ -444,7 +444,7 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
       authors: cleanPdfText(bk.authors?.map((a: any) => a.name).join(', ') || ''),
       sku: cleanPdfText(bk.sku || bk.isbn13 || bk.isbn10 || '-'),
       quantity: item.quantity || 1,
-      priceAtPurchase: item.priceAtPurchase || 0,
+      priceAtPurchase: Number(item.priceAtPurchase || 0),
       weightGrams: unitWeightGrams,
       orderNumber: item.sourceOrderNumber,
     };
@@ -452,8 +452,8 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
 
   // Calculate consolidated subtotal across all items
   const subtotal = items.reduce((sum, it) => sum + (it.priceAtPurchase * it.quantity), 0);
-  const shippingCharge = order.shippingCharge || 0;
-  const discountAmount = order.discountAmount || 0;
+  const shippingCharge = Number(order.shippingCharge || 0);
+  const discountAmount = Number(order.discountAmount || 0);
   const totalAmount = Math.max(0, subtotal + shippingCharge - discountAmount);
 
   const isPickup = order.shippingMethod === 'SELF_PICKUP' || order.shippingCarrier === 'STORE_TAKEAWAY';
@@ -640,8 +640,8 @@ export async function generateMergedInvoicesPDF(orderIds: string[]): Promise<Buf
     });
 
     const subtotal = items.reduce((sum, it) => sum + (it.priceAtPurchase * it.quantity), 0);
-    const shippingCharge = allOrders.reduce((sum, o) => sum + (o.shippingCharge || 0), 0);
-    const discountAmount = allOrders.reduce((sum, o) => sum + (o.discountAmount || 0), 0);
+    const shippingCharge = allOrders.reduce((sum, o) => sum + Number(o.shippingCharge || 0), 0);
+    const discountAmount = allOrders.reduce((sum, o) => sum + Number(o.discountAmount || 0), 0);
     const totalAmount = Math.max(0, subtotal + shippingCharge - discountAmount);
 
     // Determine highest shipping method

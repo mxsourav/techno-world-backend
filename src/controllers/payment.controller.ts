@@ -244,11 +244,12 @@ export const getPaymentTransactions = async (req: Request, res: Response, next: 
       const normMethod = normalizePaymentMethod(ord.paymentMethod);
       const isOnline = normMethod !== 'COD';
       // Standard estimated gateway fee (2% for online, 0 for COD)
+      const totalAmount = Number(ord.totalAmount);
       const estimatedGatewayFee = isOnline && ord.paymentStatus === 'PAID'
-        ? Math.round(ord.totalAmount * 0.02 * 100) / 100
+        ? Math.round(totalAmount * 0.02 * 100) / 100
         : 0;
       const netSettled = ord.paymentStatus === 'PAID'
-        ? Math.max(0, Math.round((ord.totalAmount - estimatedGatewayFee) * 100) / 100)
+        ? Math.max(0, Math.round((totalAmount - estimatedGatewayFee) * 100) / 100)
         : 0;
 
       // Extract refund reason or notes if present

@@ -52,7 +52,7 @@ export const getAdminStats = async (req: Request, res: Response, next: NextFunct
       }),
     ]);
 
-    const revenue = ordersResult._sum.totalAmount || 0;
+    const revenue = Number(ordersResult._sum.totalAmount || 0);
     const aov = totalOrders > 0 ? Math.round(revenue / totalOrders) : 0;
 
     res.status(200).json({
@@ -1102,7 +1102,7 @@ export const exportCustomerData = async (req: Request, res: Response, next: Next
       const totalOrders = c.orders.length;
       const totalSpent = c.orders
         .filter((o) => o.status !== 'CANCELLED' && o.status !== 'REFUNDED')
-        .reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+        .reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
 
       return {
         id: c.id,
@@ -1388,7 +1388,7 @@ export const getSearchAndSalesAnalytics = async (req: Request, res: Response, ne
 
     for (const item of orderItems) {
       totalUnitsSold += item.quantity;
-      const itemRev = item.quantity * item.priceAtPurchase;
+      const itemRev = item.quantity * Number(item.priceAtPurchase);
       totalRevenue += itemRev;
 
       if (!bookSalesMap.has(item.bookId)) {
@@ -1702,7 +1702,7 @@ export const exportGstr1Report = async (req: Request, res: Response, next: NextF
       const phone = ord.address?.phone || ord.user?.phone || '';
       
       const bookExemptValue = ord.subtotal;
-      const shippingTaxable = ord.shippingCharge;
+      const shippingTaxable = Number(ord.shippingCharge || 0);
       
       let cgst = 0;
       let sgst = 0;

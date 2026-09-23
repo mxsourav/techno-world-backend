@@ -8,7 +8,7 @@ async function main() {
     await prisma.book.update({
       where: { id: book.id },
       data: {
-        costPrice: Math.round((book.mrp || book.price) * 0.7),
+        costPrice: Math.round(Number(book.mrp || book.price) * 0.7),
         lifetimeSales: Math.floor(Math.random() * 50),
         reservedStock: Math.floor(Math.random() * 10),
       }

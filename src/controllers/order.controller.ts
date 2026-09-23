@@ -444,14 +444,15 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
 
     let razorpayOrder = null;
     const isOrderCOD = order.paymentMethod === 'COD' || order.paymentMethod === 'REWARDS_AND_WALLET';
-    if (!isOrderCOD && order.totalAmount > 0 && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
+    const orderTotalAmount = Number(order.totalAmount);
+    if (!isOrderCOD && orderTotalAmount > 0 && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
       const razorpay = new Razorpay({
         key_id: env.RAZORPAY_KEY_ID,
         key_secret: env.RAZORPAY_KEY_SECRET
       });
 
       razorpayOrder = await razorpay.orders.create({
-        amount: Math.round(order.totalAmount * 100),
+        amount: Math.round(orderTotalAmount * 100),
         currency: 'INR',
         receipt: order.id
       });
@@ -770,7 +771,7 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
 
     // Revoke loyalty points if order was cancelled
     if (status === 'CANCELLED') {
-      const pointsToRevoke = Math.floor(order.totalAmount / 100);
+      const pointsToRevoke = Math.floor(Number(order.totalAmount) / 100);
       if (pointsToRevoke > 0 && order.userId) {
         await prisma.user.update({
           where: { id: order.userId },
@@ -1017,7 +1018,7 @@ export const batchUpdateOrderStatus = async (req: Request, res: Response, next: 
 
       // Revoke points if cancelled
       if (status === 'CANCELLED') {
-        const pointsToRevoke = Math.floor(order.totalAmount / 100);
+        const pointsToRevoke = Math.floor(Number(order.totalAmount) / 100);
         if (pointsToRevoke > 0 && order.userId) {
           await prisma.user.update({
             where: { id: order.userId },
@@ -1396,7 +1397,7 @@ export const mergeChildOrder = async (req: Request, res: Response, next: NextFun
       return;
     }
 
-    const refundAmount = childOrder.shippingCharge || 0;
+    const refundAmount = Number(childOrder.shippingCharge || 0);
     const targetUserId = childOrder.userId || parentOrder.userId;
 
     // Perform atomic merge & wallet refund
@@ -1412,7 +1413,7 @@ export const mergeChildOrder = async (req: Request, res: Response, next: NextFun
           },
           select: { technoWallet: true }
         });
-        updatedWalletBalance = updatedUser.technoWallet;
+        updatedWalletBalance = Number(updatedUser.technoWallet);
 
         // Record audit transaction
         await tx.walletTransaction.create({
@@ -1427,7 +1428,7 @@ export const mergeChildOrder = async (req: Request, res: Response, next: NextFun
         });
       } else if (targetUserId) {
         const u = await tx.user.findUnique({ where: { id: targetUserId }, select: { technoWallet: true } });
-        updatedWalletBalance = u?.technoWallet || 0;
+        updatedWalletBalance = Number(u?.technoWallet || 0);
       }
 
       // Update child order
@@ -1444,7 +1445,7 @@ export const mergeChildOrder = async (req: Request, res: Response, next: NextFun
           mergedAt: new Date(),
           shippingCharge: 0,
           shippingRefunded: refundAmount,
-          totalAmount: Math.max(0, childOrder.totalAmount - refundAmount),
+          totalAmount: Math.max(0, Number(childOrder.totalAmount) - refundAmount),
           notes: childNotes,
         }
       });

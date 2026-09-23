@@ -598,7 +598,46 @@ export const getAllOrders = async (req: Request, res: Response, next: NextFuncti
       prisma.order.findMany({
         where,
         include: {
-          items: { include: { book: { select: { id: true, title: true, coverUrl: true, stock: true } } } },
+          items: {
+            include: {
+              book: {
+                select: {
+                  id: true,
+                  title: true,
+                  sku: true,
+                  isbn13: true,
+                  isbn10: true,
+                  coverUrl: true,
+                  stock: true,
+                  weight: true,
+                  pages: true,
+                  authors: { select: { name: true } }
+                }
+              }
+            }
+          },
+          childOrders: {
+            include: {
+              items: {
+                include: {
+                  book: {
+                    select: {
+                      id: true,
+                      title: true,
+                      sku: true,
+                      isbn13: true,
+                      isbn10: true,
+                      coverUrl: true,
+                      stock: true,
+                      weight: true,
+                      pages: true,
+                      authors: { select: { name: true } }
+                    }
+                  }
+                }
+              }
+            }
+          },
           user: { select: { id: true, name: true, email: true } },
           address: true,
         },

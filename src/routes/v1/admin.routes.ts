@@ -75,6 +75,7 @@ router.get('/customers/export', exportCustomerData);
 router.get('/customers/:id/details', getCustomerDetails);
 router.patch('/customers/:id/status', toggleCustomerStatus);
 router.post('/customers/:id/points', adjustCustomerPoints);
+router.post('/customers/points', adjustCustomerPoints);
 router.get('/settings', getAdminSettings);
 router.get('/settings/auto-accept', getAutoAcceptSetting);
 router.post('/settings/auto-accept', updateAutoAcceptSetting);

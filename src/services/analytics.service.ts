@@ -25,7 +25,8 @@ class AnalyticsService {
   private visitors: Map<string, VisitorSession> = new Map();
   private todayUniqueVisitors: Set<string> = new Set();
   private todayPageviews: number = 0;
-  private currentDay: string = new Date().toISOString().slice(0, 10);
+  private currentDay: string = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  private persistTimeout: NodeJS.Timeout | null = null;
 
   // Blog engagement metrics map (blogSlug -> metrics)
   private blogMetrics: Map<
@@ -44,6 +45,8 @@ class AnalyticsService {
   private bookInterestMap: Map<string, { clicks: number; title: string }> = new Map();
 
   constructor() {
+    this.syncFromDb();
+
     // Purge inactive sessions every 2 minutes (inactive > 5 minutes)
     setInterval(() => {
       this.cleanupSessions();
@@ -51,13 +54,47 @@ class AnalyticsService {
     }, 2 * 60 * 1000);
   }
 
+  private async syncFromDb() {
+    try {
+      const setting = await prisma.systemSetting.findUnique({
+        where: { key: `ANALYTICS_UNIQUE_IPS_${this.currentDay}` },
+      });
+      if (setting && setting.value) {
+        const ips = JSON.parse(setting.value);
+        if (Array.isArray(ips)) {
+          ips.forEach((ip: string) => this.todayUniqueVisitors.add(ip));
+        }
+      }
+    } catch {}
+  }
+
+  private persistIpsToDb() {
+    if (this.persistTimeout) clearTimeout(this.persistTimeout);
+    this.persistTimeout = setTimeout(async () => {
+      try {
+        const ipsArray = Array.from(this.todayUniqueVisitors);
+        await prisma.systemSetting.upsert({
+          where: { key: `ANALYTICS_UNIQUE_IPS_${this.currentDay}` },
+          create: {
+            key: `ANALYTICS_UNIQUE_IPS_${this.currentDay}`,
+            value: JSON.stringify(ipsArray),
+          },
+          update: {
+            value: JSON.stringify(ipsArray),
+          },
+        });
+      } catch {}
+    }, 2000);
+  }
+
   private checkDayReset() {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
     if (today !== this.currentDay) {
       this.currentDay = today;
       this.todayUniqueVisitors.clear();
       this.todayPageviews = 0;
       this.dailyDevices = { desktop: 0, mobile: 0, tablet: 0 };
+      this.syncFromDb();
     }
   }
 
@@ -108,20 +145,22 @@ class AnalyticsService {
     this.checkDayReset();
 
     const ua = data.userAgent || '';
-    const cleanIp = (data.ip || '127.0.0.1').trim().replace(/^::ffff:/, '');
+    const rawIp = (data.ip || '127.0.0.1').trim().replace(/^::ffff:/, '');
+    const cleanIp = rawIp.split(':')[0].trim(); // Remove any port if attached
     const deviceType = this.detectDevice(ua, data.deviceType, data.screenWidth);
 
     // 1. UNIQUE VISITOR DEDUPLICATION STRICTLY BY DEVICE IP:
-    // Deduplicate by public device IP (+ deviceType).
-    // Multiple visits, tab reopens, or refreshes from the same device IP will NEVER increment unique visitors.
+    // Deduplicate purely by public device IP.
+    // Multiple visits, tab reopens, or refreshes from the SAME device IP will NEVER increment unique visitors.
     const deviceIpKey = cleanIp && cleanIp !== '127.0.0.1' && cleanIp !== '::1'
-      ? `${cleanIp}_${deviceType}`
-      : (data.deviceId && data.deviceId.trim() !== '' ? data.deviceId : `local_${deviceType}`);
+      ? cleanIp
+      : (data.deviceId && data.deviceId.trim() !== '' ? data.deviceId : 'local_device');
 
     const isNewVisitor = !this.todayUniqueVisitors.has(deviceIpKey);
     if (isNewVisitor) {
       this.todayUniqueVisitors.add(deviceIpKey);
       this.dailyDevices[deviceType] = (this.dailyDevices[deviceType] || 0) + 1;
+      this.persistIpsToDb();
     }
 
     // 2. PAGEVIEWS:

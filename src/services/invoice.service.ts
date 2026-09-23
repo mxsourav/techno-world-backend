@@ -76,6 +76,15 @@ function formatINR(amount: number): string {
   return 'Rs. ' + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function cleanPdfText(text: string | null | undefined): string {
+  if (!text) return '';
+  return text
+    .replace(/₹/g, 'Rs. ')
+    .replace(/[•·]/g, '|')
+    .replace(/[—–]/g, '-')
+    .replace(/[^\x00-\x7F]/g, '');
+}
+
 function formatDate(d: Date | string): string {
   return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 }
@@ -148,20 +157,20 @@ function renderInvoiceSheet(doc: PDFKit.PDFDocument, invoiceData: {
   doc.fontSize(14).font('Helvetica-Bold').fillColor('#0f172a')
      .text(titleText, rightX - 220, 40, { width: 220, align: 'right' });
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#047857')
-     .text(`${invoiceData.invoiceNumber}`, rightX - 220, 58, { width: 220, align: 'right' });
+     .text(`${cleanPdfText(invoiceData.invoiceNumber)}`, rightX - 220, 58, { width: 220, align: 'right' });
   doc.fontSize(8).font('Helvetica').fillColor('#64748b')
      .text(`Date: ${formatDate(invoiceData.createdAt)}`, rightX - 220, 73, { width: 220, align: 'right' });
 
   const orderDisplay = invoiceData.orderNumbers.length > 1
     ? `Orders (${invoiceData.orderNumbers.length}): #${invoiceData.orderNumbers[0]} +${invoiceData.orderNumbers.length - 1} more`
     : `Order: #${invoiceData.orderNumbers[0] || 'N/A'}`;
-  doc.text(orderDisplay, rightX - 240, 85, { width: 240, align: 'right' });
+  doc.text(cleanPdfText(orderDisplay), rightX - 240, 85, { width: 240, align: 'right' });
 
-  // Payment badge
+  // Payment badge - clean ASCII without middle dot which glitched as small 1
   const payMethod = (invoiceData.paymentMethod || 'PREPAID').toUpperCase();
   const payStatus = invoiceData.paymentStatus === 'PAID' ? 'PAID' : invoiceData.paymentStatus || 'PENDING';
   doc.fontSize(8).font('Helvetica-Bold').fillColor('#065f46')
-     .text(`${payMethod} · ${payStatus}`, rightX - 220, 98, { width: 220, align: 'right' });
+     .text(`${payMethod} | ${payStatus}`, rightX - 220, 98, { width: 220, align: 'right' });
 
   // ─── SEPARATOR ───────────────────────────────────────────
   y += 20;
@@ -171,20 +180,20 @@ function renderInvoiceSheet(doc: PDFKit.PDFDocument, invoiceData: {
   // ─── CUSTOMER INFO ───────────────────────────────────────
   doc.fontSize(8).font('Helvetica-Bold').fillColor('#1e293b').text('BILL TO:', leftX, y);
   y += 12;
-  doc.fontSize(9).font('Helvetica-Bold').fillColor('#0f172a').text(invoiceData.customerName, leftX, y);
+  doc.fontSize(9).font('Helvetica-Bold').fillColor('#0f172a').text(cleanPdfText(invoiceData.customerName), leftX, y);
   y += 12;
   doc.fontSize(8).font('Helvetica').fillColor('#475569')
-     .text(`Phone: ${invoiceData.customerPhone} | Email: ${invoiceData.customerEmail}`, leftX, y);
+     .text(`Phone: ${cleanPdfText(invoiceData.customerPhone)} | Email: ${cleanPdfText(invoiceData.customerEmail)}`, leftX, y);
   y += 11;
 
   if (invoiceData.isPickup) {
     doc.text(`Pickup: College Street Dispatch Desk`, leftX, y);
     if (invoiceData.pickupSlot) {
       y += 11;
-      doc.text(`Slot: ${invoiceData.pickupSlot}`, leftX, y);
+      doc.text(`Slot: ${cleanPdfText(invoiceData.pickupSlot)}`, leftX, y);
     }
   } else if (invoiceData.deliveryAddress) {
-    doc.text(`Deliver to: ${invoiceData.deliveryAddress}`, leftX, y, { width: pageW });
+    doc.text(`Deliver to: ${cleanPdfText(invoiceData.deliveryAddress)}`, leftX, y, { width: pageW });
   }
 
   // ─── SEPARATOR ───────────────────────────────────────────
@@ -221,9 +230,9 @@ function renderInvoiceSheet(doc: PDFKit.PDFDocument, invoiceData: {
   let totalConsignmentWeightGrams = 0;
 
   invoiceData.items.forEach((item, idx) => {
-    const title = item.title || 'Book';
-    const authors = item.authors || '';
-    const sku = item.sku || '—';
+    const title = cleanPdfText(item.title || 'Book');
+    const authors = cleanPdfText(item.authors || '');
+    const sku = cleanPdfText(item.sku || '-');
     const qty = item.quantity || 1;
     const rate = item.priceAtPurchase || 0;
     const total = qty * rate;
@@ -342,8 +351,18 @@ function renderInvoiceSheet(doc: PDFKit.PDFDocument, invoiceData: {
 
 // ─── Generate Invoice for a Single Order (With Child Orders Merged) ──
 export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
-  const order = await prisma.order.findFirst({
+  const initialOrder = await prisma.order.findFirst({
     where: { OR: [{ id: orderId }, { orderNumber: orderId }] },
+    select: { id: true, parentOrderId: true }
+  });
+
+  if (!initialOrder) throw new Error(`Order ${orderId} not found`);
+
+  // If this order is a child of a merged parcel, find the parent order so the entire consignment is billed together
+  const targetParentId = initialOrder.parentOrderId || initialOrder.id;
+
+  const order = await prisma.order.findFirst({
+    where: { id: targetParentId },
     include: {
       items: {
         include: {
@@ -374,20 +393,39 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
     }
   });
 
-  if (!order) throw new Error(`Order ${orderId} not found`);
+  if (!order) throw new Error(`Order ${targetParentId} not found`);
 
   // Ensure invoice number is assigned
   const invoiceNumber = order.invoiceNumber || await assignInvoiceNumber(order.id);
 
-  // Gather ALL items (parent order + any merged child orders)
-  const allRawItems: any[] = [...(order.items || [])];
+  // Gather ALL items (parent order + any merged child orders) without duplicates
+  const allRawItems: any[] = [];
   const allOrderNumbers: string[] = [order.orderNumber];
+  const seenItemKeys = new Set<string>();
+
+  if (Array.isArray(order.items)) {
+    order.items.forEach((it: any) => {
+      const itemKey = `${order.id}_${it.id || it.bookId || ''}`;
+      if (!seenItemKeys.has(itemKey)) {
+        seenItemKeys.add(itemKey);
+        allRawItems.push({ ...it, sourceOrderNumber: order.orderNumber });
+      }
+    });
+  }
 
   if (Array.isArray(order.childOrders) && order.childOrders.length > 0) {
     for (const child of order.childOrders) {
-      allOrderNumbers.push(child.orderNumber);
+      if (child.orderNumber && !allOrderNumbers.includes(child.orderNumber)) {
+        allOrderNumbers.push(child.orderNumber);
+      }
       if (Array.isArray(child.items)) {
-        allRawItems.push(...child.items);
+        child.items.forEach((it: any) => {
+          const itemKey = `${child.id}_${it.id || it.bookId || ''}`;
+          if (!seenItemKeys.has(itemKey)) {
+            seenItemKeys.add(itemKey);
+            allRawItems.push({ ...it, sourceOrderNumber: child.orderNumber });
+          }
+        });
       }
     }
   }
@@ -402,29 +440,31 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
     }
 
     return {
-      title: bk.title || 'Book',
-      authors: bk.authors?.map((a: any) => a.name).join(', ') || '',
-      sku: bk.sku || bk.isbn13 || bk.isbn10 || '—',
+      title: cleanPdfText(bk.title || 'Book'),
+      authors: cleanPdfText(bk.authors?.map((a: any) => a.name).join(', ') || ''),
+      sku: cleanPdfText(bk.sku || bk.isbn13 || bk.isbn10 || '-'),
       quantity: item.quantity || 1,
       priceAtPurchase: item.priceAtPurchase || 0,
       weightGrams: unitWeightGrams,
+      orderNumber: item.sourceOrderNumber,
     };
   });
 
   // Calculate consolidated subtotal across all items
-  const computedSubtotal = items.reduce((sum, it) => sum + (it.priceAtPurchase * it.quantity), 0);
-  const subtotal = Math.max(order.subtotal || 0, computedSubtotal);
-  const totalAmount = Math.max(order.totalAmount || 0, subtotal + (order.shippingCharge || 0) - (order.discountAmount || 0));
+  const subtotal = items.reduce((sum, it) => sum + (it.priceAtPurchase * it.quantity), 0);
+  const shippingCharge = order.shippingCharge || 0;
+  const discountAmount = order.discountAmount || 0;
+  const totalAmount = Math.max(0, subtotal + shippingCharge - discountAmount);
 
   const isPickup = order.shippingMethod === 'SELF_PICKUP' || order.shippingCarrier === 'STORE_TAKEAWAY';
-  const custName = order.pickupName || order.address?.fullName || order.user?.name || 'Valued Customer';
-  const custPhone = order.pickupPhone || order.address?.phone || order.user?.phone || 'N/A';
-  const custEmail = order.pickupEmail || order.customerEmail || order.address?.email || order.user?.email || 'N/A';
+  const custName = cleanPdfText(order.pickupName || order.address?.fullName || order.user?.name || 'Valued Customer');
+  const custPhone = cleanPdfText(order.pickupPhone || order.address?.phone || order.user?.phone || 'N/A');
+  const custEmail = cleanPdfText(order.pickupEmail || order.customerEmail || order.address?.email || order.user?.email || 'N/A');
 
   let deliveryAddress = '';
   if (order.address) {
     const addr = order.address;
-    deliveryAddress = [addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ');
+    deliveryAddress = cleanPdfText([addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', '));
   }
 
   return new Promise((resolve, reject) => {
@@ -450,8 +490,8 @@ export async function generateInvoicePDF(orderId: string): Promise<Buffer> {
       deliveryAddress,
       items,
       subtotal,
-      shippingCharge: order.shippingCharge || 0,
-      discountAmount: order.discountAmount || 0,
+      shippingCharge,
+      discountAmount,
       totalAmount,
       shippingMethod: order.shippingMethod || 'NORMAL_POST',
     });
@@ -486,7 +526,7 @@ export async function generateBatchInvoices(): Promise<{ generated: number; erro
   return { generated, errors };
 }
 
-// ─── Merge Multiple Orders into Consolidated or Sequential Invoices ─
+// ─── Merge Multiple Orders into Consolidated Invoice ─────────────
 export async function generateMergedInvoicesPDF(orderIds: string[]): Promise<Buffer> {
   if (orderIds.length === 0) throw new Error('No orders specified');
   if (orderIds.length === 1) return generateInvoicePDF(orderIds[0]);
@@ -531,15 +571,6 @@ export async function generateMergedInvoicesPDF(orderIds: string[]): Promise<Buf
 
   if (allOrders.length === 0) throw new Error('No orders found');
 
-  // Check if all orders belong to the same customer/delivery parcel group
-  const firstPhone = (allOrders[0].pickupPhone || allOrders[0].address?.phone || allOrders[0].user?.phone || '').replace(/\D/g, '').slice(-10);
-  const firstPin = (allOrders[0].address?.pincode || '').trim();
-  const isSingleCustomerBundle = allOrders.every(o => {
-    const ph = (o.pickupPhone || o.address?.phone || o.user?.phone || '').replace(/\D/g, '').slice(-10);
-    const pin = (o.address?.pincode || '').trim();
-    return (!ph || !firstPhone || ph === firstPhone) && (!pin || !firstPin || pin === firstPin);
-  });
-
   return new Promise(async (resolve, reject) => {
     const chunks: Buffer[] = [];
     const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true });
@@ -548,146 +579,107 @@ export async function generateMergedInvoicesPDF(orderIds: string[]): Promise<Buf
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
-    if (isSingleCustomerBundle) {
-      // ── CONSOLIDATED INVOICE FOR THIS PARCEL BUNDLE ──────────────
-      // Combine ALL books from ALL merged orders into ONE comprehensive bill
-      const primaryOrder = allOrders[0];
-      const invoiceNumber = primaryOrder.invoiceNumber || await assignInvoiceNumber(primaryOrder.id);
+    // ── CONSOLIDATED INVOICE FOR THIS PARCEL BUNDLE ──────────────
+    // Combine ALL books from ALL merged orders into ONE comprehensive bill
+    const primaryOrder = allOrders[0];
+    const invoiceNumber = primaryOrder.invoiceNumber || await assignInvoiceNumber(primaryOrder.id);
 
-      const allRawItems: any[] = [];
-      const allOrderNumbers: string[] = [];
+    const allRawItems: any[] = [];
+    const allOrderNumbers: string[] = [];
+    const seenItemKeys = new Set<string>();
 
-      allOrders.forEach(ord => {
+    allOrders.forEach(ord => {
+      if (ord.orderNumber && !allOrderNumbers.includes(ord.orderNumber)) {
         allOrderNumbers.push(ord.orderNumber);
-        if (Array.isArray(ord.items)) allRawItems.push(...ord.items);
-        if (Array.isArray(ord.childOrders)) {
-          ord.childOrders.forEach((child: any) => {
+      }
+      if (Array.isArray(ord.items)) {
+        ord.items.forEach((it: any) => {
+          const itemKey = `${ord.id}_${it.id || it.bookId || ''}`;
+          if (!seenItemKeys.has(itemKey)) {
+            seenItemKeys.add(itemKey);
+            allRawItems.push({ ...it, sourceOrderNumber: ord.orderNumber });
+          }
+        });
+      }
+      if (Array.isArray(ord.childOrders)) {
+        ord.childOrders.forEach((child: any) => {
+          if (child.orderNumber && !allOrderNumbers.includes(child.orderNumber)) {
             allOrderNumbers.push(child.orderNumber);
-            if (Array.isArray(child.items)) allRawItems.push(...child.items);
-          });
-        }
-      });
+          }
+          if (Array.isArray(child.items)) {
+            child.items.forEach((it: any) => {
+              const itemKey = `${child.id}_${it.id || it.bookId || ''}`;
+              if (!seenItemKeys.has(itemKey)) {
+                seenItemKeys.add(itemKey);
+                allRawItems.push({ ...it, sourceOrderNumber: child.orderNumber });
+              }
+            });
+          }
+        });
+      }
+    });
 
-      const uniqueOrderNumbers = Array.from(new Set(allOrderNumbers));
-
-      const items = allRawItems.map((item: any) => {
-        const bk = item.book || {};
-        let unitWeightGrams = 450;
-        if (bk.weight && typeof bk.weight === 'number' && bk.weight > 0) {
-          unitWeightGrams = bk.weight < 10 ? Math.round(bk.weight * 1000) : Math.round(bk.weight);
-        } else if (bk.pages && typeof bk.pages === 'number' && bk.pages > 0) {
-          unitWeightGrams = Math.round(bk.pages * 1.25 + 50);
-        }
-
-        return {
-          title: bk.title || 'Book',
-          authors: bk.authors?.map((a: any) => a.name).join(', ') || '',
-          sku: bk.sku || bk.isbn13 || bk.isbn10 || '—',
-          quantity: item.quantity || 1,
-          priceAtPurchase: item.priceAtPurchase || 0,
-          weightGrams: unitWeightGrams,
-        };
-      });
-
-      const subtotal = items.reduce((sum, it) => sum + (it.priceAtPurchase * it.quantity), 0);
-      const shippingCharge = allOrders.reduce((sum, o) => sum + (o.shippingCharge || 0), 0);
-      const discountAmount = allOrders.reduce((sum, o) => sum + (o.discountAmount || 0), 0);
-      const totalAmount = subtotal + shippingCharge - discountAmount;
-
-      // Determine highest shipping method
-      let highestMethod = primaryOrder.shippingMethod || 'NORMAL_POST';
-      if (allOrders.some(o => o.shippingMethod === 'EXPRESS_LOCAL')) highestMethod = 'EXPRESS_LOCAL';
-      else if (allOrders.some(o => o.shippingMethod === 'SPEED_POST')) highestMethod = 'SPEED_POST';
-
-      const isPickup = allOrders.some(o => o.shippingMethod === 'SELF_PICKUP' || o.shippingCarrier === 'STORE_TAKEAWAY');
-      const custName = primaryOrder.pickupName || primaryOrder.address?.fullName || primaryOrder.user?.name || 'Valued Customer';
-      const custPhone = primaryOrder.pickupPhone || primaryOrder.address?.phone || primaryOrder.user?.phone || 'N/A';
-      const custEmail = primaryOrder.pickupEmail || primaryOrder.customerEmail || primaryOrder.address?.email || primaryOrder.user?.email || 'N/A';
-
-      let deliveryAddress = '';
-      if (primaryOrder.address) {
-        const addr = primaryOrder.address;
-        deliveryAddress = [addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ');
+    const items = allRawItems.map((item: any) => {
+      const bk = item.book || {};
+      let unitWeightGrams = 450;
+      if (bk.weight && typeof bk.weight === 'number' && bk.weight > 0) {
+        unitWeightGrams = bk.weight < 10 ? Math.round(bk.weight * 1000) : Math.round(bk.weight);
+      } else if (bk.pages && typeof bk.pages === 'number' && bk.pages > 0) {
+        unitWeightGrams = Math.round(bk.pages * 1.25 + 50);
       }
 
-      renderInvoiceSheet(doc, {
-        invoiceNumber,
-        isConsolidated: true,
-        orderNumbers: uniqueOrderNumbers,
-        createdAt: primaryOrder.invoiceGeneratedAt || primaryOrder.createdAt,
-        paymentMethod: primaryOrder.paymentMethod || 'PREPAID',
-        paymentStatus: primaryOrder.paymentStatus || 'PAID',
-        customerName: custName,
-        customerPhone: custPhone,
-        customerEmail: custEmail,
-        isPickup,
-        pickupSlot: primaryOrder.selectedPickupSlot,
-        deliveryAddress,
-        items,
-        subtotal,
-        shippingCharge,
-        discountAmount,
-        totalAmount,
-        shippingMethod: highestMethod,
-      });
-    } else {
-      // ── MULTI-CUSTOMER BATCH INVOICES ────────────────────────────
-      // Generate one sheet per order/customer
-      allOrders.forEach((order, idx) => {
-        if (idx > 0) doc.addPage({ size: 'A4', margin: 40 });
+      return {
+        title: cleanPdfText(bk.title || 'Book'),
+        authors: cleanPdfText(bk.authors?.map((a: any) => a.name).join(', ') || ''),
+        sku: cleanPdfText(bk.sku || bk.isbn13 || bk.isbn10 || '-'),
+        quantity: item.quantity || 1,
+        priceAtPurchase: item.priceAtPurchase || 0,
+        weightGrams: unitWeightGrams,
+        orderNumber: item.sourceOrderNumber,
+      };
+    });
 
-        const items = (order.items || []).map((item: any) => {
-          const bk = item.book || {};
-          let unitWeightGrams = 450;
-          if (bk.weight && typeof bk.weight === 'number' && bk.weight > 0) {
-            unitWeightGrams = bk.weight < 10 ? Math.round(bk.weight * 1000) : Math.round(bk.weight);
-          } else if (bk.pages && typeof bk.pages === 'number' && bk.pages > 0) {
-            unitWeightGrams = Math.round(bk.pages * 1.25 + 50);
-          }
+    const subtotal = items.reduce((sum, it) => sum + (it.priceAtPurchase * it.quantity), 0);
+    const shippingCharge = allOrders.reduce((sum, o) => sum + (o.shippingCharge || 0), 0);
+    const discountAmount = allOrders.reduce((sum, o) => sum + (o.discountAmount || 0), 0);
+    const totalAmount = Math.max(0, subtotal + shippingCharge - discountAmount);
 
-          return {
-            title: bk.title || 'Book',
-            authors: bk.authors?.map((a: any) => a.name).join(', ') || '',
-            sku: bk.sku || bk.isbn13 || bk.isbn10 || '—',
-            quantity: item.quantity || 1,
-            priceAtPurchase: item.priceAtPurchase || 0,
-            weightGrams: unitWeightGrams,
-          };
-        });
+    // Determine highest shipping method
+    let highestMethod = primaryOrder.shippingMethod || 'NORMAL_POST';
+    if (allOrders.some(o => o.shippingMethod === 'EXPRESS_LOCAL')) highestMethod = 'EXPRESS_LOCAL';
+    else if (allOrders.some(o => o.shippingMethod === 'SPEED_POST')) highestMethod = 'SPEED_POST';
 
-        const isPickup = order.shippingMethod === 'SELF_PICKUP' || order.shippingCarrier === 'STORE_TAKEAWAY';
-        const custName = order.pickupName || order.address?.fullName || order.user?.name || 'Valued Customer';
-        const custPhone = order.pickupPhone || order.address?.phone || order.user?.phone || 'N/A';
-        const custEmail = order.pickupEmail || order.customerEmail || order.address?.email || order.user?.email || 'N/A';
+    const isPickup = allOrders.some(o => o.shippingMethod === 'SELF_PICKUP' || o.shippingCarrier === 'STORE_TAKEAWAY');
+    const custName = cleanPdfText(primaryOrder.pickupName || primaryOrder.address?.fullName || primaryOrder.user?.name || 'Valued Customer');
+    const custPhone = cleanPdfText(primaryOrder.pickupPhone || primaryOrder.address?.phone || primaryOrder.user?.phone || 'N/A');
+    const custEmail = cleanPdfText(primaryOrder.pickupEmail || primaryOrder.customerEmail || primaryOrder.address?.email || primaryOrder.user?.email || 'N/A');
 
-        let deliveryAddress = '';
-        if (order.address) {
-          const addr = order.address;
-          deliveryAddress = [addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', ');
-        }
-
-        renderInvoiceSheet(doc, {
-          invoiceNumber: order.invoiceNumber || 'PENDING',
-          isConsolidated: false,
-          orderNumbers: [order.orderNumber],
-          createdAt: order.invoiceGeneratedAt || order.createdAt,
-          paymentMethod: order.paymentMethod || 'PREPAID',
-          paymentStatus: order.paymentStatus || 'PAID',
-          customerName: custName,
-          customerPhone: custPhone,
-          customerEmail: custEmail,
-          isPickup,
-          pickupSlot: order.selectedPickupSlot,
-          deliveryAddress,
-          items,
-          subtotal: order.subtotal || 0,
-          shippingCharge: order.shippingCharge || 0,
-          discountAmount: order.discountAmount || 0,
-          totalAmount: order.totalAmount || 0,
-          shippingMethod: order.shippingMethod || 'NORMAL_POST',
-        });
-      });
+    let deliveryAddress = '';
+    if (primaryOrder.address) {
+      const addr = primaryOrder.address;
+      deliveryAddress = cleanPdfText([addr.addressLine1, addr.addressLine2, addr.city, addr.state, addr.pincode].filter(Boolean).join(', '));
     }
+
+    renderInvoiceSheet(doc, {
+      invoiceNumber,
+      isConsolidated: true,
+      orderNumbers: allOrderNumbers,
+      createdAt: primaryOrder.invoiceGeneratedAt || primaryOrder.createdAt,
+      paymentMethod: primaryOrder.paymentMethod || 'PREPAID',
+      paymentStatus: primaryOrder.paymentStatus || 'PAID',
+      customerName: custName,
+      customerPhone: custPhone,
+      customerEmail: custEmail,
+      isPickup,
+      pickupSlot: primaryOrder.selectedPickupSlot,
+      deliveryAddress,
+      items,
+      subtotal,
+      shippingCharge,
+      discountAmount,
+      totalAmount,
+      shippingMethod: highestMethod,
+    });
 
     doc.end();
   });

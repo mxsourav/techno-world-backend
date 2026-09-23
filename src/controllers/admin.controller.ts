@@ -820,8 +820,13 @@ export const toggleCustomerStatus = async (req: Request, res: Response, next: Ne
 // POST /api/v1/admin/customers/:id/points (Manual Loyalty Points Grant / Deduct - Points ONLY)
 export const adjustCustomerPoints = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { id } = req.params;
+    const targetIdentifier = (req.params.id || req.body.id || req.body.userId || req.body.email || '').trim();
     const { points, type = 'CREDIT', reason } = req.body;
+
+    if (!targetIdentifier || targetIdentifier === 'undefined' || targetIdentifier === 'null') {
+      res.status(400).json({ success: false, message: 'Valid customer ID or email is required' });
+      return;
+    }
 
     const pointsNum = Math.abs(parseInt(points, 10));
     if (isNaN(pointsNum) || pointsNum <= 0) {
@@ -832,13 +837,18 @@ export const adjustCustomerPoints = async (req: Request, res: Response, next: Ne
     const isCredit = type.toUpperCase() === 'CREDIT';
     const auditReason = (reason || '').trim() || (isCredit ? 'Manual loyalty reward granted by store admin' : 'Points deduction adjustment by store admin');
 
-    const user = await prisma.user.findUnique({
-      where: { id },
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { id: targetIdentifier },
+          { email: targetIdentifier }
+        ]
+      },
       select: { id: true, name: true, email: true, technoPoints: true },
     });
 
     if (!user) {
-      res.status(404).json({ success: false, message: 'Customer not found' });
+      res.status(404).json({ success: false, message: `Customer not found for identifier "${targetIdentifier}"` });
       return;
     }
 
@@ -855,7 +865,7 @@ export const adjustCustomerPoints = async (req: Request, res: Response, next: Ne
     // Execute atomic transaction for points adjustment
     await prisma.$transaction(async (tx) => {
       await tx.user.update({
-        where: { id },
+        where: { id: user.id },
         data: {
           technoPoints: newBalance,
         },
@@ -866,7 +876,7 @@ export const adjustCustomerPoints = async (req: Request, res: Response, next: Ne
 
       await tx.pointTransaction.create({
         data: {
-          userId: id,
+          userId: user.id,
           points: pointsNum,
           type: isCredit ? 'ADMIN_CREDIT' : 'ADMIN_DEBIT',
           status: 'COMPLETED',

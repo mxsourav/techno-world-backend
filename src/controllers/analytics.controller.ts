@@ -4,11 +4,12 @@ import { analyticsService } from '../services/analytics.service.js';
 // POST /api/v1/analytics/pulse (Public heartbeat)
 export const recordPulse = (req: Request, res: Response): void => {
   try {
-    const { sessionId, path, pageTitle, referrer, deviceType, screenWidth } = req.body;
+    const { deviceId, sessionId, path, pageTitle, referrer, deviceType, screenWidth, isPageview } = req.body;
     const userAgent = req.headers['user-agent'];
     const ip = req.ip || (req.headers['x-forwarded-for'] as string);
 
     const result = analyticsService.recordPulse({
+      deviceId,
       sessionId,
       path,
       pageTitle,
@@ -17,11 +18,12 @@ export const recordPulse = (req: Request, res: Response): void => {
       screenWidth,
       userAgent,
       ip,
+      isPageview: Boolean(isPageview),
     });
 
     res.status(200).json({ success: true, data: result });
   } catch {
-    res.status(200).json({ success: true, data: { activeNow: 1 } });
+    res.status(200).json({ success: true, data: { activeNow: 0 } });
   }
 };
 

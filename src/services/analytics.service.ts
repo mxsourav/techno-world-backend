@@ -94,6 +94,7 @@ class AnalyticsService {
 
   // Record visitor pulse/heartbeat
   public recordPulse(data: {
+    deviceId?: string;
     sessionId: string;
     path: string;
     pageTitle?: string;
@@ -102,23 +103,43 @@ class AnalyticsService {
     ip?: string;
     deviceType?: string;
     screenWidth?: number;
+    isPageview?: boolean;
   }) {
     this.checkDayReset();
 
-    const sessionId = data.sessionId || `anon-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const ua = data.userAgent || '';
+    const ip = data.ip || '127.0.0.1';
     const deviceType = this.detectDevice(ua, data.deviceType, data.screenWidth);
 
-    const isNewVisitor = !this.todayUniqueVisitors.has(sessionId);
-    if (isNewVisitor) {
-      this.todayUniqueVisitors.add(sessionId);
-      this.dailyDevices[deviceType] += 1;
-    }
-    this.todayPageviews += 1;
+    // 1. UNIQUE VISITOR DEDUPLICATION:
+    // Prefer persistent deviceId from client (localStorage / 1-year cookie).
+    // Fall back to IP + device + userAgent signature if deviceId is missing.
+    // One physical device can visit 100 times in a day — it is counted ONCE as a unique shopper today.
+    const visitorKey = data.deviceId && data.deviceId.trim() !== ''
+      ? data.deviceId
+      : `anon_${ip}_${deviceType}_${ua.slice(0, 60)}`;
 
+    const isNewVisitor = !this.todayUniqueVisitors.has(visitorKey);
+    if (isNewVisitor) {
+      this.todayUniqueVisitors.add(visitorKey);
+      this.dailyDevices[deviceType] = (this.dailyDevices[deviceType] || 0) + 1;
+    }
+
+    // 2. PAGEVIEWS:
+    // Only increment when explicitly flagged as a genuine pageview or when path changed.
+    // Idle 25-second heartbeats on the same URL do NOT increment pageviews.
+    const sessionId = data.sessionId || `sess-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const existingSession = this.visitors.get(sessionId);
+    const isNewPage = !existingSession || existingSession.currentPath !== (data.path || '/');
+
+    if (data.isPageview || isNewPage) {
+      this.todayPageviews += 1;
+    }
+
+    // 3. ACTIVE SESSIONS (sliding 5-minute heartbeat window):
     this.visitors.set(sessionId, {
       sessionId,
-      ip: data.ip || '127.0.0.1',
+      ip,
       userAgent: ua,
       currentPath: data.path || '/',
       pageTitle: data.pageTitle || 'Techno World Books',
@@ -126,9 +147,6 @@ class AnalyticsService {
       deviceType,
       lastSeen: Date.now(),
     });
-
-    this.todayUniqueVisitors.add(sessionId);
-    this.todayPageviews += 1;
 
     return {
       activeNow: this.getActiveCount(),

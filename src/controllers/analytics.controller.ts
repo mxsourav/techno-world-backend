@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { analyticsService } from '../services/analytics.service.js';
+import { getClientIp } from '../utils/ip.util.js';
 
 // POST /api/v1/analytics/pulse (Public heartbeat)
 export const recordPulse = (req: Request, res: Response): void => {
   try {
     const { deviceId, sessionId, path, pageTitle, referrer, deviceType, screenWidth, isPageview } = req.body;
     const userAgent = req.headers['user-agent'];
-    const ip = req.ip || (req.headers['x-forwarded-for'] as string);
+    const clientIp = getClientIp(req);
 
     const result = analyticsService.recordPulse({
       deviceId,
@@ -17,7 +18,7 @@ export const recordPulse = (req: Request, res: Response): void => {
       deviceType,
       screenWidth,
       userAgent,
-      ip,
+      ip: clientIp,
       isPageview: Boolean(isPageview),
     });
 

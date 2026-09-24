@@ -8,7 +8,7 @@ const router = Router();
 
 // Standard Password Login with Brute-Force Protection
 router.post('/login', authLimiter, validateRequest(loginSchema), login);
-router.post('/refresh', authLimiter, refresh);
+router.post('/refresh', refresh);
 router.post('/logout', logout);
 
 // Mobile OTP Authentication (for Customers and Admins)

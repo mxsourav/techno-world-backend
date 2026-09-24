@@ -7,6 +7,7 @@ import { ExecutionService } from '../services/import/execution.service.js';
 import { CloudinaryService } from '../services/cloudinary.service.js';
 import { emailService } from '../services/email.service.js';
 import { notifyBookUpdated, submitToIndexNow } from '../services/indexnow.service.js';
+import { SalesReportService } from '../services/sales-report.service.js';
 
 
 export const getAdminStats = async (req: Request, res: Response, next: NextFunction) => {
@@ -1803,3 +1804,70 @@ export const triggerIndexNowSubmission = async (
   }
 };
 
+/**
+ * Main sales report data handler
+ * GET /api/v1/admin/sales-report
+ */
+export const getSalesReport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { period, startDate, endDate } = req.query as {
+      period?: '1month' | '3months' | '6months' | '1year' | 'custom';
+      startDate?: string;
+      endDate?: string;
+    };
+
+    const data = await SalesReportService.getSalesReport({ period, startDate, endDate });
+    res.status(200).json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Tally-compatible CSV export handler
+ * GET /api/v1/admin/sales-report/export
+ */
+export const exportSalesReport = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { period, startDate, endDate } = req.query as {
+      period?: '1month' | '3months' | '6months' | '1year' | 'custom';
+      startDate?: string;
+      endDate?: string;
+    };
+
+    const { filename, content } = await SalesReportService.generateTallyCSV({ period, startDate, endDate });
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(content);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Current vs previous month sales comparison
+ * GET /api/v1/admin/sales-report/monthly-summary
+ */
+export const getSalesMonthlyComparison = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const data = await SalesReportService.getMonthlyComparison();
+    res.status(200).json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Refresh historical sales snapshots
+ * POST /api/v1/admin/sales-report/refresh-snapshots
+ */
+export const refreshSalesSnapshots = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const months = req.query.months ? Number(req.query.months) : 12;
+    const result = await SalesReportService.backfillSnapshots(months);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};

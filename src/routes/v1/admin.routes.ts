@@ -32,7 +32,11 @@ import {
   getAbandonedCarts,
   processRtoRestock,
   exportGstr1Report,
-  triggerIndexNowSubmission
+  triggerIndexNowSubmission,
+  getSalesReport,
+  exportSalesReport,
+  getSalesMonthlyComparison,
+  refreshSalesSnapshots,
 } from '../../controllers/admin.controller.js';
 
 import {
@@ -88,6 +92,12 @@ router.get('/emails', getEmailLogs);
 router.get('/abandoned-carts', getAbandonedCarts);
 router.post('/orders/:id/rto', processRtoRestock);
 router.get('/reports/gstr1', exportGstr1Report);
+
+// Sales Reports & Snapshots
+router.get('/sales-report', getSalesReport);
+router.get('/sales-report/export', exportSalesReport);
+router.get('/sales-report/monthly-summary', getSalesMonthlyComparison);
+router.post('/sales-report/refresh-snapshots', refreshSalesSnapshots);
 
 // Logs
 router.get('/books/:id/logs', getActivityLogs);

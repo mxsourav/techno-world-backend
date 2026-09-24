@@ -961,6 +961,35 @@ model BookRequest {
 }
 
 // ============================================================
+// SALES SNAPSHOT & REPORTING PERSISTENCE
+// ============================================================
+
+model SalesSnapshot {
+  id               String   @id @default(uuid())
+  yearMonth        String   @unique // Format: "YYYY-MM" (e.g., "2026-09")
+  
+  totalRevenue     Decimal  @default(0) @db.Decimal(12, 2)
+  totalOrders      Int      @default(0)
+  avgOrderValue    Decimal  @default(0) @db.Decimal(12, 2)
+  totalBooksSold   Int      @default(0)
+  totalShipping    Decimal  @default(0) @db.Decimal(12, 2)
+  totalDiscounts   Decimal  @default(0) @db.Decimal(12, 2)
+  totalTax         Decimal  @default(0) @db.Decimal(12, 2)
+  netRevenue       Decimal  @default(0) @db.Decimal(12, 2)
+  
+  paymentBreakdown String?  @db.Text // JSON: { [method]: { count, amount } }
+  statusBreakdown  String?  @db.Text // JSON: { [status]: count }
+  topBooks         String?  @db.Text // JSON: Array of { id, title, quantitySold, revenue }
+  dailyData        String?  @db.Text // JSON: Array of { date, revenue, orders }
+  
+  snapshotDate     DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([yearMonth])
+}
+
+// ============================================================
 // ENUMS
 // ============================================================
 

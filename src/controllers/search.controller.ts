@@ -14,24 +14,27 @@ export const instantSearch = async (req: Request, res: Response, next: NextFunct
     const words = q.split(/\s+/).filter(w => w.length >= 2);
 
     const orClauses: any[] = [
-      { title: { contains: q } },
-      { isbn13: { contains: q } },
-      { isbn10: { contains: q } },
-      { bookCode: { contains: q } },
-      { sku: { contains: q } },
-      { seoKeywords: { contains: q } },
-      { tags: { contains: q } },
-      { authors: { some: { name: { contains: q } } } },
-      { category: { name: { contains: q } } },
-      { publisher: { name: { contains: q } } },
+      { title: { contains: q, mode: 'insensitive' } },
+      { isbn13: { contains: q, mode: 'insensitive' } },
+      { isbn10: { contains: q, mode: 'insensitive' } },
+      { bookCode: { contains: q, mode: 'insensitive' } },
+      { sku: { contains: q, mode: 'insensitive' } },
+      { seoKeywords: { contains: q, mode: 'insensitive' } },
+      { tags: { contains: q, mode: 'insensitive' } },
+      { examination: { contains: q, mode: 'insensitive' } },
+      { university: { contains: q, mode: 'insensitive' } },
+      { course: { contains: q, mode: 'insensitive' } },
+      { authors: { some: { name: { contains: q, mode: 'insensitive' } } } },
+      { category: { name: { contains: q, mode: 'insensitive' } } },
+      { publisher: { name: { contains: q, mode: 'insensitive' } } },
     ];
 
     // If query has multiple words, also match individual terms against seoKeywords, tags, and title
     if (words.length > 1) {
       words.forEach(w => {
-        orClauses.push({ seoKeywords: { contains: w } });
-        orClauses.push({ tags: { contains: w } });
-        orClauses.push({ title: { contains: w } });
+        orClauses.push({ seoKeywords: { contains: w, mode: 'insensitive' } });
+        orClauses.push({ tags: { contains: w, mode: 'insensitive' } });
+        orClauses.push({ title: { contains: w, mode: 'insensitive' } });
       });
     }
 

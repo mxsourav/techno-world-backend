@@ -4,23 +4,40 @@ import { prisma } from '../config/database.js';
 
 
 // Map Prisma Book to Frontend Book shape
-const mapBookToFrontendShape = (book: any) => ({
-  ...book,
-  author: book.authors?.length ? book.authors.map((a: any) => a.name).join(', ') : 'Unknown Author',
-  authorsList: book.authors?.map((a: any) => a.name) || [],
-  publisher: book.publisher?.name || 'Unknown Publisher',
-  category: book.category?.slug || 'uncategorized',
-  bookType: book.bookType?.name,
-  subjects: book.subjects?.map((s: any) => s.name) || [],
-  bestseller: book.isBestseller,
-  featured: book.isFeatured,
-  trending: book.isTrending,
-  newRelease: book.isNewArrival,
-  rating: 4.5, // Default for now
-  ratingsCount: Math.floor(Math.random() * 500) + 10,
-  tags: book.tags ? (typeof book.tags === 'string' ? JSON.parse(book.tags) : book.tags) : [],
-  coverUrl: book.coverUrl,
-});
+const mapBookToFrontendShape = (book: any) => {
+  let galleryUrls: string[] = [];
+  if (Array.isArray(book.galleryUrls)) {
+    galleryUrls = book.galleryUrls;
+  } else if (typeof book.galleryUrls === 'string') {
+    try {
+      galleryUrls = JSON.parse(book.galleryUrls);
+    } catch {}
+  }
+  if (!galleryUrls.length && Array.isArray(book.images) && book.images.length > 0) {
+    galleryUrls = book.images.map((img: any) => img.secureUrl);
+  }
+
+  return {
+    ...book,
+    author: book.authors?.length ? book.authors.map((a: any) => a.name).join(', ') : 'Unknown Author',
+    authorsList: book.authors?.map((a: any) => a.name) || [],
+    publisher: book.publisher?.name || 'Unknown Publisher',
+    category: book.category?.slug || 'uncategorized',
+    bookType: book.bookType?.name,
+    subjects: book.subjects?.map((s: any) => s.name) || [],
+    bestseller: book.isBestseller,
+    featured: book.isFeatured,
+    trending: book.isTrending,
+    newRelease: book.isNewArrival,
+    rating: 4.5, // Default for now
+    ratingsCount: Math.floor(Math.random() * 500) + 10,
+    tags: book.tags ? (typeof book.tags === 'string' ? JSON.parse(book.tags) : book.tags) : [],
+    coverUrl: book.coverUrl,
+    images: book.images || [],
+    galleryUrls,
+    previewPdfUrl: book.previewPdfUrl || null,
+  };
+};
 
 export const getBooks = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -62,23 +79,23 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
       // SQLite Prisma doesn't support full-text search out of the box, so we use OR with contains
       // Advanced search: Title, Author, ISBN, Code, SKU, Publisher, Subject, Tags, SEO Keywords
       const orList: any[] = [
-        { title: { contains: searchStr } },
-        { isbn13: { contains: searchStr } },
-        { isbn10: { contains: searchStr } },
-        { bookCode: { contains: searchStr } },
-        { sku: { contains: searchStr } },
-        { seoKeywords: { contains: searchStr } },
-        { tags: { contains: searchStr } },
-        { authors: { some: { name: { contains: searchStr } } } },
-        { publisher: { name: { contains: searchStr } } },
-        { subjects: { some: { name: { contains: searchStr } } } }
+        { title: { contains: searchStr, mode: 'insensitive' } },
+        { isbn13: { contains: searchStr, mode: 'insensitive' } },
+        { isbn10: { contains: searchStr, mode: 'insensitive' } },
+        { bookCode: { contains: searchStr, mode: 'insensitive' } },
+        { sku: { contains: searchStr, mode: 'insensitive' } },
+        { seoKeywords: { contains: searchStr, mode: 'insensitive' } },
+        { tags: { contains: searchStr, mode: 'insensitive' } },
+        { authors: { some: { name: { contains: searchStr, mode: 'insensitive' } } } },
+        { publisher: { name: { contains: searchStr, mode: 'insensitive' } } },
+        { subjects: { some: { name: { contains: searchStr, mode: 'insensitive' } } } }
       ];
 
       if (words.length > 1) {
         words.forEach(w => {
-          orList.push({ seoKeywords: { contains: w } });
-          orList.push({ tags: { contains: w } });
-          orList.push({ title: { contains: w } });
+          orList.push({ seoKeywords: { contains: w, mode: 'insensitive' } });
+          orList.push({ tags: { contains: w, mode: 'insensitive' } });
+          orList.push({ title: { contains: w, mode: 'insensitive' } });
         });
       }
 
@@ -91,7 +108,12 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
       where.authors = { some: { slug: author as string } };
     }
     if (publisher) {
-      where.publisher = { slug: publisher as string };
+      where.publisher = {
+        OR: [
+          { slug: publisher as string },
+          { name: { contains: publisher as string, mode: 'insensitive' } }
+        ]
+      };
     }
     if (subject) {
       where.subjects = { some: { slug: subject as string } };
@@ -195,6 +217,7 @@ export const getBookBySlug = async (req: Request, res: Response, next: NextFunct
         category: true,
         bookType: true,
         subjects: true,
+        images: { orderBy: { sortOrder: 'asc' } },
       },
     });
 

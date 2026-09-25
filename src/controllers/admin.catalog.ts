@@ -105,16 +105,22 @@ export const getAdminCatalog = async (req: Request, res: Response, next: NextFun
       prisma.book.count({ where: { stock: 0 } })
     ]);
 
-    // Fast estimation of inventory value using raw SQL or Prisma aggregate
-    const inventoryAggr = await prisma.book.aggregate({
-      _sum: {
-        price: true, // we can't cleanly do sum(stock * price) in prisma without raw query, so we'll approximate or use a raw query
+    // Safe calculation of total inventory valuation
+    let inventoryValue = 0;
+    try {
+      const rawInvValue: any[] = await prisma.$queryRaw`SELECT COALESCE(SUM(stock * COALESCE("costPrice", price)), 0) as "totalValue" FROM "Book"`;
+      inventoryValue = Number(rawInvValue[0]?.totalValue || 0);
+    } catch (e) {
+      // In-memory fallback if raw SQL syntax differs
+      try {
+        const booksForInv = await prisma.book.findMany({
+          select: { stock: true, costPrice: true, price: true },
+        });
+        inventoryValue = booksForInv.reduce((sum, b) => sum + ((b.stock || 0) * Number(b.costPrice ?? b.price ?? 0)), 0);
+      } catch (err) {
+        inventoryValue = 0;
       }
-    });
-    
-    // For exact calculation, raw query is needed
-    const rawInvValue: any[] = await prisma.$queryRaw`SELECT SUM(stock * COALESCE(costPrice, price)) as totalValue FROM Book`;
-    const inventoryValue = rawInvValue[0]?.totalValue || 0;
+    }
 
     res.status(200).json({
       success: true,

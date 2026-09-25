@@ -162,14 +162,29 @@ export const uploadBookGalleryImages = async (req: Request, res: Response, next:
       createdImages.push(imageRecord);
     }
 
-    // Synchronize galleryUrls string array on Book for backward compatibility
+    // Synchronize galleryUrls string array on Book and ensure cover is set
     const allGalleryImages = await prisma.bookImage.findMany({
       where: { bookId: id },
       orderBy: { sortOrder: 'asc' },
     });
+
+    let newCoverUrl = book.coverUrl;
+    let newCoverPublicId = book.coverPublicId;
+
+    if (!newCoverUrl && allGalleryImages.length > 0) {
+      newCoverUrl = allGalleryImages[0].secureUrl;
+      newCoverPublicId = allGalleryImages[0].publicId;
+      await prisma.bookImage.update({
+        where: { id: allGalleryImages[0].id },
+        data: { isCover: true },
+      });
+    }
+
     await prisma.book.update({
       where: { id },
       data: {
+        coverUrl: newCoverUrl,
+        coverPublicId: newCoverPublicId,
         galleryUrls: JSON.stringify(allGalleryImages.map((img) => img.secureUrl)),
       },
     });
@@ -284,25 +299,32 @@ export const reorderBookImages = async (req: Request, res: Response, next: NextF
       return;
     }
 
-    // Update sortOrder in transaction
+    // Update sortOrder and isCover in transaction (first image is always primary cover)
     const updateOperations = imageIds.map((imgId: string, index: number) =>
       prisma.bookImage.updateMany({
         where: { id: imgId, bookId: id },
-        data: { sortOrder: index },
+        data: { 
+          sortOrder: index,
+          isCover: index === 0,
+        },
       })
     );
 
     await prisma.$transaction(updateOperations);
 
-    // Refresh galleryUrls
+    // Refresh galleryUrls and synchronize book.coverUrl to the 1st image
     const orderedImages = await prisma.bookImage.findMany({
       where: { bookId: id },
       orderBy: { sortOrder: 'asc' },
     });
 
+    const firstImage = orderedImages[0];
+
     await prisma.book.update({
       where: { id },
       data: {
+        coverUrl: firstImage ? firstImage.secureUrl : undefined,
+        coverPublicId: firstImage ? firstImage.publicId : undefined,
         galleryUrls: JSON.stringify(orderedImages.map((img) => img.secureUrl)),
       },
     });

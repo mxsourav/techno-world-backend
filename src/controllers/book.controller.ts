@@ -17,6 +17,22 @@ const mapBookToFrontendShape = (book: any) => {
     galleryUrls = book.images.map((img: any) => img.secureUrl);
   }
 
+  // Filter out any broken placeholder strings
+  galleryUrls = galleryUrls.filter(u => typeof u === 'string' && u.trim() && !u.includes('placeholder-book.jpg'));
+
+  // Resolve coverUrl: If book.coverUrl is missing, empty, or placeholder, use the 1st gallery image
+  let coverUrl = book.coverUrl;
+  if (!coverUrl || coverUrl.includes('placeholder-book.jpg') || coverUrl === '/placeholder-book.jpg') {
+    coverUrl = galleryUrls.length > 0 ? galleryUrls[0] : null;
+    // Auto-heal the database in background if book has an id
+    if (book.id && coverUrl && coverUrl !== book.coverUrl) {
+      prisma.book.update({
+        where: { id: book.id },
+        data: { coverUrl },
+      }).catch(() => {});
+    }
+  }
+
   return {
     ...book,
     author: book.authors?.length ? book.authors.map((a: any) => a.name).join(', ') : 'Unknown Author',
@@ -32,7 +48,7 @@ const mapBookToFrontendShape = (book: any) => {
     rating: 4.5, // Default for now
     ratingsCount: Math.floor(Math.random() * 500) + 10,
     tags: book.tags ? (typeof book.tags === 'string' ? JSON.parse(book.tags) : book.tags) : [],
-    coverUrl: book.coverUrl,
+    coverUrl,
     images: book.images || [],
     galleryUrls,
     previewPdfUrl: book.previewPdfUrl || null,

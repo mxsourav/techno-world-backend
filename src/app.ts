@@ -78,8 +78,8 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'Cookie', 'Cache-Control', 'Pragma', 'Expires'],
-    exposedHeaders: ['Set-Cookie'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'Cookie', 'Cache-Control', 'Pragma', 'Expires', 'x-refresh-token', 'X-Refresh-Token'],
+    exposedHeaders: ['Set-Cookie', 'x-new-access-token', 'X-New-Access-Token'],
   })
 );
 app.use(compression());

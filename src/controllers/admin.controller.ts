@@ -194,6 +194,7 @@ export const uploadBookPdf = async (req: Request, res: Response, next: NextFunct
 export const deleteBook = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
+    const forcePermanent = req.query.permanent === 'true';
 
     const book = await prisma.book.findUnique({
       where: { id },
@@ -205,40 +206,58 @@ export const deleteBook = async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    // 1. Delete all Cloudinary assets associated with this book
+    // 1. Delete all Cloudinary assets and folders associated with this book
     try {
-      if (book.images && book.images.length > 0) {
-        for (const img of book.images) {
-          if (img.publicId) {
-            await CloudinaryService.deleteAsset(img.publicId, (img.resourceType as any) || 'image');
-          }
-        }
-      }
-      if (book.coverPublicId && !book.images?.some((img) => img.publicId === book.coverPublicId)) {
-        await CloudinaryService.deleteAsset(book.coverPublicId, 'image');
-      }
-      if (book.previewPdfPublicId) {
-        await CloudinaryService.deleteAsset(book.previewPdfPublicId, (book.previewPdfResourceType as any) || 'raw');
-      }
-      await CloudinaryService.deleteFolder(CloudinaryService.getBookImagesFolder(book.slug));
-      await CloudinaryService.deleteFolder(CloudinaryService.getBookDocsFolder(book.slug));
-      await CloudinaryService.deleteFolder(CloudinaryService.getBookRootFolder(book.slug));
+      await CloudinaryService.deleteBookMedia(book);
     } catch (cleanupErr) {
       console.warn(`[Cloudinary] Asset cleanup warning for book ${book.slug}:`, cleanupErr);
     }
 
-    // 2. Delete database records in transaction
+    // 2. Check if this book is referenced in historical customer orders
+    const orderItemCount = await prisma.orderItem.count({ where: { bookId: id } });
+
+    if (orderItemCount > 0 && !forcePermanent) {
+      // SOFT DELETE (Archive): Preserves customer order history, tax invoices, and accounting records
+      await prisma.$transaction([
+        prisma.cartItem.deleteMany({ where: { bookId: id } }),
+        prisma.wishlistItem.deleteMany({ where: { bookId: id } }),
+        prisma.bookImage.deleteMany({ where: { bookId: id } }),
+        prisma.book.update({
+          where: { id },
+          data: {
+            status: 'ARCHIVED',
+            visibility: false,
+            stock: 0,
+            coverUrl: null,
+            coverPublicId: null,
+            galleryUrls: '[]',
+            previewPdfUrl: null,
+            previewPdfPublicId: null,
+          },
+        }),
+      ]);
+
+      res.status(200).json({
+        success: true,
+        message: 'Book has past customer orders. Safely archived (soft-deleted) and media deleted from Cloudinary.',
+        archived: true,
+      });
+      return;
+    }
+
+    // 3. HARD DELETE (for test books or books without order history)
     await prisma.$transaction([
       prisma.cartItem.deleteMany({ where: { bookId: id } }),
       prisma.wishlistItem.deleteMany({ where: { bookId: id } }),
       prisma.review.deleteMany({ where: { bookId: id } }),
       prisma.inventoryHistory.deleteMany({ where: { bookId: id } }),
-      prisma.orderItem.deleteMany({ where: { bookId: id } }),
+      prisma.bookQuestion.deleteMany({ where: { bookId: id } }),
       prisma.bookImage.deleteMany({ where: { bookId: id } }),
+      ...(forcePermanent ? [prisma.orderItem.deleteMany({ where: { bookId: id } })] : []),
       prisma.book.delete({ where: { id } }),
     ]);
 
-    res.status(200).json({ success: true, message: 'Book and associated media deleted successfully' });
+    res.status(200).json({ success: true, message: 'Book and associated media deleted successfully from database and Cloudinary' });
   } catch (error) {
     next(error);
   }
@@ -246,15 +265,72 @@ export const deleteBook = async (req: Request, res: Response, next: NextFunction
 
 export const deleteAllBooks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
+    const allBooks = await prisma.book.findMany({
+      include: { images: true },
+    });
+
+    // 1. Clean up Cloudinary assets for all books
+    for (const book of allBooks) {
+      try {
+        await CloudinaryService.deleteBookMedia(book);
+      } catch (err) {
+        console.warn(`[Cloudinary] Deleting media for ${book.slug} failed:`, err);
+      }
+    }
+
+    // 2. Also wipe any leftover resources in Home/books prefix
+    try {
+      await CloudinaryService.deleteFolderRecursively('Home/books');
+      await CloudinaryService.deleteFolderRecursively('books');
+    } catch {}
+
+    // 3. Safe DB processing: preserve books with customer order history, hard-delete unpurchased test books
+    const booksWithOrders = await prisma.orderItem.findMany({
+      select: { bookId: true },
+      distinct: ['bookId'],
+    });
+    const bookIdsWithOrders = new Set(booksWithOrders.map((b) => b.bookId));
+
+    const toHardDelete = allBooks.filter((b) => !bookIdsWithOrders.has(b.id)).map((b) => b.id);
+    const toSoftDelete = allBooks.filter((b) => bookIdsWithOrders.has(b.id)).map((b) => b.id);
+
     await prisma.$transaction([
       prisma.cartItem.deleteMany({}),
       prisma.wishlistItem.deleteMany({}),
-      prisma.review.deleteMany({}),
-      prisma.inventoryHistory.deleteMany({}),
-      prisma.orderItem.deleteMany({}),
-      prisma.book.deleteMany({}),
+      prisma.bookQuestion.deleteMany({}),
+      prisma.bookImage.deleteMany({}),
+      // Archive books with order history
+      ...(toSoftDelete.length > 0
+        ? [
+            prisma.book.updateMany({
+              where: { id: { in: toSoftDelete } },
+              data: {
+                status: 'ARCHIVED',
+                visibility: false,
+                stock: 0,
+                coverUrl: null,
+                coverPublicId: null,
+                galleryUrls: '[]',
+                previewPdfUrl: null,
+                previewPdfPublicId: null,
+              },
+            }),
+          ]
+        : []),
+      // Hard delete unpurchased test books
+      ...(toHardDelete.length > 0
+        ? [
+            prisma.inventoryHistory.deleteMany({ where: { bookId: { in: toHardDelete } } }),
+            prisma.review.deleteMany({ where: { bookId: { in: toHardDelete } } }),
+            prisma.book.deleteMany({ where: { id: { in: toHardDelete } } }),
+          ]
+        : []),
     ]);
-    res.status(200).json({ success: true, message: 'All books deleted successfully' });
+
+    res.status(200).json({
+      success: true,
+      message: `All books processed: ${toHardDelete.length} test books permanently deleted, ${toSoftDelete.length} books with order history safely archived. Cloudinary storage purged.`,
+    });
   } catch (error) {
     next(error);
   }

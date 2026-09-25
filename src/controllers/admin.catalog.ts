@@ -26,12 +26,16 @@ export const getAdminCatalog = async (req: Request, res: Response, next: NextFun
           where.status = 'ARCHIVED';
           break;
         case 'low_stock':
-          where.stock = { lte: 20, gt: 0 }; // Simplified low stock
+          where.stock = { lte: 20, gt: 0 };
+          where.status = { not: 'ARCHIVED' };
           break;
         case 'out_of_stock':
           where.stock = 0;
+          where.status = { not: 'ARCHIVED' };
           break;
       }
+    } else {
+      where.status = { not: 'ARCHIVED' };
     }
 
     if (search) {
@@ -99,21 +103,22 @@ export const getAdminCatalog = async (req: Request, res: Response, next: NextFun
 
     // Get KPIs for Smart Header
     const [totalProducts, activeProducts, draftProducts, outOfStockProducts] = await Promise.all([
-      prisma.book.count(),
+      prisma.book.count({ where: { status: { not: 'ARCHIVED' } } }),
       prisma.book.count({ where: { status: 'PUBLISHED' } }),
       prisma.book.count({ where: { status: 'DRAFT' } }),
-      prisma.book.count({ where: { stock: 0 } })
+      prisma.book.count({ where: { stock: 0, status: { not: 'ARCHIVED' } } })
     ]);
 
     // Safe calculation of total inventory valuation
     let inventoryValue = 0;
     try {
-      const rawInvValue: any[] = await prisma.$queryRaw`SELECT COALESCE(SUM(stock * COALESCE("costPrice", price)), 0) as "totalValue" FROM "Book"`;
+      const rawInvValue: any[] = await prisma.$queryRaw`SELECT COALESCE(SUM(stock * COALESCE("costPrice", price)), 0) as "totalValue" FROM "Book" WHERE "status" != 'ARCHIVED'`;
       inventoryValue = Number(rawInvValue[0]?.totalValue || 0);
     } catch (e) {
       // In-memory fallback if raw SQL syntax differs
       try {
         const booksForInv = await prisma.book.findMany({
+          where: { status: { not: 'ARCHIVED' } },
           select: { stock: true, costPrice: true, price: true },
         });
         inventoryValue = booksForInv.reduce((sum, b) => sum + ((b.stock || 0) * Number(b.costPrice ?? b.price ?? 0)), 0);

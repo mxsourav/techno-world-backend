@@ -446,21 +446,25 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     const isOrderCOD = order.paymentMethod === 'COD' || order.paymentMethod === 'REWARDS_AND_WALLET';
     const orderTotalAmount = Number(order.totalAmount);
     if (!isOrderCOD && orderTotalAmount > 0 && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET) {
-      const razorpay = new Razorpay({
-        key_id: env.RAZORPAY_KEY_ID,
-        key_secret: env.RAZORPAY_KEY_SECRET
-      });
+      try {
+        const razorpay = new Razorpay({
+          key_id: env.RAZORPAY_KEY_ID,
+          key_secret: env.RAZORPAY_KEY_SECRET
+        });
 
-      razorpayOrder = await razorpay.orders.create({
-        amount: Math.round(orderTotalAmount * 100),
-        currency: 'INR',
-        receipt: order.id
-      });
+        razorpayOrder = await razorpay.orders.create({
+          amount: Math.round(orderTotalAmount * 100),
+          currency: 'INR',
+          receipt: order.id
+        });
 
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { paymentId: razorpayOrder.id }
-      });
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { paymentId: razorpayOrder.id }
+        });
+      } catch (rzpErr: any) {
+        logger.warn(`[CREATE_ORDER_RZP_WARN] Failed to create Razorpay order for online payment: ${rzpErr.message}`);
+      }
     }
 
     // Send test order confirmation SMS

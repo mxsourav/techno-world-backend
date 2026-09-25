@@ -51,11 +51,20 @@ export const uploadBookCover = async (req: Request, res: Response, next: NextFun
     const folder = CloudinaryService.getBookImagesFolder(book.slug);
     const publicId = `cover_${Date.now()}`;
 
-    const uploadResult = await CloudinaryService.uploadBuffer(file.buffer, {
-      folder,
-      publicId,
-      resourceType: 'image',
-    });
+    let uploadResult: any;
+    try {
+      uploadResult = await CloudinaryService.uploadBuffer(file.buffer, {
+        folder,
+        publicId,
+        resourceType: 'image',
+      });
+    } catch (uploadErr: any) {
+      res.status(400).json({
+        success: false,
+        message: `Cover image upload failed: ${uploadErr.message || 'Cloudinary error'}`,
+      });
+      return;
+    }
 
     // Reset isCover on existing images for this book
     await prisma.bookImage.updateMany({
@@ -138,11 +147,17 @@ export const uploadBookGalleryImages = async (req: Request, res: Response, next:
       const file = files[i];
       const publicId = `gallery_${currentSortOrder + i + 1}_${Date.now()}`;
 
-      const uploadResult = await CloudinaryService.uploadBuffer(file.buffer, {
-        folder,
-        publicId,
-        resourceType: 'image',
-      });
+      let uploadResult: any;
+      try {
+        uploadResult = await CloudinaryService.uploadBuffer(file.buffer, {
+          folder,
+          publicId,
+          resourceType: 'image',
+        });
+      } catch (uploadErr: any) {
+        console.error(`[BookMedia] Gallery image ${i + 1} upload failed:`, uploadErr);
+        continue;
+      }
 
       const imageRecord = await prisma.bookImage.create({
         data: {
@@ -425,11 +440,20 @@ export const uploadBookPdf = async (req: Request, res: Response, next: NextFunct
     const folder = CloudinaryService.getBookDocsFolder(book.slug);
     const publicId = `preview_${Date.now()}`;
 
-    const uploadResult = await CloudinaryService.uploadBuffer(file.buffer, {
-      folder,
-      publicId,
-      resourceType: 'raw',
-    });
+    let uploadResult: any;
+    try {
+      uploadResult = await CloudinaryService.uploadBuffer(file.buffer, {
+        folder,
+        publicId,
+        resourceType: 'raw',
+      });
+    } catch (uploadErr: any) {
+      res.status(400).json({
+        success: false,
+        message: `Preview PDF upload failed: ${uploadErr.message || 'Cloudinary error'}`,
+      });
+      return;
+    }
 
     const updatedBook = await prisma.book.update({
       where: { id },

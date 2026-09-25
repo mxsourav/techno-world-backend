@@ -1,22 +1,31 @@
 import { v2 as cloudinary } from 'cloudinary';
+import dotenv from 'dotenv';
 
-const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-const apiKey = process.env.CLOUDINARY_API_KEY;
-const apiSecret = process.env.CLOUDINARY_API_SECRET;
+dotenv.config();
+
+const getCloudName = (): string =>
+  process.env.CLOUDINARY_CLOUD_NAME || 'tcsmyxe2';
+const getApiKey = (): string =>
+  process.env.CLOUDINARY_API_KEY || '369481197139156';
+const getApiSecret = (): string =>
+  process.env.CLOUDINARY_API_SECRET || 'TzFuSl3HKQVmCxZ-UkF-sdpOhpo';
 
 export const isCloudinaryConfigured = (): boolean => {
-  return Boolean(cloudName && apiKey && apiSecret);
+  return Boolean(getCloudName() && getApiKey() && getApiSecret());
 };
 
-if (isCloudinaryConfigured()) {
-  cloudinary.config({
-    cloud_name: cloudName,
-    api_key: apiKey,
-    api_secret: apiSecret,
-    secure: true,
-  });
-} else {
-  console.warn('[Cloudinary] Missing CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, or CLOUDINARY_API_SECRET in environment.');
-}
+export const configureCloudinary = () => {
+  if (isCloudinaryConfigured()) {
+    cloudinary.config({
+      cloud_name: getCloudName(),
+      api_key: getApiKey(),
+      api_secret: getApiSecret(),
+      secure: true,
+    });
+  }
+};
+
+configureCloudinary();
 
 export { cloudinary };
+

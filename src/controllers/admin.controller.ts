@@ -260,39 +260,229 @@ export const deleteAllBooks = async (req: Request, res: Response, next: NextFunc
   }
 };
 
+// Helper: Sanitize unique identifier fields (empty strings -> null)
+const sanitizeUniqueField = (val: any): string | null => {
+  if (val === null || val === undefined) return null;
+  const s = String(val).trim();
+  return s === '' ? null : s;
+};
+
+// Helper: Safely parse publication date
+const parsePublicationDate = (val: any): Date | null => {
+  if (!val) return null;
+  const s = String(val).trim();
+  if (!s) return null;
+  const dateStr = s.length === 7 ? `${s}-01T00:00:00.000Z` : s;
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+// Helper: Normalize entity slug
+const normalizeEntitySlug = (name: string): string => {
+  const clean = (name || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return clean || `entity-${Date.now()}`;
+};
+
+// Helper: Resolve / upsert Author records
+const resolveAuthors = async (authorsInput: any): Promise<{ id: string }[]> => {
+  const authorNames: string[] = [];
+  if (Array.isArray(authorsInput)) {
+    for (const a of authorsInput) {
+      if (typeof a === 'string') {
+        authorNames.push(...a.split(',').map((s) => s.trim()).filter(Boolean));
+      } else if (a && typeof a === 'object' && a.name) {
+        authorNames.push(String(a.name).trim());
+      }
+    }
+  } else if (typeof authorsInput === 'string' && authorsInput.trim()) {
+    authorNames.push(...authorsInput.split(',').map((s) => s.trim()).filter(Boolean));
+  }
+
+  const connectedIds: string[] = [];
+  const seenIds = new Set<string>();
+
+  for (const name of authorNames) {
+    if (!name) continue;
+    const slug = normalizeEntitySlug(name);
+    let author = await prisma.author.findFirst({
+      where: { OR: [{ name }, { slug }] },
+    });
+
+    if (!author) {
+      try {
+        author = await prisma.author.create({
+          data: { name, slug },
+        });
+      } catch {
+        author = await prisma.author.findFirst({
+          where: { OR: [{ name }, { slug }] },
+        });
+      }
+    }
+
+    if (author && !seenIds.has(author.id)) {
+      seenIds.add(author.id);
+      connectedIds.push(author.id);
+    }
+  }
+
+  return connectedIds.map((id) => ({ id }));
+};
+
+// Helper: Resolve / upsert Subject records
+const resolveSubjects = async (subjectsInput: any): Promise<{ id: string }[]> => {
+  const subjectNames: string[] = [];
+  if (Array.isArray(subjectsInput)) {
+    for (const s of subjectsInput) {
+      if (typeof s === 'string') {
+        subjectNames.push(...s.split(',').map((str) => str.trim()).filter(Boolean));
+      } else if (s && typeof s === 'object' && s.name) {
+        subjectNames.push(String(s.name).trim());
+      }
+    }
+  } else if (typeof subjectsInput === 'string' && subjectsInput.trim()) {
+    subjectNames.push(...subjectsInput.split(',').map((s) => s.trim()).filter(Boolean));
+  }
+
+  const connectedIds: string[] = [];
+  const seenIds = new Set<string>();
+
+  for (const name of subjectNames) {
+    if (!name) continue;
+    const slug = normalizeEntitySlug(name);
+    let subject = await prisma.subject.findFirst({
+      where: { OR: [{ name }, { slug }] },
+    });
+
+    if (!subject) {
+      try {
+        subject = await prisma.subject.create({
+          data: { name, slug },
+        });
+      } catch {
+        subject = await prisma.subject.findFirst({
+          where: { OR: [{ name }, { slug }] },
+        });
+      }
+    }
+
+    if (subject && !seenIds.has(subject.id)) {
+      seenIds.add(subject.id);
+      connectedIds.push(subject.id);
+    }
+  }
+
+  return connectedIds.map((id) => ({ id }));
+};
+
+// Helper: Resolve / upsert Category record
+const resolveCategoryId = async (categoryName: string): Promise<string | undefined> => {
+  const name = categoryName.trim();
+  if (!name) return undefined;
+  const slug = normalizeEntitySlug(name);
+  let cat = await prisma.category.findFirst({
+    where: { OR: [{ name }, { slug }] },
+  });
+  if (!cat) {
+    try {
+      cat = await prisma.category.create({
+        data: { name, slug },
+      });
+    } catch {
+      cat = await prisma.category.findFirst({
+        where: { OR: [{ name }, { slug }] },
+      });
+    }
+  }
+  return cat?.id;
+};
+
+// Helper: Resolve / upsert Publisher record
+const resolvePublisherId = async (publisherName: string): Promise<string | undefined> => {
+  const name = publisherName.trim();
+  if (!name) return undefined;
+  const slug = normalizeEntitySlug(name);
+  let pub = await prisma.publisher.findFirst({
+    where: { OR: [{ name }, { slug }] },
+  });
+  if (!pub) {
+    try {
+      pub = await prisma.publisher.create({
+        data: { name, slug },
+      });
+    } catch {
+      pub = await prisma.publisher.findFirst({
+        where: { OR: [{ name }, { slug }] },
+      });
+    }
+  }
+  return pub?.id;
+};
+
+// Helper: Resolve / upsert BookType record
+const resolveBookTypeId = async (bookTypeName: string): Promise<string | undefined> => {
+  const name = bookTypeName.trim();
+  if (!name) return undefined;
+  const slug = normalizeEntitySlug(name);
+  let bt = await prisma.bookType.findFirst({
+    where: { OR: [{ name }, { slug }] },
+  });
+  if (!bt) {
+    try {
+      bt = await prisma.bookType.create({
+        data: { name, slug },
+      });
+    } catch {
+      bt = await prisma.bookType.findFirst({
+        where: { OR: [{ name }, { slug }] },
+      });
+    }
+  }
+  return bt?.id;
+};
+
 export const updateBook = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
     const body = req.body;
-    const userId = (req as any).user?.id || 'system';
+    const userId = (req as any).user?.userId || (req as any).user?.id || null;
     
-    const existingBook = await prisma.book.findUnique({ where: { id } });
+    const existingBook = await prisma.book.findUnique({
+      where: { id },
+      include: { authors: true, subjects: true },
+    });
     if (!existingBook) {
       res.status(404).json({ success: false, message: 'Book not found' });
       return;
     }
 
     const data: any = {};
-    if (body.title !== undefined) data.title = body.title;
-    if (body.price !== undefined) data.price = Number(body.price);
-    if (body.mrp !== undefined) data.mrp = Number(body.mrp);
-    if (body.costPrice !== undefined) data.costPrice = body.costPrice !== null && body.costPrice !== '' ? Number(body.costPrice) : null;
-    if (body.stock !== undefined) data.stock = Number(body.stock);
+    if (body.title !== undefined) data.title = String(body.title).trim();
+    if (body.price !== undefined) data.price = Number(body.price) || 0;
+    if (body.mrp !== undefined) data.mrp = Number(body.mrp) || Number(body.price) || 0;
+    if (body.costPrice !== undefined) {
+      data.costPrice = body.costPrice !== null && body.costPrice !== '' ? Number(body.costPrice) : null;
+    }
+    if (body.stock !== undefined) data.stock = Number(body.stock) || 0;
     if (body.reservedStock !== undefined) data.reservedStock = Number(body.reservedStock) || 0;
     if (body.reorderLevel !== undefined) data.reorderLevel = Number(body.reorderLevel) || 20;
     if (body.warehouse !== undefined) data.warehouse = body.warehouse ? String(body.warehouse).trim() : 'Main Warehouse';
-    if (body.pages !== undefined) data.pages = Number(body.pages);
-    if (body.isbn13 !== undefined) data.isbn13 = body.isbn13;
-    if (body.isbn10 !== undefined) data.isbn10 = body.isbn10;
-    if (body.sku !== undefined) data.sku = body.sku;
-    if (body.bookCode !== undefined) data.bookCode = body.bookCode;
+    if (body.pages !== undefined) data.pages = Number(body.pages) || 0;
+    if (body.isbn13 !== undefined) data.isbn13 = sanitizeUniqueField(body.isbn13);
+    if (body.isbn10 !== undefined) data.isbn10 = sanitizeUniqueField(body.isbn10);
+    if (body.sku !== undefined) data.sku = sanitizeUniqueField(body.sku);
+    if (body.bookCode !== undefined) data.bookCode = sanitizeUniqueField(body.bookCode);
     if (body.description !== undefined) data.description = body.description;
     if (body.shortDescription !== undefined) data.shortDescription = body.shortDescription;
-    if (body.edition !== undefined) data.edition = body.edition;
-    if (body.language !== undefined) data.language = body.language;
-    if (body.bindingType !== undefined) data.bindingType = body.bindingType;
+    if (body.edition !== undefined) data.edition = body.edition ? String(body.edition).trim() : '1st Edition';
+    if (body.language !== undefined) data.language = body.language ? String(body.language).trim() : 'English';
+    if (body.bindingType !== undefined) data.bindingType = body.bindingType ? String(body.bindingType).trim() : 'Paperback';
     if (body.publicationDate !== undefined) {
-      data.publicationDate = body.publicationDate ? new Date(body.publicationDate) : null;
+      data.publicationDate = parsePublicationDate(body.publicationDate);
     }
     if (body.seoKeywords !== undefined) {
       if (Array.isArray(body.seoKeywords)) {
@@ -309,58 +499,63 @@ export const updateBook = async (req: Request, res: Response, next: NextFunction
       }
     }
 
-    // Handle Category upsert / update
-    if (body.category !== undefined && typeof body.category === 'string' && body.category.trim() !== '') {
-      const catSlug = body.category.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const cat = await prisma.category.upsert({
-        where: { slug: catSlug },
-        update: {},
-        create: { name: body.category, slug: catSlug }
-      });
-      data.categoryId = cat.id;
+    // Handle Category update
+    if (body.category !== undefined && typeof body.category === 'string') {
+      data.categoryId = body.category.trim() !== '' ? await resolveCategoryId(body.category) : null;
     }
 
-    // Handle Publisher upsert / update
-    if (body.publisher !== undefined && typeof body.publisher === 'string' && body.publisher.trim() !== '') {
-      const pubSlug = body.publisher.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const pub = await prisma.publisher.upsert({
-        where: { slug: pubSlug },
-        update: {},
-        create: { name: body.publisher, slug: pubSlug }
-      });
-      data.publisherId = pub.id;
+    // Handle Publisher update
+    if (body.publisher !== undefined && typeof body.publisher === 'string') {
+      data.publisherId = body.publisher.trim() !== '' ? await resolvePublisherId(body.publisher) : null;
     }
 
-    // Handle BookType upsert / update
-    if (body.bookType !== undefined && typeof body.bookType === 'string' && body.bookType.trim() !== '') {
-      const typeSlug = body.bookType.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const btype = await prisma.bookType.upsert({
-        where: { slug: typeSlug },
-        update: {},
-        create: { name: body.bookType, slug: typeSlug }
-      });
-      data.bookTypeId = btype.id;
+    // Handle BookType update
+    if (body.bookType !== undefined && typeof body.bookType === 'string') {
+      data.bookTypeId = body.bookType.trim() !== '' ? await resolveBookTypeId(body.bookType) : null;
+    }
+
+    // Handle Authors update
+    if (body.authorsList !== undefined || body.authors !== undefined || body.author !== undefined) {
+      const authors = await resolveAuthors(body.authorsList || body.authors || body.author);
+      data.authors = { set: authors };
+    }
+
+    // Handle Subjects update
+    if (body.subjects !== undefined) {
+      const subjects = await resolveSubjects(body.subjects);
+      data.subjects = { set: subjects };
     }
 
     const diffs: string[] = [];
     for (const key of Object.keys(data)) {
-      if (existingBook[key as keyof typeof existingBook] !== data[key]) {
+      if (key !== 'authors' && key !== 'subjects' && existingBook[key as keyof typeof existingBook] !== data[key]) {
         diffs.push(`${key} changed from '${existingBook[key as keyof typeof existingBook]}' to '${data[key]}'`);
       }
     }
 
-    const book = await prisma.book.update({ where: { id }, data });
+    const book = await prisma.book.update({
+      where: { id },
+      data,
+      include: {
+        category: true,
+        publisher: true,
+        bookType: true,
+        authors: true,
+        subjects: true,
+        images: { orderBy: { sortOrder: 'asc' } },
+      },
+    });
     
     if (diffs.length > 0) {
       await prisma.activityLog.create({
         data: {
-          userId: userId === 'system' ? null : userId,
+          userId,
           action: 'UPDATE',
           entity: 'Book',
           entityId: book.id,
           details: diffs.join('\n'),
-          ipAddress: req.ip
-        }
+          ipAddress: req.ip,
+        },
       });
     }
 
@@ -380,47 +575,31 @@ export const updateBook = async (req: Request, res: Response, next: NextFunction
 export const createBook = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const body = req.body;
-    const userId = (req as any).user?.id || 'system';
+    const userId = (req as any).user?.userId || (req as any).user?.id || null;
 
-    const slug = body.title
-      ? body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.floor(1000 + Math.random() * 9000)
-      : 'book-' + Date.now();
+    const baseTitle = body.title ? String(body.title).trim() : 'book';
+    const cleanTitleSlug = baseTitle
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    const slug = (cleanTitleSlug || 'book') + '-' + Math.floor(1000 + Math.random() * 9000);
 
-    let categoryId = undefined;
-    if (body.category && typeof body.category === 'string' && body.category.trim() !== '') {
-      const catSlug = body.category.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const cat = await prisma.category.upsert({
-        where: { slug: catSlug },
-        update: {},
-        create: { name: body.category, slug: catSlug }
-      });
-      categoryId = cat.id;
-    }
-
-    let publisherId = undefined;
-    if (body.publisher && typeof body.publisher === 'string' && body.publisher.trim() !== '') {
-      const pubSlug = body.publisher.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const pub = await prisma.publisher.upsert({
-        where: { slug: pubSlug },
-        update: {},
-        create: { name: body.publisher, slug: pubSlug }
-      });
-      publisherId = pub.id;
-    }
-
-    let bookTypeId = undefined;
-    if (body.bookType && typeof body.bookType === 'string' && body.bookType.trim() !== '') {
-      const typeSlug = body.bookType.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const btype = await prisma.bookType.upsert({
-        where: { slug: typeSlug },
-        update: {},
-        create: { name: body.bookType, slug: typeSlug }
-      });
-      bookTypeId = btype.id;
-    }
+    const [authors, subjects, categoryId, publisherId, bookTypeId] = await Promise.all([
+      resolveAuthors(body.authorsList || body.authors || body.author),
+      resolveSubjects(body.subjects),
+      body.category && typeof body.category === 'string' && body.category.trim() !== ''
+        ? resolveCategoryId(body.category)
+        : Promise.resolve(undefined),
+      body.publisher && typeof body.publisher === 'string' && body.publisher.trim() !== ''
+        ? resolvePublisherId(body.publisher)
+        : Promise.resolve(undefined),
+      body.bookType && typeof body.bookType === 'string' && body.bookType.trim() !== ''
+        ? resolveBookTypeId(body.bookType)
+        : Promise.resolve(undefined),
+    ]);
 
     const data: any = {
-      title: body.title || 'Untitled Book',
+      title: body.title ? String(body.title).trim() : 'Untitled Book',
       slug,
       price: Number(body.price) || 0,
       mrp: Number(body.mrp) || Number(body.price) || 0,
@@ -430,34 +609,53 @@ export const createBook = async (req: Request, res: Response, next: NextFunction
       reorderLevel: Number(body.reorderLevel) || 20,
       warehouse: body.warehouse ? String(body.warehouse).trim() : 'Main Warehouse',
       pages: Number(body.pages) || 0,
-      isbn13: body.isbn13 || null,
-      isbn10: body.isbn10 || null,
-      sku: body.sku || null,
-      bookCode: body.bookCode || null,
-      description: body.description || 'No description provided.',
-      shortDescription: body.shortDescription || null,
-      edition: body.edition || '1st Edition',
-      language: body.language || 'English',
-      bindingType: body.bindingType || 'Paperback',
-      publicationDate: body.publicationDate ? new Date(body.publicationDate) : null,
+      isbn13: sanitizeUniqueField(body.isbn13),
+      isbn10: sanitizeUniqueField(body.isbn10),
+      sku: sanitizeUniqueField(body.sku),
+      bookCode: sanitizeUniqueField(body.bookCode),
+      description: body.description ? String(body.description) : 'No description provided.',
+      shortDescription: body.shortDescription ? String(body.shortDescription) : null,
+      edition: body.edition ? String(body.edition).trim() : '1st Edition',
+      language: body.language ? String(body.language).trim() : 'English',
+      bindingType: body.bindingType ? String(body.bindingType).trim() : 'Paperback',
+      publicationDate: parsePublicationDate(body.publicationDate),
       categoryId,
       publisherId,
       bookTypeId,
       seoKeywords: Array.isArray(body.seoKeywords) ? body.seoKeywords.join(', ') : (body.seoKeywords || ''),
       tags: Array.isArray(body.tags) ? body.tags.join(', ') : (body.tags || ''),
-      status: 'PUBLISHED'
+      status: body.status || 'PUBLISHED',
+      visibility: body.visibility !== undefined ? Boolean(body.visibility) : true,
     };
-    const book = await prisma.book.create({ data });
+
+    if (authors.length > 0) {
+      data.authors = { connect: authors };
+    }
+    if (subjects.length > 0) {
+      data.subjects = { connect: subjects };
+    }
+
+    const book = await prisma.book.create({
+      data,
+      include: {
+        category: true,
+        publisher: true,
+        bookType: true,
+        authors: true,
+        subjects: true,
+        images: { orderBy: { sortOrder: 'asc' } },
+      },
+    });
     
     await prisma.activityLog.create({
       data: {
-        userId: userId === 'system' ? null : userId,
+        userId,
         action: 'CREATE',
         entity: 'Book',
         entityId: book.id,
-        details: 'Created new book',
-        ipAddress: req.ip
-      }
+        details: `Created new book: ${book.title}`,
+        ipAddress: req.ip,
+      },
     });
 
     // Ping search engines via IndexNow if published and visible

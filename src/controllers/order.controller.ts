@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
+import { Role } from '@prisma/client';
 import { prisma } from '../config/database.js';
 import Razorpay from 'razorpay';
 import { env } from '../config/env.js';
+import { generateTokens } from '../utils/jwt.js';
 import { PricingEngine } from '../services/pricing.service.js';
 import { emailService } from '../services/email.service.js';
 import { generateInvoicePDF, assignInvoiceNumber, generateMergedInvoicesPDF } from '../services/invoice.service.js';
@@ -89,19 +91,12 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
   try {
     const { items, addressId, address, paymentMethod, couponCode, shippingMethod, pointsUsed, walletUsed } = req.body;
     const authenticatedUserId = (req as any).user?.userId || (req as any).user?.id;
-    if (!authenticatedUserId) {
-      res.status(401).json({ success: false, message: 'Valid authentication required to checkout' });
-      return;
-    }
 
-    const existingUser = await prisma.user.findUnique({ where: { id: authenticatedUserId } });
-    if (!existingUser || !existingUser.isActive) {
-      res.status(401).json({ success: false, message: 'User account not found or inactive' });
-      return;
-    }
+    let existingUser = authenticatedUserId ? await prisma.user.findUnique({ where: { id: authenticatedUserId } }) : null;
 
-    const userId = existingUser.id;
-    const orderEmail = (existingUser.email || req.body.email || req.body.customerEmail || address?.email || '').trim();
+    const orderEmail = (existingUser?.email || req.body.email || req.body.customerEmail || address?.email || '').trim().toLowerCase();
+    const orderPhone = (existingUser?.phone || req.body.phone || req.body.customerPhone || address?.phone || '').trim();
+    const orderName = (existingUser?.name || req.body.name || address?.fullName || address?.name || 'Customer').trim();
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ success: false, message: 'Items are required' });
@@ -112,6 +107,31 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       res.status(400).json({ success: false, message: 'Valid Customer Email ID is mandatory to place an order' });
       return;
     }
+
+    if (!existingUser) {
+      existingUser = await prisma.user.findUnique({ where: { email: orderEmail } });
+      if (!existingUser) {
+        existingUser = await prisma.user.create({
+          data: {
+            email: orderEmail,
+            name: orderName || 'Customer',
+            phone: orderPhone || null,
+            password: 'AUTO_CUSTOMER_ACCOUNT_' + Math.random().toString(36).slice(2),
+            role: Role.CUSTOMER,
+            isActive: true,
+          }
+        });
+      }
+    }
+
+    if (!existingUser.isActive) {
+      res.status(403).json({ success: false, message: 'User account is inactive or disabled' });
+      return;
+    }
+
+    const userId = existingUser.id;
+    const userTokens = generateTokens(existingUser.id, existingUser.role);
+    res.setHeader('x-new-access-token', userTokens.accessToken);
 
     const isSelfPickup = shippingMethod === 'SELF_PICKUP';
     const isCOD = (String(paymentMethod || '').trim().toUpperCase() === 'COD' || String(paymentMethod || '').toLowerCase().includes('cash on delivery'));
@@ -202,9 +222,12 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       // Address Deduplication: Search for identical address before creating
       let finalAddressId: string | null = null;
       if (addressId) {
-        const existingAddr = await tx.address.findFirst({ where: { id: addressId, userId } });
+        const existingAddr = await tx.address.findFirst({ where: { id: addressId } });
         if (existingAddr) {
           finalAddressId = existingAddr.id;
+          if (!existingAddr.userId) {
+            await tx.address.update({ where: { id: existingAddr.id }, data: { userId } });
+          }
         }
       }
 
@@ -548,6 +571,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       message: 'Order placed successfully',
       data: {
         ...order,
+        accessToken: userTokens.accessToken,
+        refreshToken: userTokens.refreshToken,
         razorpayOrderId: razorpayOrder?.id,
         pointsUsed: pricingResult.pointsUsed || 0,
         pointsDiscount: pricingResult.pointsDiscount || 0,

@@ -16,14 +16,14 @@ import {
   mergeChildOrder,
   adminLookupOrder,
 } from '../../controllers/order.controller.js';
-import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
+import { requireAuth, optionalAuth, requireRole } from '../../middlewares/auth.middleware.js';
 import { validateRequest } from '../../middlewares/validate.middleware.js';
 import { createOrderSchema } from '../../schemas/order.schema.js';
 
 const router = Router();
 
 // Customer checkout
-router.post('/', requireAuth, validateRequest(createOrderSchema), createOrder);
+router.post('/', optionalAuth, validateRequest(createOrderSchema), createOrder);
 
 // Customer endpoints
 router.get('/my-orders', requireAuth, getMyOrders);

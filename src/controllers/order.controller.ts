@@ -261,7 +261,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
             data: {
               userId,
               fullName: address.fullName || address.name || 'Valued Customer',
-              phone: address.phone || '9876543210',
+              phone: address.phone || address.mobile || (req as any).user?.phone || existingUser.phone || '',
               email: orderEmail,
               addressLine1: line1 || 'Delivery Address',
               addressLine2: (address.addressLine2 || address.line2 || null)?.trim(),

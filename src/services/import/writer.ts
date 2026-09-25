@@ -89,7 +89,7 @@ export class Writer {
         barcode: row.barcode || null,
         series: row.series || null,
         volume: row.volume || null,
-        coverUrl: row.coverUrl || '/placeholder-book.jpg',
+        coverUrl: row.coverUrl || null,
         categoryId: categoryId || null,
         bookTypeId: bookTypeId || null,
         publisherId: publisherId || null,

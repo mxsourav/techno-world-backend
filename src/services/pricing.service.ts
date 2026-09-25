@@ -158,11 +158,26 @@ export class PricingEngine {
       const unitMrp = Number(book.mrp);
       totalWeightGrams += itemWeight;
 
+      let resolvedCoverUrl = book.coverUrl;
+      if (!resolvedCoverUrl || resolvedCoverUrl.includes('placeholder-book.jpg') || resolvedCoverUrl === '/placeholder-book.jpg') {
+        let gallery: string[] = [];
+        if (typeof (book as any).galleryUrls === 'string') {
+          try {
+            gallery = JSON.parse((book as any).galleryUrls);
+          } catch {
+            gallery = [];
+          }
+        } else if (Array.isArray((book as any).galleryUrls)) {
+          gallery = (book as any).galleryUrls;
+        }
+        resolvedCoverUrl = gallery.find(u => typeof u === 'string' && u.trim() && !u.includes('placeholder-book.jpg')) || null;
+      }
+
       result.items.push({
         bookId: book.id,
         title: book.title,
         slug: book.slug,
-        coverUrl: book.coverUrl,
+        coverUrl: resolvedCoverUrl,
         author: book.authors?.[0]?.name || null,
         quantity: qty,
         unitPrice,

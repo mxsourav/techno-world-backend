@@ -91,9 +91,9 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
 
     if (search) {
       const searchStr = (search as string).trim();
-      const words = searchStr.split(/\s+/).filter(w => w.length >= 2);
-      // SQLite Prisma doesn't support full-text search out of the box, so we use OR with contains
-      // Advanced search: Title, Author, ISBN, Code, SKU, Publisher, Subject, Tags, SEO Keywords
+      const stopWords = new Set(['and', 'of', 'the', 'for', 'in', 'a', 'an', 'to', 'with', 'on', 'by']);
+      const words = searchStr.split(/\s+/).filter(w => w.length >= 2 && !stopWords.has(w.toLowerCase()));
+      
       const orList: any[] = [
         { title: { contains: searchStr, mode: 'insensitive' } },
         { isbn13: { contains: searchStr, mode: 'insensitive' } },
@@ -108,11 +108,14 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
       ];
 
       if (words.length > 1) {
-        words.forEach(w => {
-          orList.push({ seoKeywords: { contains: w, mode: 'insensitive' } });
-          orList.push({ tags: { contains: w, mode: 'insensitive' } });
-          orList.push({ title: { contains: w, mode: 'insensitive' } });
-        });
+        const andClauses = words.map(w => ({
+          OR: [
+            { title: { contains: w, mode: 'insensitive' } },
+            { seoKeywords: { contains: w, mode: 'insensitive' } },
+            { tags: { contains: w, mode: 'insensitive' } }
+          ]
+        }));
+        orList.push({ AND: andClauses });
       }
 
       where.OR = orList;

@@ -134,7 +134,22 @@ app.use(botSeoMiddleware);
 app.get('/sitemap.xml', generateSitemap);
 app.get('/robots.txt', (_req, res) => {
   res.type('text/plain');
-  res.send("# Techno World Books API Server\nUser-agent: *\nDisallow: /\n");
+  res.send(
+`# Techno World Books API Server
+User-agent: *
+Allow: /api/v1/books
+Allow: /api/v1/categories
+Allow: /api/v1/cms
+Allow: /api/v1/analytics/pulse
+Allow: /sitemap.xml
+Allow: /health
+Disallow: /api/v1/admin
+Disallow: /api/v1/orders
+Disallow: /api/v1/profile
+Disallow: /api/v1/auth
+Disallow: /docs
+`
+  );
 });
 app.get('/llms.txt', (_req, res) => {
   const filePath = path.resolve('../app/public/llms.txt');

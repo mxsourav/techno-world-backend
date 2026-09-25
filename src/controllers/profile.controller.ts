@@ -437,9 +437,9 @@ export const getPointTransactions = async (req: Request, res: Response, next: Ne
     res.status(200).json({
       success: true,
       data: {
-        technoPoints: user?.technoPoints || 0,
-        pendingPoints: user?.pendingPoints || 0,
-        technoWallet: user?.technoWallet || 0,
+        technoPoints: Number(user?.technoPoints || 0),
+        pendingPoints: Number(user?.pendingPoints || 0),
+        technoWallet: Number(user?.technoWallet || 0),
         terms: {
           rate: '1 Techno Point = ₹1.00 (Awarded at 1 point per ₹100 spent)',
           creditTiming: 'Points are credited after the 7-day return window concludes',

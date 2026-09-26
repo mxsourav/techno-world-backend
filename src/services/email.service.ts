@@ -140,10 +140,10 @@ export class EmailService {
     return `
       <div style="border-top: 1px solid #e2e8f0; margin-top: 24px; padding-top: 18px; font-size: 12px; color: #64748b; text-align: center; line-height: 1.6;">
         <p style="margin: 0 0 6px; font-weight: 600; color: #334155;">
-          Techno World Books &bull; College Street, Kolkata &bull; Delivering Across India
+          Techno World Books &bull; Kolkata, West Bengal &bull; Delivering Across India
         </p>
         <p style="margin: 0; font-size: 11px;">
-          Office: 90/6A, Mahatma Gandhi Rd, College Street, Kolkata, WB 700007<br/>
+          90/6A, Mahatma Gandhi Rd, Kolkata, WB 700007<br/>
           Direct Phone: <a href="tel:+917479135626" style="color: #047857; text-decoration: none; font-weight: 600;">+91 747 913 5626</a> &bull; 
           WhatsApp Support: <a href="https://wa.me/917479135626" style="color: #047857; text-decoration: none; font-weight: 600;">Chat on WhatsApp</a>
         </p>
@@ -284,7 +284,7 @@ export class EmailService {
         headline = `Thank you for your order, ${safeName}!`;
         messageBody = `
           <p style="margin: 0 0 12px; color: #334155; line-height: 1.6;">
-            We have received your order <b>#${orderNumber}</b> and it is confirmed. Our team at College Street has initiated procurement and stock verification.
+            We have received your order <b>#${orderNumber}</b> and it is confirmed. Our team has initiated procurement and stock verification.
           </p>
           ${paymentMethod ? `<p style="margin: 0 0 8px; font-size: 12.5px; color: #64748b;">Payment Method: <b>${paymentMethod}</b></p>` : ''}
           ${deliveryAddress ? `<p style="margin: 0 0 8px; font-size: 12.5px; color: #64748b;">Shipping to: <b>${deliveryAddress}</b></p>` : ''}
@@ -297,7 +297,7 @@ export class EmailService {
             <b>Status:</b> Order Confirmed &bull; Preparing for Packing
           </div>
         `;
-        plainTextMessage = `Hello ${safeName},\n\nYour order #${orderNumber} has been received and confirmed. Total: ₹${totalAmount.toFixed(2)}.\nOur College Street team is preparing your books.`;
+        plainTextMessage = `Hello ${safeName},\n\nYour order #${orderNumber} has been received and confirmed. Total: ₹${totalAmount.toFixed(2)}.\nOur team is preparing your books.`;
         break;
 
       case 'PROCESSING':
@@ -305,7 +305,7 @@ export class EmailService {
         headline = `We are packing your books, ${safeName}`;
         messageBody = `
           <p style="margin: 0 0 12px; color: #334155; line-height: 1.6;">
-            Your order <b>#${orderNumber}</b> is currently being packed at our College Street dispatch desk.
+            Your order <b>#${orderNumber}</b> is currently being packed at our dispatch desk.
           </p>
           <p style="margin: 0 0 12px; color: #334155; line-height: 1.6;">
             Each book is inspected for physical condition and carefully wrapped to protect corners and binding during transit.
@@ -834,7 +834,7 @@ export class EmailService {
             </p>
 
             <p style="color: #475569; font-size: 13px; margin: 14px 0;">
-              If you believe this action was taken in error or if you wish to appeal this review, please get in touch directly with our support helpdesk at College Street, Kolkata.
+              If you believe this action was taken in error or if you wish to appeal this review, please get in touch directly with our support helpdesk via WhatsApp or email.
             </p>
           ` : `
             <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 16px; margin: 16px 0; color: #065f46;">

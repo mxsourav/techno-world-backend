@@ -30,3 +30,17 @@ npx prisma studio
 
 ## 📚 API Documentation
 - Interactive Swagger docs: [http://localhost:5000/docs](http://localhost:5000/docs)
+
+## 💳 Razorpay Payments
+Set these server environment variables with Razorpay **Test Mode** credentials before accepting online payments:
+
+```env
+RAZORPAY_KEY_ID=rzp_test_...
+RAZORPAY_KEY_SECRET=...
+RAZORPAY_WEBHOOK_SECRET=...
+```
+
+Configure this webhook in the Razorpay dashboard:
+`https://<your-api-host>/api/v1/payments/razorpay/webhook`
+
+The checkout receives the public key from the server, so moving to production only requires replacing the three server-side values with the corresponding Live Mode values. Never expose `RAZORPAY_KEY_SECRET` or `RAZORPAY_WEBHOOK_SECRET` to the frontend.

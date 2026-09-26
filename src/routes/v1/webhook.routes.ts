@@ -1,5 +1,6 @@
 import { Router, raw } from 'express';
-import { handleRazorpayWebhook, handleIndiaPostWebhook } from '../../controllers/webhook.controller.js';
+import { razorpayWebhook } from '../../controllers/payment.controller.js';
+import { handleIndiaPostWebhook } from '../../controllers/webhook.controller.js';
 
 const router = Router();
 
@@ -7,7 +8,7 @@ const router = Router();
 router.post(
   '/razorpay',
   raw({ type: 'application/json' }), // Parses the incoming request into a Buffer
-  handleRazorpayWebhook
+  razorpayWebhook
 );
 
 // India Post Tracking & Dispatch Event Webhook

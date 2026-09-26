@@ -466,6 +466,11 @@ export const verifyPayment = async (req: Request, res: Response, next: NextFunct
       return;
     }
 
+    if (order.razorpayOrderId !== razorpay_order_id) {
+      res.status(400).json({ success: false, message: 'Payment does not belong to this order.' });
+      return;
+    }
+
     // BOLA/IDOR protection
     if (order.userId && order.userId !== userId && userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN') {
       res.status(403).json({ success: false, message: 'Unauthorized to verify payment for this order.' });
@@ -493,6 +498,9 @@ export const verifyPayment = async (req: Request, res: Response, next: NextFunct
       data: {
         paymentStatus: PaymentStatus.PAID,
         paymentId: razorpay_payment_id,
+        razorpayPaymentId: razorpay_payment_id,
+        razorpaySignature: razorpay_signature,
+        razorpayVerifiedAt: new Date(),
         status: newStatus,
         notes: notesUpdate,
       },
@@ -553,8 +561,11 @@ export const razorpayWebhook = async (req: Request, res: Response, next: NextFun
       return;
     }
 
+    const rawBody = Buffer.isBuffer(req.body)
+      ? req.body
+      : Buffer.from(JSON.stringify(req.body));
     const shasum = crypto.createHmac('sha256', webhookSecret);
-    shasum.update(JSON.stringify(req.body));
+    shasum.update(rawBody);
     const digest = shasum.digest('hex');
 
     const digestBuf = Buffer.from(digest, 'utf8');
@@ -564,8 +575,16 @@ export const razorpayWebhook = async (req: Request, res: Response, next: NextFun
       return;
     }
 
-    const event = req.body.event;
-    const payload = req.body.payload;
+    let webhookBody: any;
+    try {
+      webhookBody = JSON.parse(rawBody.toString('utf8'));
+    } catch {
+      res.status(400).json({ success: false, message: 'Invalid webhook JSON payload' });
+      return;
+    }
+
+    const event = webhookBody.event;
+    const payload = webhookBody.payload;
 
     logger.info(`Razorpay Webhook Event received: ${event}`);
 
@@ -581,6 +600,7 @@ export const razorpayWebhook = async (req: Request, res: Response, next: NextFun
             OR: [
               { id: orderId },
               { orderNumber: orderId },
+              { razorpayOrderId: p.order_id },
               { paymentId: paymentId },
             ],
           },
@@ -592,6 +612,8 @@ export const razorpayWebhook = async (req: Request, res: Response, next: NextFun
             data: {
               paymentStatus: PaymentStatus.PAID,
               paymentId,
+              razorpayPaymentId: paymentId,
+              razorpayOrderId: p.order_id,
               paymentMethod: method,
               notes: existingOrder.notes
                 ? `${existingOrder.notes}\n[${new Date().toISOString()}] Razorpay Webhook captured: ${paymentId}`

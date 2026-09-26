@@ -455,12 +455,19 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         razorpayOrder = await razorpay.orders.create({
           amount: Math.round(orderTotalAmount * 100),
           currency: 'INR',
-          receipt: order.id
+          receipt: order.id,
+          notes: {
+            order_id: order.id,
+            order_number: order.orderNumber,
+          },
         });
 
         await prisma.order.update({
           where: { id: order.id },
-          data: { paymentId: razorpayOrder.id }
+          data: {
+            razorpayOrderId: razorpayOrder.id,
+            paymentGateway: 'RAZORPAY',
+          }
         });
       } catch (rzpErr: any) {
         logger.warn(`[CREATE_ORDER_RZP_WARN] Failed to create Razorpay order for online payment: ${rzpErr.message}`);
@@ -549,6 +556,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       data: {
         ...order,
         razorpayOrderId: razorpayOrder?.id,
+        razorpayKeyId: razorpayOrder ? env.RAZORPAY_KEY_ID : undefined,
         pointsUsed: pricingResult.pointsUsed || 0,
         pointsDiscount: pricingResult.pointsDiscount || 0,
         walletUsed: pricingResult.walletUsed || 0,

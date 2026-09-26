@@ -86,7 +86,7 @@ app.use(compression());
 // Exclude webhooks from global express.json because they need the raw Buffer for signature verification
 app.use((req, res, next) => {
   // Use startsWith to safeguard against trailing slashes or query parameters
-  if (req.originalUrl.startsWith('/api/v1/webhook/razorpay')) {
+  if (req.originalUrl.startsWith('/api/v1/webhook/razorpay') || req.originalUrl.startsWith('/api/v1/payments/razorpay/webhook')) {
     next();
   } else {
     express.json({ limit: '10mb' })(req, res, next);

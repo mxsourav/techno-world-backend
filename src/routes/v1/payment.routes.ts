@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, raw } from 'express';
 import {
   getPaymentOverview,
   getPaymentTransactions,
@@ -19,6 +19,6 @@ router.get('/transactions', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), 
 router.patch('/:orderId/status', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), updatePaymentStatus);
 
 // Razorpay Webhook listener (Signature verified inside controller)
-router.post('/razorpay/webhook', razorpayWebhook);
+router.post('/razorpay/webhook', raw({ type: 'application/json' }), razorpayWebhook);
 
 export default router;

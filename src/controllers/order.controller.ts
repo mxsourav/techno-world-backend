@@ -8,6 +8,7 @@ import { PricingEngine } from '../services/pricing.service.js';
 import { emailService } from '../services/email.service.js';
 import { generateInvoicePDF, assignInvoiceNumber, generateMergedInvoicesPDF } from '../services/invoice.service.js';
 import { logger } from '../config/logger.js';
+import { generateNextCustomerId } from '../utils/customerId.util.js';
 
 import dotenv from "dotenv"
 import twilio from 'twilio';
@@ -111,8 +112,10 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
     if (!existingUser) {
       existingUser = await prisma.user.findUnique({ where: { email: orderEmail } });
       if (!existingUser) {
+        const customerId = await generateNextCustomerId();
         existingUser = await prisma.user.create({
           data: {
+            customerId,
             email: orderEmail,
             name: orderName || 'Customer',
             phone: orderPhone || null,
@@ -120,6 +123,31 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
             role: Role.CUSTOMER,
             isActive: true,
           }
+        });
+      }
+    }
+
+    if (existingUser) {
+      const userUpdates: any = {};
+      if (!existingUser.phone && orderPhone) {
+        userUpdates.phone = orderPhone;
+      }
+      if ((existingUser.name === 'Customer' || existingUser.name?.startsWith('Reader ')) && orderName && orderName !== 'Customer') {
+        userUpdates.name = orderName;
+      }
+      if (existingUser.email?.endsWith('@technoworldbooks.in') && orderEmail && !orderEmail.endsWith('@technoworldbooks.in')) {
+        const emailTaken = await prisma.user.findUnique({ where: { email: orderEmail } });
+        if (!emailTaken) {
+          userUpdates.email = orderEmail;
+        }
+      }
+      if (!existingUser.customerId) {
+        userUpdates.customerId = await generateNextCustomerId();
+      }
+      if (Object.keys(userUpdates).length > 0) {
+        existingUser = await prisma.user.update({
+          where: { id: existingUser.id },
+          data: userUpdates,
         });
       }
     }

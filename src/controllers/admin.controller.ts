@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database.js';
+import argon2 from 'argon2';
 import fs from 'fs';
 import path from 'path';
 import { ImportService } from '../services/import.service.js';
@@ -952,17 +953,65 @@ export const getEmailLogs = async (req: Request, res: Response, next: NextFuncti
 
 export const getAdminCustomers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { search, status, page = 1, limit = 50 } = req.query;
+    const { search, phone, status, page = 1, limit = 50 } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
 
     const where: any = {};
+    const conditions: any[] = [];
+
+    // Search query handling: name, email, phone, customerId, address fields
     if (search && typeof search === 'string' && search.trim()) {
       const q = search.trim();
-      where.OR = [
-        { name: { contains: q } },
-        { email: { contains: q } },
+      const digits = q.replace(/\D/g, '');
+
+      const searchConditions: any[] = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { email: { contains: q, mode: 'insensitive' } },
         { phone: { contains: q } },
+        { customerId: { contains: q, mode: 'insensitive' } },
+        {
+          addresses: {
+            some: {
+              OR: [
+                { fullName: { contains: q, mode: 'insensitive' } },
+                { phone: { contains: q } },
+                { city: { contains: q, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
       ];
+
+      // If search contains phone digits
+      if (digits.length >= 4) {
+        searchConditions.push(
+          { phone: { contains: digits } },
+          { phone: { contains: `+91${digits}` } },
+          { addresses: { some: { phone: { contains: digits } } } },
+          { addresses: { some: { phone: { contains: `+91${digits}` } } } }
+        );
+      }
+
+      conditions.push({ OR: searchConditions });
+    }
+
+    // Explicit phone query parameter (e.g. from dedicated phone search bar)
+    if (phone && typeof phone === 'string' && phone.trim()) {
+      const p = phone.trim();
+      const digits = p.replace(/\D/g, '');
+      const phoneConditions: any[] = [
+        { phone: { contains: p } },
+        { addresses: { some: { phone: { contains: p } } } },
+      ];
+      if (digits.length >= 3) {
+        phoneConditions.push(
+          { phone: { contains: digits } },
+          { phone: { contains: `+91${digits}` } },
+          { addresses: { some: { phone: { contains: digits } } } },
+          { addresses: { some: { phone: { contains: `+91${digits}` } } } }
+        );
+      }
+      conditions.push({ OR: phoneConditions });
     }
 
     if (status === 'ACTIVE') {
@@ -971,18 +1020,26 @@ export const getAdminCustomers = async (req: Request, res: Response, next: NextF
       where.isActive = false;
     }
 
+    if (conditions.length > 0) {
+      where.AND = conditions;
+    }
+
     const [users, total] = await Promise.all([
       prisma.user.findMany({
         where,
         select: {
           id: true,
+          customerId: true,
           name: true,
           email: true,
           phone: true,
           role: true,
           isActive: true,
+          googleId: true,
+          avatarUrl: true,
           technoPoints: true,
           technoWallet: true,
+          lastLoginAt: true,
           createdAt: true,
           addresses: {
             orderBy: { isDefault: 'desc' },
@@ -1012,8 +1069,24 @@ export const getAdminCustomers = async (req: Request, res: Response, next: NextF
         .filter((o: any) => o.status !== 'CANCELLED' && o.status !== 'REFUNDED')
         .reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0);
 
+      // Best phone number: User.phone or first available Address.phone
+      const effectivePhone = u.phone || u.addresses?.find((a: any) => a.phone)?.phone || null;
+
+      // Best display name: if user.name is empty or just generic 'Reader 1234', fallback to shipping address name
+      const effectiveName = (u.name && !u.name.startsWith('Reader '))
+        ? u.name
+        : (u.addresses?.[0]?.fullName || u.name || 'Anonymous User');
+
+      // Login method determination
+      const isGoogle = !!u.googleId;
+      const isOtpOnly = !u.googleId && (u.email?.endsWith('@technoworldbooks.in'));
+      const authMethod = isGoogle ? 'GOOGLE' : (isOtpOnly ? 'PHONE_OTP' : 'EMAIL_PASSWORD');
+
       return {
         ...u,
+        name: effectiveName,
+        phone: effectivePhone,
+        authMethod,
         totalOrders,
         totalSpent,
       };
@@ -1028,6 +1101,179 @@ export const getAdminCustomers = async (req: Request, res: Response, next: NextF
         page: Number(page),
         limit: Number(limit),
       },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// PATCH /api/v1/admin/customers/:id (Full Admin Customer Profile Edit)
+export const updateCustomerProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      email,
+      phone,
+      role,
+      isActive,
+      technoPoints,
+      technoWallet,
+      password,
+    } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      res.status(404).json({ success: false, message: 'Customer not found' });
+      return;
+    }
+
+    const updates: any = {};
+
+    if (name !== undefined) {
+      const cleanName = String(name).trim();
+      if (!cleanName) {
+        res.status(400).json({ success: false, message: 'Name cannot be empty' });
+        return;
+      }
+      updates.name = cleanName;
+    }
+
+    if (email !== undefined) {
+      const cleanEmail = String(email).trim().toLowerCase();
+      if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        res.status(400).json({ success: false, message: 'Valid email address is required' });
+        return;
+      }
+      if (cleanEmail !== user.email) {
+        const existing = await prisma.user.findUnique({ where: { email: cleanEmail } });
+        if (existing && existing.id !== id) {
+          res.status(409).json({ success: false, message: `Email ${cleanEmail} is already registered to another customer` });
+          return;
+        }
+        updates.email = cleanEmail;
+      }
+    }
+
+    if (phone !== undefined) {
+      const cleanPhone = phone ? String(phone).replace(/\D/g, '').slice(-10) : null;
+      updates.phone = cleanPhone;
+    }
+
+    if (role !== undefined) {
+      updates.role = role;
+    }
+
+    if (typeof isActive === 'boolean') {
+      updates.isActive = isActive;
+    }
+
+    if (technoPoints !== undefined && !isNaN(Number(technoPoints))) {
+      updates.technoPoints = Math.max(0, parseInt(String(technoPoints), 10));
+    }
+
+    if (technoWallet !== undefined && !isNaN(Number(technoWallet))) {
+      updates.technoWallet = Math.max(0, parseFloat(String(technoWallet)));
+    }
+
+    if (password && typeof password === 'string' && password.trim().length >= 6) {
+      updates.password = await argon2.hash(password.trim());
+      updates.tokenVersion = { increment: 1 };
+    }
+
+    // Security: if user is deactivated or role changed, purge active sessions
+    const shouldPurgeSessions = updates.isActive === false || (updates.role && updates.role !== user.role);
+
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.update({
+        where: { id },
+        data: updates,
+        select: {
+          id: true,
+          customerId: true,
+          name: true,
+          email: true,
+          phone: true,
+          role: true,
+          isActive: true,
+          technoPoints: true,
+          technoWallet: true,
+          avatarUrl: true,
+          googleId: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (shouldPurgeSessions) {
+        await tx.session.deleteMany({ where: { userId: id } });
+      }
+
+      return u;
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Customer profile updated successfully',
+      data: { customer: updatedUser },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// DELETE /api/v1/admin/customers/:id (Delete or Safe-Deactivate Customer Account)
+export const deleteCustomerAccount = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { orders: true },
+        },
+      },
+    });
+
+    if (!user) {
+      res.status(404).json({ success: false, message: 'Customer account not found' });
+      return;
+    }
+
+    // If user has orders, soft-deactivate to protect financial / audit history
+    if (user._count.orders > 0) {
+      await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id },
+          data: {
+            isActive: false,
+            tokenVersion: { increment: 1 },
+          },
+        });
+        await tx.session.deleteMany({ where: { userId: id } });
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `Customer account has ${user._count.orders} order(s). Account has been safely deactivated and all active sessions terminated.`,
+        data: { id, isActive: false, softDeleted: true },
+      });
+      return;
+    }
+
+    // If 0 orders, permanently delete customer and all associated data
+    await prisma.user.delete({
+      where: { id },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Customer account permanently deleted.',
+      data: { id, deleted: true },
     });
   } catch (error) {
     next(error);

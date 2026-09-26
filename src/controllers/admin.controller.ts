@@ -1445,9 +1445,12 @@ export const getCustomerDetails = async (req: Request, res: Response, next: Next
       where: { id },
       select: {
         id: true,
+        customerId: true,
         name: true,
         email: true,
         phone: true,
+        googleId: true,
+        avatarUrl: true,
         role: true,
         isActive: true,
         technoPoints: true,

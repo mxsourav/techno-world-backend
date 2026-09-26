@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken } from '../utils/jwt.js';
+import { prisma } from '../config/database.js';
+import { generateTokens, verifyToken } from '../utils/jwt.js';
 import { env } from '../config/env.js';
 
 declare global {
@@ -13,7 +14,7 @@ declare global {
   }
 }
 
-export const requireAuth = (req: Request, res: Response, next: NextFunction): void => {
+export const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
   let token = '';
 
@@ -41,6 +42,29 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
     decoded = verifyToken(token, env.JWT_ACCESS_SECRET);
   }
 
+  // If access token is expired or invalid, attempt seamless refresh via refresh token
+  if (!decoded) {
+    const refToken = (req.headers['x-refresh-token'] as string) || req.cookies?.refreshToken;
+    if (refToken) {
+      try {
+        const refDecoded = verifyToken(refToken, env.JWT_REFRESH_SECRET);
+        if (refDecoded) {
+          const session = await prisma.session.findUnique({ where: { refreshToken: refToken } });
+          if (session && session.expiresAt > new Date()) {
+            const user = await prisma.user.findUnique({ where: { id: refDecoded.userId } });
+            if (user && user.isActive) {
+              const { accessToken: freshAccess } = generateTokens(user.id, user.role);
+              res.setHeader('x-new-access-token', freshAccess);
+              decoded = { userId: user.id, role: user.role };
+            }
+          }
+        }
+      } catch (err) {
+        // Fall through to 401
+      }
+    }
+  }
+
   if (!decoded) {
     res.status(401).json({ success: false, message: 'Invalid or expired token' });
     return;
@@ -66,7 +90,7 @@ export const requireRole = (roles: string[]) => {
   };
 };
 
-export const optionalAuth = (req: Request, res: Response, next: NextFunction): void => {
+export const optionalAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
   let token = '';
 
@@ -82,7 +106,26 @@ export const optionalAuth = (req: Request, res: Response, next: NextFunction): v
   }
 
   if (token) {
-    const decoded = verifyToken(token, env.JWT_ACCESS_SECRET);
+    let decoded = verifyToken(token, env.JWT_ACCESS_SECRET);
+    if (!decoded) {
+      const refToken = (req.headers['x-refresh-token'] as string) || req.cookies?.refreshToken;
+      if (refToken) {
+        try {
+          const refDecoded = verifyToken(refToken, env.JWT_REFRESH_SECRET);
+          if (refDecoded) {
+            const session = await prisma.session.findUnique({ where: { refreshToken: refToken } });
+            if (session && session.expiresAt > new Date()) {
+              const user = await prisma.user.findUnique({ where: { id: refDecoded.userId } });
+              if (user && user.isActive) {
+                const { accessToken: freshAccess } = generateTokens(user.id, user.role);
+                res.setHeader('x-new-access-token', freshAccess);
+                decoded = { userId: user.id, role: user.role };
+              }
+            }
+          }
+        } catch (err) {}
+      }
+    }
     if (decoded) {
       req.user = decoded;
     }

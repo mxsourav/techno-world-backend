@@ -17,6 +17,22 @@ const mapBookToFrontendShape = (book: any) => {
     galleryUrls = book.images.map((img: any) => img.secureUrl);
   }
 
+  // Filter out any broken placeholder strings
+  galleryUrls = galleryUrls.filter(u => typeof u === 'string' && u.trim() && !u.includes('placeholder-book.jpg'));
+
+  // Resolve coverUrl: If book.coverUrl is missing, empty, or placeholder, use the 1st gallery image
+  let coverUrl = book.coverUrl;
+  if (!coverUrl || coverUrl.includes('placeholder-book.jpg') || coverUrl === '/placeholder-book.jpg') {
+    coverUrl = galleryUrls.length > 0 ? galleryUrls[0] : null;
+    // Auto-heal the database in background if book has an id
+    if (book.id && coverUrl && coverUrl !== book.coverUrl) {
+      prisma.book.update({
+        where: { id: book.id },
+        data: { coverUrl },
+      }).catch(() => {});
+    }
+  }
+
   return {
     ...book,
     author: book.authors?.length ? book.authors.map((a: any) => a.name).join(', ') : 'Unknown Author',
@@ -32,7 +48,7 @@ const mapBookToFrontendShape = (book: any) => {
     rating: 4.5, // Default for now
     ratingsCount: Math.floor(Math.random() * 500) + 10,
     tags: book.tags ? (typeof book.tags === 'string' ? JSON.parse(book.tags) : book.tags) : [],
-    coverUrl: book.coverUrl,
+    coverUrl,
     images: book.images || [],
     galleryUrls,
     previewPdfUrl: book.previewPdfUrl || null,
@@ -75,9 +91,9 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
 
     if (search) {
       const searchStr = (search as string).trim();
-      const words = searchStr.split(/\s+/).filter(w => w.length >= 2);
-      // SQLite Prisma doesn't support full-text search out of the box, so we use OR with contains
-      // Advanced search: Title, Author, ISBN, Code, SKU, Publisher, Subject, Tags, SEO Keywords
+      const stopWords = new Set(['and', 'of', 'the', 'for', 'in', 'a', 'an', 'to', 'with', 'on', 'by']);
+      const words = searchStr.split(/\s+/).filter(w => w.length >= 2 && !stopWords.has(w.toLowerCase()));
+      
       const orList: any[] = [
         { title: { contains: searchStr, mode: 'insensitive' } },
         { isbn13: { contains: searchStr, mode: 'insensitive' } },
@@ -92,11 +108,14 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
       ];
 
       if (words.length > 1) {
-        words.forEach(w => {
-          orList.push({ seoKeywords: { contains: w, mode: 'insensitive' } });
-          orList.push({ tags: { contains: w, mode: 'insensitive' } });
-          orList.push({ title: { contains: w, mode: 'insensitive' } });
-        });
+        const andClauses = words.map(w => ({
+          OR: [
+            { title: { contains: w, mode: 'insensitive' } },
+            { seoKeywords: { contains: w, mode: 'insensitive' } },
+            { tags: { contains: w, mode: 'insensitive' } }
+          ]
+        }));
+        orList.push({ AND: andClauses });
       }
 
       where.OR = orList;

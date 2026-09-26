@@ -10,8 +10,9 @@ export const instantSearch = async (req: Request, res: Response, next: NextFunct
       return;
     }
 
-    // Split query into words to match multi-word keywords (e.g. "NEET Physics")
-    const words = q.split(/\s+/).filter(w => w.length >= 2);
+    // Split query into words and filter out common stop words
+    const stopWords = new Set(['and', 'of', 'the', 'for', 'in', 'a', 'an', 'to', 'with', 'on', 'by']);
+    const words = q.split(/\s+/).filter(w => w.length >= 2 && !stopWords.has(w.toLowerCase()));
 
     const orClauses: any[] = [
       { title: { contains: q, mode: 'insensitive' } },
@@ -29,13 +30,16 @@ export const instantSearch = async (req: Request, res: Response, next: NextFunct
       { publisher: { name: { contains: q, mode: 'insensitive' } } },
     ];
 
-    // If query has multiple words, also match individual terms against seoKeywords, tags, and title
+    // Match books that contain ALL the significant words in their title/tags/seoKeywords
     if (words.length > 1) {
-      words.forEach(w => {
-        orClauses.push({ seoKeywords: { contains: w, mode: 'insensitive' } });
-        orClauses.push({ tags: { contains: w, mode: 'insensitive' } });
-        orClauses.push({ title: { contains: w, mode: 'insensitive' } });
-      });
+      const andClauses = words.map(w => ({
+        OR: [
+          { title: { contains: w, mode: 'insensitive' } },
+          { seoKeywords: { contains: w, mode: 'insensitive' } },
+          { tags: { contains: w, mode: 'insensitive' } }
+        ]
+      }));
+      orClauses.push({ AND: andClauses });
     }
 
     const books = await prisma.book.findMany({

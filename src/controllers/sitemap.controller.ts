@@ -34,7 +34,7 @@ export const generateSitemap = async (req: Request, res: Response, next: NextFun
     // Fetch all published books with cover image info
     const books = await prisma.book.findMany({
       where: { status: 'PUBLISHED' },
-      select: { slug: true, updatedAt: true, title: true, coverUrl: true },
+      select: { slug: true, updatedAt: true, title: true, coverUrl: true, galleryUrls: true },
     });
 
     // Fetch all active categories
@@ -77,7 +77,20 @@ export const generateSitemap = async (req: Request, res: Response, next: NextFun
     // Published books with Google Image search markup
     for (const book of books) {
       const lastmod = formatIso(book.updatedAt);
-      const cover = book.coverUrl;
+      let cover = book.coverUrl;
+      if (!cover || cover.includes('placeholder-book.jpg') || cover === '/placeholder-book.jpg') {
+        let gallery: string[] = [];
+        if (typeof (book as any).galleryUrls === 'string') {
+          try {
+            gallery = JSON.parse((book as any).galleryUrls);
+          } catch {
+            gallery = [];
+          }
+        } else if (Array.isArray((book as any).galleryUrls)) {
+          gallery = (book as any).galleryUrls;
+        }
+        cover = gallery.find(u => typeof u === 'string' && u.trim() && !u.includes('placeholder-book.jpg')) || null;
+      }
 
       xml += `  <url>\n`;
       xml += `    <loc>${BASE_URL}/book/${escapeXml(book.slug)}</loc>\n`;
@@ -85,7 +98,7 @@ export const generateSitemap = async (req: Request, res: Response, next: NextFun
       xml += `    <changefreq>weekly</changefreq>\n`;
       xml += `    <priority>0.8</priority>\n`;
 
-      if (cover) {
+      if (cover && !cover.includes('placeholder-book.jpg')) {
         const fullCover = cover.startsWith('http') ? cover : `${BASE_URL}${cover.startsWith('/') ? cover : '/' + cover}`;
         xml += `    <image:image>\n`;
         xml += `      <image:loc>${escapeXml(fullCover)}</image:loc>\n`;

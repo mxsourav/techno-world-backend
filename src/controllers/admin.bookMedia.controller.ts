@@ -186,7 +186,7 @@ export const uploadBookGalleryImages = async (req: Request, res: Response, next:
     let newCoverUrl = book.coverUrl;
     let newCoverPublicId = book.coverPublicId;
 
-    if (!newCoverUrl && allGalleryImages.length > 0) {
+    if ((!newCoverUrl || newCoverUrl.includes('placeholder-book.jpg') || newCoverUrl === '/placeholder-book.jpg') && allGalleryImages.length > 0) {
       newCoverUrl = allGalleryImages[0].secureUrl;
       newCoverPublicId = allGalleryImages[0].publicId;
       await prisma.bookImage.update({

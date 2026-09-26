@@ -62,12 +62,49 @@ async function ensureDefaultAdminUser(): Promise<void> {
   }
 }
 
+async function autoHealPlaceholderCovers(): Promise<void> {
+  try {
+    const booksToHeal = await prisma.book.findMany({
+      where: {
+        coverUrl: { contains: 'placeholder-book.jpg' },
+      },
+      select: {
+        id: true,
+        galleryUrls: true,
+      },
+    });
+
+    if (booksToHeal.length > 0) {
+      logger.info(`[AutoHeal] Found ${booksToHeal.length} books with placeholder coverUrl. Healing...`);
+      for (const book of booksToHeal) {
+        let realCover: string | null = null;
+        if (book.galleryUrls) {
+          try {
+            const parsed = typeof book.galleryUrls === 'string' ? JSON.parse(book.galleryUrls) : book.galleryUrls;
+            if (Array.isArray(parsed)) {
+              realCover = parsed.find(u => typeof u === 'string' && u.trim() && !u.includes('placeholder-book.jpg')) || null;
+            }
+          } catch {}
+        }
+        await prisma.book.update({
+          where: { id: book.id },
+          data: { coverUrl: realCover },
+        });
+      }
+      logger.info(`[AutoHeal] Successfully healed ${booksToHeal.length} book cover URLs.`);
+    }
+  } catch (err) {
+    logger.warn('[AutoHeal] Non-critical error during cover auto-heal:', err);
+  }
+}
+
 async function bootstrap() {
   try {
     await prisma.$connect();
     logger.info('DB connected successfully');
 
     await ensureDefaultAdminUser();
+    await autoHealPlaceholderCovers();
 
     startInvoiceCron();
 

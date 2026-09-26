@@ -79,14 +79,60 @@ export class CloudinaryService {
     }
 
     try {
-      const res = await cloudinary.uploader.destroy(publicId, {
+      let cleanPublicId = publicId.trim();
+      if (cleanPublicId.startsWith('http://') || cleanPublicId.startsWith('https://')) {
+        const extracted = this.extractPublicIdFromUrl(cleanPublicId);
+        if (extracted) {
+          cleanPublicId = extracted.publicId;
+          resourceType = extracted.resourceType;
+        }
+      }
+
+      // For image/video, Cloudinary public_id must not include file extension
+      if (resourceType !== 'raw') {
+        cleanPublicId = cleanPublicId.replace(/\.(jpe?g|png|webp|gif|svg|avif|mp4|mov)$/i, '');
+      }
+
+      const res = await cloudinary.uploader.destroy(cleanPublicId, {
         resource_type: resourceType,
         invalidate: true,
       });
       return res;
     } catch (err: any) {
       console.error(`[Cloudinary] Error deleting asset ${publicId}:`, err?.message || err);
-      throw err;
+      return { result: 'error' };
+    }
+  }
+
+  /**
+   * Extracts publicId and resourceType from any Cloudinary URL
+   */
+  public static extractPublicIdFromUrl(url: string): { publicId: string; resourceType: 'image' | 'raw' | 'video' } | null {
+    if (!url || typeof url !== 'string' || !url.includes('cloudinary.com')) return null;
+    try {
+      const parsed = new URL(url);
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      const uploadIndex = parts.indexOf('upload');
+      if (uploadIndex === -1 || uploadIndex >= parts.length - 1) return null;
+
+      const resourceType: 'image' | 'raw' | 'video' =
+        parts[uploadIndex - 1] === 'raw' ? 'raw' :
+        parts[uploadIndex - 1] === 'video' ? 'video' : 'image';
+
+      let rest = parts.slice(uploadIndex + 1);
+      if (rest[0] && /^v\d+$/.test(rest[0])) {
+        rest = rest.slice(1);
+      }
+      const fullPath = decodeURIComponent(rest.join('/'));
+      if (resourceType === 'raw') {
+        return { publicId: fullPath, resourceType };
+      } else {
+        const lastDot = fullPath.lastIndexOf('.');
+        const publicId = lastDot > 0 ? fullPath.substring(0, lastDot) : fullPath;
+        return { publicId, resourceType };
+      }
+    } catch {
+      return null;
     }
   }
 
@@ -105,6 +151,119 @@ export class CloudinaryService {
       // Cloudinary will return error if folder does not exist or is not empty
       console.warn(`[Cloudinary] Folder deletion skipped for '${folderPath}':`, err?.message || err);
       return false;
+    }
+  }
+
+  /**
+   * Thoroughly deletes all assets under a folder prefix and then removes the folders
+   */
+  public static async deleteFolderRecursively(folderPath: string): Promise<boolean> {
+    if (!isCloudinaryConfigured()) return false;
+    try {
+      const cleanPath = folderPath.replace(/^\/+|\/+$/g, '');
+      // 1. Delete all image assets under prefix
+      try {
+        await cloudinary.api.delete_resources_by_prefix(cleanPath, { resource_type: 'image' });
+      } catch {}
+      // 2. Delete all raw files (e.g. PDFs)
+      try {
+        await cloudinary.api.delete_resources_by_prefix(cleanPath, { resource_type: 'raw' });
+      } catch {}
+      // 3. Delete all video files
+      try {
+        await cloudinary.api.delete_resources_by_prefix(cleanPath, { resource_type: 'video' });
+      } catch {}
+
+      // 4. Try deleting subfolders
+      try {
+        await cloudinary.api.delete_folder(`${cleanPath}/images`);
+      } catch {}
+      try {
+        await cloudinary.api.delete_folder(`${cleanPath}/documents`);
+      } catch {}
+
+      // 5. Delete root folder
+      try {
+        await cloudinary.api.delete_folder(cleanPath);
+      } catch {}
+
+      return true;
+    } catch (err: any) {
+      console.warn(`[Cloudinary] deleteFolderRecursively warning for '${folderPath}':`, err?.message || err);
+      return false;
+    }
+  }
+
+  /**
+   * Completely cleans up all Cloudinary assets, folders, and URLs associated with a book
+   */
+  public static async deleteBookMedia(book: {
+    slug: string;
+    coverPublicId?: string | null;
+    coverUrl?: string | null;
+    previewPdfPublicId?: string | null;
+    previewPdfUrl?: string | null;
+    previewPdfResourceType?: string | null;
+    galleryUrls?: string | null;
+    images?: Array<{ publicId?: string | null; resourceType?: string | null }>;
+  }): Promise<void> {
+    if (!isCloudinaryConfigured() || !book) return;
+
+    const cleanSlug = (book.slug || '').replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase();
+
+    // 1. Delete by prefix (catches all assets under Home/books/{slug} and books/{slug})
+    if (cleanSlug) {
+      await this.deleteFolderRecursively(`Home/books/${cleanSlug}`);
+      await this.deleteFolderRecursively(`books/${cleanSlug}`);
+    }
+
+    // 2. Delete explicit public IDs from BookImage records
+    if (book.images && Array.isArray(book.images)) {
+      for (const img of book.images) {
+        if (img?.publicId) {
+          try {
+            await this.deleteAsset(img.publicId, (img.resourceType as any) || 'image');
+          } catch {}
+        }
+      }
+    }
+
+    // 3. Delete cover public ID
+    if (book.coverPublicId) {
+      try {
+        await this.deleteAsset(book.coverPublicId, 'image');
+      } catch {}
+    }
+
+    // 4. Delete preview PDF public ID
+    if (book.previewPdfPublicId) {
+      try {
+        await this.deleteAsset(book.previewPdfPublicId, (book.previewPdfResourceType as any) || 'raw');
+      } catch {}
+    }
+
+    // 5. Extract and delete any Cloudinary URLs that might not have matching public IDs stored
+    const urlsToCheck: string[] = [];
+    if (book.coverUrl) urlsToCheck.push(book.coverUrl);
+    if (book.previewPdfUrl) urlsToCheck.push(book.previewPdfUrl);
+    if (book.galleryUrls) {
+      try {
+        const parsed = typeof book.galleryUrls === 'string' ? JSON.parse(book.galleryUrls) : book.galleryUrls;
+        if (Array.isArray(parsed)) {
+          for (const u of parsed) {
+            if (typeof u === 'string') urlsToCheck.push(u);
+          }
+        }
+      } catch {}
+    }
+
+    for (const url of urlsToCheck) {
+      const extracted = this.extractPublicIdFromUrl(url);
+      if (extracted) {
+        try {
+          await this.deleteAsset(extracted.publicId, extracted.resourceType);
+        } catch {}
+      }
     }
   }
 

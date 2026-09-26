@@ -225,9 +225,13 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         const existingAddr = await tx.address.findFirst({ where: { id: addressId } });
         if (existingAddr) {
           finalAddressId = existingAddr.id;
-          if (!existingAddr.userId) {
-            await tx.address.update({ where: { id: existingAddr.id }, data: { userId } });
-          }
+          await tx.address.update({
+            where: { id: existingAddr.id },
+            data: {
+              userId: existingAddr.userId || userId,
+              email: orderEmail,
+            }
+          });
         }
       }
 
@@ -531,9 +535,9 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
 
     // Trigger customer email notification on order placement
     try {
-      const recipientEmail = (order as any).customerEmail || order.address?.email || order.user?.email || orderEmail;
+      const recipientEmail = orderEmail || (order as any).customerEmail || (order.address?.email && !order.address.email.includes('@mail.com') ? order.address.email : null) || (!order.user?.email?.includes('@mail.com') ? order.user?.email : null);
       const recipientName = order.address?.fullName || order.user?.name || (address as any)?.fullName || 'Valued Customer';
-      if (recipientEmail && recipientEmail.includes('@')) {
+      if (recipientEmail && recipientEmail.includes('@') && !recipientEmail.includes('@example.com') && !recipientEmail.includes('@mail.com')) {
         const itemsSummary = (order.items || []).map((it: any) => ({
           title: it.book?.title || 'Academic Book',
           quantity: it.quantity,
@@ -819,10 +823,14 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
 
     // Trigger lifecycle customer email for every status update until delivery
     try {
-      const recipientEmail = (order as any).customerEmail || order.address?.email || order.user?.email || null;
+      const recipientEmail = (order.address?.email && !order.address.email.includes('@mail.com') && !order.address.email.includes('@example.com'))
+        ? order.address.email
+        : (order.user?.email && !order.user.email.includes('@mail.com') && !order.user.email.includes('@example.com'))
+        ? order.user.email
+        : null;
       const recipientName = order.address?.fullName || order.user?.name || 'Valued Customer';
 
-      if (recipientEmail && recipientEmail.includes('@') && !recipientEmail.includes('@example.com') && !recipientEmail.includes('@technoworld.com')) {
+      if (recipientEmail && recipientEmail.includes('@') && !recipientEmail.includes('@technoworld.com')) {
         const itemsSummary = (order.items || []).map((it: any) => ({
           title: it.book?.title || 'Academic Book',
           quantity: it.quantity,

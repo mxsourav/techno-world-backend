@@ -965,17 +965,17 @@ export const getAdminCustomers = async (req: Request, res: Response, next: NextF
       const digits = q.replace(/\D/g, '');
 
       const searchConditions: any[] = [
-        { name: { contains: q, mode: 'insensitive' } },
-        { email: { contains: q, mode: 'insensitive' } },
+        { name: { contains: q } },
+        { email: { contains: q } },
         { phone: { contains: q } },
-        { customerId: { contains: q, mode: 'insensitive' } },
+        { customerId: { contains: q } },
         {
           addresses: {
             some: {
               OR: [
-                { fullName: { contains: q, mode: 'insensitive' } },
+                { fullName: { contains: q } },
                 { phone: { contains: q } },
-                { city: { contains: q, mode: 'insensitive' } },
+                { city: { contains: q } },
               ],
             },
           },
@@ -1067,7 +1067,7 @@ export const getAdminCustomers = async (req: Request, res: Response, next: NextF
       const totalOrders = u.orders.length;
       const totalSpent = u.orders
         .filter((o: any) => o.status !== 'CANCELLED' && o.status !== 'REFUNDED')
-        .reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0);
+        .reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
 
       // Best phone number: User.phone or first available Address.phone
       const effectivePhone = u.phone || u.addresses?.find((a: any) => a.phone)?.phone || null;
@@ -1531,7 +1531,7 @@ export const getCustomerDetails = async (req: Request, res: Response, next: Next
         if (bookPurchaseMap.has(bookId)) {
           const existing = bookPurchaseMap.get(bookId);
           existing.totalQuantity += it.quantity;
-          existing.totalSpent += it.quantity * it.priceAtPurchase;
+          existing.totalSpent += it.quantity * Number(it.priceAtPurchase || 0);
           existing.orderReferences.push({
             orderNumber: ord.orderNumber,
             date: ord.createdAt,
@@ -1545,9 +1545,9 @@ export const getCustomerDetails = async (req: Request, res: Response, next: Next
             edition: it.book.edition,
             isbn: it.book.isbn13 || it.book.isbn10 || 'N/A',
             coverImage: it.book.images?.[0]?.secureUrl || '',
-            unitPrice: it.priceAtPurchase,
+            unitPrice: Number(it.priceAtPurchase || 0),
             totalQuantity: it.quantity,
-            totalSpent: it.quantity * it.priceAtPurchase,
+            totalSpent: it.quantity * Number(it.priceAtPurchase || 0),
             lastPurchasedAt: ord.createdAt,
             orderReferences: [{
               orderNumber: ord.orderNumber,
@@ -1565,7 +1565,7 @@ export const getCustomerDetails = async (req: Request, res: Response, next: Next
 
     const totalSpent = user.orders
       .filter((o: any) => o.status !== 'CANCELLED' && o.status !== 'REFUNDED')
-      .reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0);
+      .reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
 
     res.status(200).json({
       success: true,

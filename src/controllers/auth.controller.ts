@@ -8,6 +8,7 @@ import { env } from '../config/env.js';
 import { generateTokens, verifyToken } from '../utils/jwt.js';
 import { ensureUserTestingBonus } from '../services/loyalty.service.js';
 import { otpService } from '../services/otp.service.js';
+import { generateNextCustomerId } from '../utils/customerId.util.js';
 
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME_MS = 15 * 60 * 1000; // 15 minutes
@@ -121,8 +122,17 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     // Ensure testing bonus (at least 150 points & ₹50 cash)
     const bonus = await ensureUserTestingBonus(user.id);
 
+    if (!user.customerId) {
+      const cid = await generateNextCustomerId();
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { customerId: cid },
+      });
+    }
+
     const userPayload = {
       id: user.id,
+      customerId: user.customerId,
       email: user.email,
       role: user.role,
       name: user.name,
@@ -269,8 +279,10 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
     }
 
     if (!user) {
+      const customerId = await generateNextCustomerId();
       user = await prisma.user.create({
         data: {
+          customerId,
           email: devGoogleEmail,
           name: devGoogleName,
           googleId: devGoogleId,
@@ -280,11 +292,17 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
           technoPoints: 0,
         },
       });
-    } else if (!user.googleId) {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { googleId: devGoogleId, avatarUrl: user.avatarUrl || devAvatar },
-      });
+    } else {
+      const updates: any = {};
+      if (!user.googleId) updates.googleId = devGoogleId;
+      if (!user.avatarUrl) updates.avatarUrl = devAvatar;
+      if (!user.customerId) updates.customerId = await generateNextCustomerId();
+      if (Object.keys(updates).length > 0) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: updates,
+        });
+      }
     }
 
     const { accessToken, refreshToken } = generateTokens(user.id, user.role);
@@ -326,6 +344,7 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
         accessToken,
         user: {
           id: user.id,
+          customerId: user.customerId,
           email: user.email,
           role: user.role,
           name: user.name,
@@ -443,8 +462,10 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
     }
 
     if (!user) {
+      const customerId = await generateNextCustomerId();
       user = await prisma.user.create({
         data: {
+          customerId,
           email,
           name,
           googleId,
@@ -462,6 +483,9 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
       }
       if (!user.avatarUrl && avatarUrl) {
         updates.avatarUrl = avatarUrl;
+      }
+      if (!user.customerId) {
+        updates.customerId = await generateNextCustomerId();
       }
       if (Object.keys(updates).length > 0) {
         user = await prisma.user.update({
@@ -511,6 +535,7 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
         refreshToken,
         user: {
           id: user.id,
+          customerId: user.customerId,
           email: user.email,
           role: user.role,
           name: user.name,
@@ -574,11 +599,13 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     });
 
     if (!user) {
+      const customerId = await generateNextCustomerId();
       const defaultName = name?.trim() || `Reader ${cleanPhone.slice(-4)}`;
       const defaultEmail = `${cleanPhone}@technoworldbooks.in`;
       const dummyHash = await argon2.hash(`OTP_AUTH_${cleanPhone}_${Date.now()}`);
       user = await prisma.user.create({
         data: {
+          customerId,
           name: defaultName,
           email: defaultEmail,
           phone: cleanPhone,
@@ -590,6 +617,12 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
     } else if (!user.isActive) {
       res.status(403).json({ success: false, message: 'Account is deactivated. Please contact support.' });
       return;
+    } else if (!user.customerId) {
+      const customerId = await generateNextCustomerId();
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { customerId },
+      });
     }
 
     const { accessToken, refreshToken } = generateTokens(user.id, user.role);
@@ -623,6 +656,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
 
     const userPayload = {
       id: user.id,
+      customerId: user.customerId,
       email: user.email,
       phone: user.phone || cleanPhone,
       role: user.role,

@@ -98,6 +98,8 @@ async function autoHealPlaceholderCovers(): Promise<void> {
   }
 }
 
+import { ensureCustomerIds } from './utils/customerId.util.js';
+
 async function bootstrap() {
   try {
     await prisma.$connect();
@@ -105,6 +107,7 @@ async function bootstrap() {
 
     await ensureDefaultAdminUser();
     await autoHealPlaceholderCovers();
+    await ensureCustomerIds();
 
     startInvoiceCron();
 

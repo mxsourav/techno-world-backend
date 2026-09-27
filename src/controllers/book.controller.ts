@@ -95,24 +95,24 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
       const words = searchStr.split(/\s+/).filter(w => w.length >= 2 && !stopWords.has(w.toLowerCase()));
       
       const orList: any[] = [
-        { title: { contains: searchStr, mode: 'insensitive' } },
-        { isbn13: { contains: searchStr, mode: 'insensitive' } },
-        { isbn10: { contains: searchStr, mode: 'insensitive' } },
-        { bookCode: { contains: searchStr, mode: 'insensitive' } },
-        { sku: { contains: searchStr, mode: 'insensitive' } },
-        { seoKeywords: { contains: searchStr, mode: 'insensitive' } },
-        { tags: { contains: searchStr, mode: 'insensitive' } },
-        { authors: { some: { name: { contains: searchStr, mode: 'insensitive' } } } },
-        { publisher: { name: { contains: searchStr, mode: 'insensitive' } } },
-        { subjects: { some: { name: { contains: searchStr, mode: 'insensitive' } } } }
+        { title: { contains: searchStr } },
+        { isbn13: { contains: searchStr } },
+        { isbn10: { contains: searchStr } },
+        { bookCode: { contains: searchStr } },
+        { sku: { contains: searchStr } },
+        { seoKeywords: { contains: searchStr } },
+        { tags: { contains: searchStr } },
+        { authors: { some: { name: { contains: searchStr } } } },
+        { publisher: { name: { contains: searchStr } } },
+        { subjects: { some: { name: { contains: searchStr } } } }
       ];
 
       if (words.length > 1) {
         const andClauses = words.map(w => ({
           OR: [
-            { title: { contains: w, mode: 'insensitive' } },
-            { seoKeywords: { contains: w, mode: 'insensitive' } },
-            { tags: { contains: w, mode: 'insensitive' } }
+            { title: { contains: w } },
+            { seoKeywords: { contains: w } },
+            { tags: { contains: w } }
           ]
         }));
         orList.push({ AND: andClauses });
@@ -130,7 +130,7 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
       where.publisher = {
         OR: [
           { slug: publisher as string },
-          { name: { contains: publisher as string, mode: 'insensitive' } }
+          { name: { contains: publisher as string } }
         ]
       };
     }

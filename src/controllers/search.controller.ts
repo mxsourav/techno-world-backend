@@ -15,28 +15,28 @@ export const instantSearch = async (req: Request, res: Response, next: NextFunct
     const words = q.split(/\s+/).filter(w => w.length >= 2 && !stopWords.has(w.toLowerCase()));
 
     const orClauses: any[] = [
-      { title: { contains: q, mode: 'insensitive' } },
-      { isbn13: { contains: q, mode: 'insensitive' } },
-      { isbn10: { contains: q, mode: 'insensitive' } },
-      { bookCode: { contains: q, mode: 'insensitive' } },
-      { sku: { contains: q, mode: 'insensitive' } },
-      { seoKeywords: { contains: q, mode: 'insensitive' } },
-      { tags: { contains: q, mode: 'insensitive' } },
-      { examination: { contains: q, mode: 'insensitive' } },
-      { university: { contains: q, mode: 'insensitive' } },
-      { course: { contains: q, mode: 'insensitive' } },
-      { authors: { some: { name: { contains: q, mode: 'insensitive' } } } },
-      { category: { name: { contains: q, mode: 'insensitive' } } },
-      { publisher: { name: { contains: q, mode: 'insensitive' } } },
+      { title: { contains: q } },
+      { isbn13: { contains: q } },
+      { isbn10: { contains: q } },
+      { bookCode: { contains: q } },
+      { sku: { contains: q } },
+      { seoKeywords: { contains: q } },
+      { tags: { contains: q } },
+      { examination: { contains: q } },
+      { university: { contains: q } },
+      { course: { contains: q } },
+      { authors: { some: { name: { contains: q } } } },
+      { category: { name: { contains: q } } },
+      { publisher: { name: { contains: q } } },
     ];
 
     // Match books that contain ALL the significant words in their title/tags/seoKeywords
     if (words.length > 1) {
       const andClauses = words.map(w => ({
         OR: [
-          { title: { contains: w, mode: 'insensitive' } },
-          { seoKeywords: { contains: w, mode: 'insensitive' } },
-          { tags: { contains: w, mode: 'insensitive' } }
+          { title: { contains: w } },
+          { seoKeywords: { contains: w } },
+          { tags: { contains: w } }
         ]
       }));
       orClauses.push({ AND: andClauses });

@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database.js';
 import { indiaPostService } from '../services/indiapost.service.js';
+import { emailService } from '../services/email.service.js';
+import { generateInvoicePDF, assignInvoiceNumber } from '../services/invoice.service.js';
 import {
   indiaPostTariffRequestSchema,
   indiaPostArticleSchema,
@@ -99,6 +101,101 @@ export const bookOrderShipment = async (req: Request, res: Response, next: NextF
       }
     }
 
+async function sendDispatchEmail(orderId: string, trackingNumber?: string | null, carrier?: string | null, method?: string | null) {
+  try {
+    const fullOrder = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        address: true,
+        user: true,
+        items: { include: { book: true } },
+      },
+    });
+
+    if (!fullOrder) return;
+
+    // Use actual customer email from address, ignoring dummy @mail.com
+    const recipientEmail = (fullOrder.address?.email && !fullOrder.address.email.includes('@mail.com') && !fullOrder.address.email.includes('@example.com'))
+      ? fullOrder.address.email
+      : (fullOrder.user?.email && !fullOrder.user.email.includes('@mail.com') && !fullOrder.user.email.includes('@example.com'))
+      ? fullOrder.user.email
+      : null;
+
+    const recipientName = fullOrder.address?.fullName || fullOrder.user?.name || 'Valued Customer';
+
+    if (recipientEmail && recipientEmail.includes('@')) {
+      let invoiceAttachment: any = undefined;
+      try {
+        const invNum = fullOrder.invoiceNumber || await assignInvoiceNumber(fullOrder.id);
+        const pdfBuffer = await generateInvoicePDF(fullOrder.id);
+        if (pdfBuffer && pdfBuffer.length > 0) {
+          invoiceAttachment = [{
+            filename: `Tax-Invoice-${invNum || fullOrder.orderNumber}.pdf`,
+            content: pdfBuffer,
+            contentType: 'application/pdf',
+          }];
+        }
+      } catch (invErr: any) {
+        logger.warn(`[SHIP_INVOICE_WARN] Could not generate invoice for #${fullOrder.orderNumber}: ${invErr.message}`);
+      }
+
+      const addrStr = fullOrder.address
+        ? `${fullOrder.address.addressLine1}${fullOrder.address.city ? `, ${fullOrder.address.city}` : ''}${fullOrder.address.pincode ? ` - ${fullOrder.address.pincode}` : ''}`
+        : null;
+
+      const itemsSummary = (fullOrder.items || []).map((it: any) => ({
+        title: it.book?.title || 'Academic Book',
+        quantity: it.quantity,
+        price: Number(it.priceAtPurchase),
+        sku: it.book?.sku || it.book?.bookCode || undefined,
+      }));
+
+      const emailContent = emailService.generateLifecycleEmailHtml({
+        status: 'SHIPPED',
+        orderNumber: fullOrder.orderNumber,
+        customerName: recipientName,
+        items: itemsSummary,
+        totalAmount: Number(fullOrder.totalAmount),
+        subtotal: Number(fullOrder.subtotal),
+        shippingCharge: Number(fullOrder.shippingCharge),
+        discountAmount: Number(fullOrder.discountAmount),
+        trackingNumber: trackingNumber || fullOrder.trackingNumber,
+        shippingCarrier: carrier || fullOrder.shippingCarrier,
+        shippingMethod: method || fullOrder.shippingMethod,
+        deliveryAddress: addrStr,
+        paymentMethod: fullOrder.paymentMethod,
+        hasInvoiceAttachment: Boolean(invoiceAttachment),
+      });
+
+      await emailService.sendOrderNotification({
+        recipientEmail,
+        recipientName,
+        orderNumber: fullOrder.orderNumber,
+        subject: emailContent.subject,
+        message: emailContent.text,
+        attachments: invoiceAttachment,
+      }, emailContent.html);
+
+      logger.info(`[SHIP_EMAIL_SENT] Automated dispatch email sent for #${fullOrder.orderNumber} to ${recipientEmail}`);
+    }
+
+    // In-app customer notification
+    if (fullOrder.userId) {
+      await prisma.notification.create({
+        data: {
+          userId: fullOrder.userId,
+          title: `🚚 Dispatched: #${fullOrder.orderNumber}`,
+          message: `Order #${fullOrder.orderNumber} has been dispatched via ${carrier || 'India Post'}.${trackingNumber ? ` Tracking No: ${trackingNumber}` : ''}`,
+          type: 'order_shipped',
+          link: '/profile?tab=orders',
+        },
+      }).catch(() => {});
+    }
+  } catch (err: any) {
+    logger.warn(`[SHIP_EMAIL_ERR] Failed to send dispatch email for ${orderId}: ${err.message}`);
+  }
+}
+
     // ── EXPRESS_LOCAL: Manual local courier (Porter/Rapido) — no India Post API ──
     if (orderShippingMethod === 'EXPRESS_LOCAL') {
       await prisma.order.updateMany({
@@ -110,6 +207,11 @@ export const bookOrderShipment = async (req: Request, res: Response, next: NextF
           notes: (order.notes ? order.notes + ' | ' : '') +
             `Express Local dispatch via ${deliveryPartner || 'Local Courier'}${agentPhone ? ` (${agentPhone})` : ''} at ${new Date().toISOString()}`,
         },
+      });
+
+      // Send automated dispatch emails asynchronously
+      allIds.forEach(id => {
+        sendDispatchEmail(id, null, deliveryPartner || 'Local Courier', 'EXPRESS_LOCAL');
       });
 
       res.json({
@@ -178,8 +280,13 @@ export const bookOrderShipment = async (req: Request, res: Response, next: NextF
         trackingNumber: barcode,
         shippingCarrier: carrierLabel,
         shippingMethod: orderShippingMethod,
-        status: order.status === 'PENDING' ? 'PROCESSING' : order.status,
+        status: 'SHIPPED',
       },
+    });
+
+    // Send automated dispatch emails with real India Post AWB / barcode
+    allIds.forEach(id => {
+      sendDispatchEmail(id, barcode, carrierLabel, orderShippingMethod);
     });
 
     res.json({

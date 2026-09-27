@@ -13,6 +13,8 @@ import {
   adjustCustomerPoints,
   getCustomerDetails,
   exportCustomerData,
+  updateCustomerProfile,
+  deleteCustomerAccount,
   getAdminSettings,
   updateAdminProfile,
   updateSmtpSettings,
@@ -77,6 +79,8 @@ router.get('/analytics/search-trends', getSearchAndSalesAnalytics);
 router.get('/customers', getAdminCustomers);
 router.get('/customers/export', exportCustomerData);
 router.get('/customers/:id/details', getCustomerDetails);
+router.patch('/customers/:id', updateCustomerProfile);
+router.delete('/customers/:id', deleteCustomerAccount);
 router.patch('/customers/:id/status', toggleCustomerStatus);
 router.post('/customers/:id/points', adjustCustomerPoints);
 router.post('/customers/points', adjustCustomerPoints);

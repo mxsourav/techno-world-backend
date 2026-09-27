@@ -28,16 +28,16 @@ export async function ensureUserTestingBonus(userId: string, externalTx?: any): 
       if (existingBonus) {
         // Bonus already granted; return live balances without refilling
         return {
-          technoPoints: user.technoPoints ?? 0,
-          technoWallet: user.technoWallet ?? 0
+          technoPoints: Number(user.technoPoints ?? 0),
+          technoWallet: Number(user.technoWallet ?? 0)
         };
       }
 
       const TARGET_TEST_POINTS = 150;
       const TARGET_TEST_WALLET = 50.0;
 
-      const currentPoints = user.technoPoints ?? 0;
-      const currentWallet = user.technoWallet ?? 0;
+      const currentPoints = Number(user.technoPoints ?? 0);
+      const currentWallet = Number(user.technoWallet ?? 0);
 
       const pointsToCredit = Math.max(0, TARGET_TEST_POINTS - currentPoints);
       const walletToCredit = Math.max(0, TARGET_TEST_WALLET - currentWallet);

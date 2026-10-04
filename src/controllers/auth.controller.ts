@@ -43,6 +43,12 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Account lockout enforcement
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      res.status(429).json({ success: false, message: 'Account temporarily locked due to too many failed attempts. Please try again later.' });
+      return;
+    }
+
     let isValid = false;
     if (user.password.startsWith('$argon2')) {
       try {
@@ -597,6 +603,12 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
         ],
       },
     });
+
+    // Security: Admin/Super_Admin accounts must use password login — OTP login is for customers only
+    if (user && (user.role === Role.ADMIN || user.role === Role.SUPER_ADMIN)) {
+      res.status(403).json({ success: false, message: 'Admin accounts must use password login.' });
+      return;
+    }
 
     if (!user) {
       const customerId = await generateNextCustomerId();

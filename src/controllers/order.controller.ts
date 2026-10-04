@@ -109,9 +109,15 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
+    // Security: unauthenticated guests cannot use points or wallet of existing accounts
+    const safePointsUsed = authenticatedUserId ? (pointsUsed || 0) : 0;
+    const safeWalletUsed = authenticatedUserId ? (walletUsed || 0) : 0;
+
+    let wasNewlyCreated = false;
     if (!existingUser) {
       existingUser = await prisma.user.findUnique({ where: { email: orderEmail } });
       if (!existingUser) {
+        wasNewlyCreated = true;
         const customerId = await generateNextCustomerId();
         existingUser = await prisma.user.create({
           data: {
@@ -157,9 +163,20 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       return;
     }
 
+    // Security: reject guest orders using admin/super_admin email accounts
+    if (!authenticatedUserId && (existingUser.role === 'ADMIN' || existingUser.role === 'SUPER_ADMIN')) {
+      res.status(403).json({ success: false, message: 'This email address is not available for guest checkout.' });
+      return;
+    }
+
     const userId = existingUser.id;
-    const userTokens = generateTokens(existingUser.id, existingUser.role);
-    res.setHeader('x-new-access-token', userTokens.accessToken);
+    // Only issue new tokens if this is a newly created CUSTOMER account (not pre-existing)
+    const userTokens = wasNewlyCreated && existingUser.role === 'CUSTOMER'
+      ? generateTokens(existingUser.id, existingUser.role)
+      : null;
+    if (userTokens) {
+      res.setHeader('x-new-access-token', userTokens.accessToken);
+    }
 
     const isSelfPickup = shippingMethod === 'SELF_PICKUP';
     const isCOD = (String(paymentMethod || '').trim().toUpperCase() === 'COD' || String(paymentMethod || '').toLowerCase().includes('cash on delivery'));
@@ -196,8 +213,8 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       addressId,
       shippingMethod: shippingMethod || 'NORMAL_POST',
       paymentMethod: paymentMethod || 'COD',
-      pointsUsed: pointsUsed !== undefined ? Number(pointsUsed) : undefined,
-      walletUsed: walletUsed !== undefined ? Number(walletUsed) : undefined,
+      pointsUsed: safePointsUsed !== undefined ? Number(safePointsUsed) : undefined,
+      walletUsed: safeWalletUsed !== undefined ? Number(safeWalletUsed) : undefined,
       address: {
         fullName: address?.fullName || address?.name,
         phone: address?.phone,
@@ -610,8 +627,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       message: 'Order placed successfully',
       data: {
         ...order,
-        accessToken: userTokens.accessToken,
-        refreshToken: userTokens.refreshToken,
+        ...(userTokens ? { accessToken: userTokens.accessToken, refreshToken: userTokens.refreshToken } : {}),
         razorpayOrderId: razorpayOrder?.id,
         razorpayKeyId: razorpayOrder ? env.RAZORPAY_KEY_ID : undefined,
         pointsUsed: pricingResult.pointsUsed || 0,

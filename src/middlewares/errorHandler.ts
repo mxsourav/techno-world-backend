@@ -115,7 +115,7 @@ export function errorHandler(
 
   const response: any = {
     success: false,
-    message: err.message || 'Internal Server Error',
+    message: env.NODE_ENV === 'production' ? 'An unexpected error occurred. Please try again later.' : (err.message || 'Internal Server Error'),
     requestId,
   };
 

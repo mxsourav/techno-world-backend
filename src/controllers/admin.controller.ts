@@ -1131,6 +1131,23 @@ export const updateCustomerProfile = async (req: Request, res: Response, next: N
       return;
     }
 
+    // Privilege escalation protection
+    const callerId: string = (req as any).user?.userId || (req as any).user?.id;
+    const caller = await prisma.user.findUnique({ where: { id: callerId }, select: { role: true } });
+    const callerRole = caller?.role;
+
+    // Only SUPER_ADMIN can edit another SUPER_ADMIN's account
+    if (user.role === 'SUPER_ADMIN' && callerRole !== 'SUPER_ADMIN') {
+      res.status(403).json({ success: false, message: 'Insufficient privileges to modify a Super Admin account.' });
+      return;
+    }
+
+    // Only SUPER_ADMIN can assign or change roles
+    if (role !== undefined && callerRole !== 'SUPER_ADMIN') {
+      res.status(403).json({ success: false, message: 'Only a Super Admin can assign or change user roles.' });
+      return;
+    }
+
     const updates: any = {};
 
     if (name !== undefined) {
@@ -1241,6 +1258,18 @@ export const deleteCustomerAccount = async (req: Request, res: Response, next: N
 
     if (!user) {
       res.status(404).json({ success: false, message: 'Customer account not found' });
+      return;
+    }
+
+    // Role hierarchy protection: regular admins cannot delete SUPER_ADMIN or other ADMIN accounts
+    const callerId: string = (req as any).user?.userId || (req as any).user?.id;
+    const caller = await prisma.user.findUnique({ where: { id: callerId }, select: { role: true } });
+    if (user.role === 'SUPER_ADMIN') {
+      res.status(403).json({ success: false, message: 'Super Admin accounts cannot be deleted through this endpoint.' });
+      return;
+    }
+    if (user.role === 'ADMIN' && caller?.role !== 'SUPER_ADMIN') {
+      res.status(403).json({ success: false, message: 'Only Super Admins can delete Admin accounts.' });
       return;
     }
 

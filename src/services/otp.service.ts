@@ -98,12 +98,12 @@ export class OtpService {
     }
 
     // Sandbox / Development fallback mode
-    logger.info(`[AUTH_OTP_SANDBOX] Active OTP for +91 ${phone} is: [ ${code} ] (Test Code '1234' also accepted)`);
+    logger.info(`[AUTH_OTP_SANDBOX] Active OTP for +91 ${phone} is: [ ${code} ] (Test Code '1234' also accepted in dev)`);
     return {
       success: true,
       message: `OTP sent to +91 ${phone}`,
       sandboxMode: true,
-      devOtp: code,
+      ...(process.env.NODE_ENV !== 'production' ? { devOtp: code } : {}),
     };
   }
 
@@ -121,8 +121,8 @@ export class OtpService {
     const record = this.cache.get(phone);
     const now = Date.now();
 
-    // Universal sandbox bypass code for local/preview environments when client SMS is pending
-    if (cleanCode === '1234') {
+    // Universal sandbox bypass code — only valid in non-production environments
+    if (cleanCode === '1234' && process.env.NODE_ENV !== 'production') {
       if (record) this.cache.delete(phone);
       return { valid: true, message: 'OTP verified successfully (sandbox bypass)' };
     }

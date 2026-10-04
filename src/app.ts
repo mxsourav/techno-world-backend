@@ -42,15 +42,9 @@ const trustedProductionDomains = [
   'https://technoworldbooks.in',
   'https://www.technoworldbooks.in',
   'https://admin.technoworldbooks.in',
+  'https://techno-world-books.vercel.app',
+  'https://techno-world-admin.vercel.app',
 ];
-
-const isAllowedVercelOrRender = (origin: string): boolean => {
-  return (
-    /^https:\/\/techno-world[a-z0-9-]*\.vercel\.app$/.test(origin) ||
-    /^https:\/\/[a-z0-9-]+-mxsouravs-projects\.vercel\.app$/.test(origin) ||
-    /^https:\/\/techno-world[a-z0-9-]*\.onrender\.com$/.test(origin)
-  );
-};
 
 app.use(
   cors({
@@ -62,13 +56,12 @@ app.use(
         return callback(null, true);
       }
 
-      // Explicit match or local / cloud domain patterns
+      // Explicit match or local development patterns
       const isAllowed =
         allowedOrigins.includes(origin) ||
         trustedProductionDomains.includes(origin) ||
         /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
-        /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
-        isAllowedVercelOrRender(origin);
+        /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin);
 
       if (isAllowed) {
         return callback(null, true);

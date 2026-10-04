@@ -32,7 +32,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^9.1.0",
+    "nodemailer": "^10.0.14",
     "pdfkit": "^0.20.2",
     "razorpay": "^2.9.8",
     "sharp": "^0.35.4",
@@ -59,6 +59,10 @@
     "prisma": "^6.10.0",
     "tsx": "^4.19.4",
     "typescript": "~5.9.3"
+  },
+  "overrides": {
+    "tar": "7.5.22",
+    "deepmerge-ts": "8.0.2"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

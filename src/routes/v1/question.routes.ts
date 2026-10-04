@@ -8,12 +8,13 @@ import {
   clearOldQuestions,
 } from '../../controllers/question.controller.js';
 import { requireAuth, requireRole, optionalAuth } from '../../middlewares/auth.middleware.js';
+import { formSubmissionLimiter } from '../../middlewares/rateLimiter.js';
 
 const router = Router();
 
 // Storefront routes
 router.get('/', getQuestions);
-router.post('/', optionalAuth, askQuestion);
+router.post('/', formSubmissionLimiter, optionalAuth, askQuestion);
 
 // Admin moderation routes
 router.get('/admin', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), getAdminQuestions);

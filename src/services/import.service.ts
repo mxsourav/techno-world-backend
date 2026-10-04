@@ -48,7 +48,18 @@ export class ImportService {
     const workbook = xlsx.read(buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-    const rawData = xlsx.utils.sheet_to_json(sheet) as any[];
+    const rawData = (xlsx.utils.sheet_to_json(sheet) as any[]).map((row: any) => {
+      if (!row || typeof row !== 'object') return {};
+      const cleanRow: Record<string, any> = {};
+      for (const [key, val] of Object.entries(row)) {
+        const lowerKey = key.toLowerCase().trim();
+        if (lowerKey === '__proto__' || lowerKey === 'constructor' || lowerKey === 'prototype') {
+          continue;
+        }
+        cleanRow[key] = val;
+      }
+      return cleanRow;
+    });
 
     const result = {
       toAdd: [] as any[],

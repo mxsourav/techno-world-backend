@@ -25,7 +25,10 @@ export const handleRazorpayWebhook = async (req: Request, res: Response): Promis
     .update(req.body)
     .digest('hex');
 
-  if (expectedSignature !== signature) {
+  const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+  const providedBuffer = Buffer.from(String(signature), 'utf8');
+
+  if (expectedBuffer.length !== providedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
     console.error('Invalid Razorpay webhook signature');
     res.status(400).json({ success: false, message: 'Invalid signature' });
     return;

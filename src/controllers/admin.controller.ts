@@ -1226,6 +1226,40 @@ export const updateCustomerProfile = async (req: Request, res: Response, next: N
         await tx.session.deleteMany({ where: { userId: id } });
       }
 
+      if (updates.technoPoints !== undefined && Number(updates.technoPoints) !== Number(user.technoPoints || 0)) {
+        const diff = Number(updates.technoPoints) - Number(user.technoPoints || 0);
+        const isCred = diff > 0;
+        const absDiff = Math.abs(diff);
+        await tx.notification.create({
+          data: {
+            userId: id,
+            title: isCred ? `🪙 ${absDiff.toLocaleString('en-IN')} TechnoPoints Credited!` : `🪙 ${absDiff.toLocaleString('en-IN')} TechnoPoints Deducted`,
+            message: isCred
+              ? `${absDiff.toLocaleString('en-IN')} TechnoPoints have been credited to your loyalty balance by our admin team. Total balance: ${Number(updates.technoPoints).toLocaleString('en-IN')} coins.`
+              : `${absDiff.toLocaleString('en-IN')} TechnoPoints have been deducted from your loyalty balance. Total balance: ${Number(updates.technoPoints).toLocaleString('en-IN')} coins.`,
+            type: isCred ? 'points_credit' : 'points_debit',
+            link: '/profile?tab=points',
+          },
+        });
+      }
+
+      if (updates.technoWallet !== undefined && Number(updates.technoWallet) !== Number(user.technoWallet || 0)) {
+        const diff = Number(updates.technoWallet) - Number(user.technoWallet || 0);
+        const isCred = diff > 0;
+        const absDiff = Math.abs(diff);
+        await tx.notification.create({
+          data: {
+            userId: id,
+            title: isCred ? `💳 ₹${absDiff.toFixed(2)} Added to TechnoWallet!` : `💳 ₹${absDiff.toFixed(2)} Deducted from TechnoWallet`,
+            message: isCred
+              ? `₹${absDiff.toFixed(2)} store credit has been deposited into your TechnoWallet. Total balance: ₹${Number(updates.technoWallet).toFixed(2)}.`
+              : `₹${absDiff.toFixed(2)} has been deducted from your TechnoWallet. Total balance: ₹${Number(updates.technoWallet).toFixed(2)}.`,
+            type: isCred ? 'wallet_credit' : 'wallet_debit',
+            link: '/profile?tab=wallet',
+          },
+        });
+      }
+
       return u;
     });
 
@@ -1429,6 +1463,21 @@ export const adjustCustomerPoints = async (req: Request, res: Response, next: Ne
           status: 'COMPLETED',
           description: auditReason,
           expiresAt: expiryDate,
+        },
+      });
+
+      // Dispatch dynamic in-app notification to customer
+      await tx.notification.create({
+        data: {
+          userId: user.id,
+          title: isCredit
+            ? `🪙 ${pointsNum.toLocaleString('en-IN')} TechnoPoints Credited!`
+            : `🪙 ${pointsNum.toLocaleString('en-IN')} TechnoPoints Deducted`,
+          message: isCredit
+            ? `${pointsNum.toLocaleString('en-IN')} TechnoPoints have been credited to your loyalty balance by our admin team.${auditReason ? ` Note: ${auditReason}.` : ''} Total balance: ${newBalance.toLocaleString('en-IN')} coins.`
+            : `${pointsNum.toLocaleString('en-IN')} TechnoPoints have been deducted from your loyalty balance.${auditReason ? ` Note: ${auditReason}.` : ''} Total balance: ${newBalance.toLocaleString('en-IN')} coins.`,
+          type: isCredit ? 'points_credit' : 'points_debit',
+          link: '/profile?tab=points',
         },
       });
     });

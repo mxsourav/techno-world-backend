@@ -147,8 +147,12 @@ export class EmailService {
           Direct Phone: <a href="tel:+917479135626" style="color: #047857; text-decoration: none; font-weight: 600;">+91 747 913 5626</a> &bull; 
           WhatsApp Support: <a href="https://wa.me/917479135626" style="color: #047857; text-decoration: none; font-weight: 600;">Chat on WhatsApp</a>
         </p>
-        <p style="margin: 8px 0 0; font-size: 10.5px; color: #94a3b8;">
-          You received this email because you placed an order or requested updates on technoworldbooks.com.
+        <div style="margin-top: 12px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 11px; color: #475569; display: inline-block; max-width: 90%; text-align: center;">
+          <strong style="color: #0f172a;">&#9888; Automated Notification &bull; Do Not Reply:</strong><br/>
+          This is an automated system email from an unmonitored mailbox. Direct replies cannot be received or answered. For inquiries or assistance, message us on WhatsApp or reach out to <a href="mailto:care@technoworldbooks.in" style="color: #047857; font-weight: 600; text-decoration: none;">care@technoworldbooks.in</a>.
+        </div>
+        <p style="margin: 10px 0 0; font-size: 10.5px; color: #94a3b8;">
+          You received this email because you placed an order or requested updates on <a href="https://technoworldbooks.in" style="color: #64748b; text-decoration: underline;">technoworldbooks.in</a>.
         </p>
       </div>
     `;
@@ -563,7 +567,7 @@ export class EmailService {
     const effectiveSenderEmail = config.senderEmail || config.user;
     const sender = effectiveSenderEmail
       ? `"${config.senderName}" <${effectiveSenderEmail}>`
-      : `"${config.senderName}" <orders@technoworldbooks.com>`;
+      : `"${config.senderName}" <orders@technoworldbooks.in>`;
 
     let deliveryStatus = 'DISPATCHED_TO_OUTBOX';
     let messageId = `outbox_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -583,8 +587,14 @@ export class EmailService {
         const resendPayload: any = {
           from: `${config.senderName} <onboarding@resend.dev>`,
           to: [targetEmail],
+          reply_to: 'no-reply@technoworldbooks.in',
           subject: params.subject,
           html: html,
+          headers: {
+            'Auto-Submitted': 'auto-generated',
+            'X-Auto-Response-Suppress': 'All',
+            'Precedence': 'bulk',
+          },
         };
 
         if (mailAttachments.length > 0) {
@@ -640,10 +650,16 @@ export class EmailService {
         const info = await transporter.sendMail({
           from: sender,
           to: targetEmail,
+          replyTo: 'no-reply@technoworldbooks.in',
           subject: params.subject,
           text: params.message,
           html: html,
           attachments: mailAttachments,
+          headers: {
+            'Auto-Submitted': 'auto-generated',
+            'X-Auto-Response-Suppress': 'All',
+            'Precedence': 'bulk',
+          },
         });
 
         deliveryStatus = 'DELIVERED';
@@ -662,7 +678,7 @@ export class EmailService {
       await prisma.emailLog.create({
         data: {
           toEmail: targetEmail,
-          senderEmail: effectiveSenderEmail || 'system@technoworldbooks.com',
+          senderEmail: effectiveSenderEmail || 'system@technoworldbooks.in',
           senderName: config.senderName,
           subject: params.subject,
           message: params.message,
@@ -716,7 +732,7 @@ export class EmailService {
     const subject = '✅ Techno World Books — Email System Connection Test';
     const message = `Hello! This is a verification test from your Techno World Books Admin Panel.\n\nSender: ${effectiveSenderEmail}\nTime: ${new Date().toLocaleString('en-IN')}`;
     const html = this.generateBrandedHtml(subject, message);
-    const sender = `"${config.senderName}" <${effectiveSenderEmail || 'test@technoworldbooks.com'}>`;
+    const sender = `"${config.senderName}" <${effectiveSenderEmail || 'test@technoworldbooks.in'}>`;
 
     let isDelivered = false;
     let messageId = `test_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -748,9 +764,15 @@ export class EmailService {
         const info = await transporter.sendMail({
           from: sender,
           to: toEmail,
+          replyTo: 'no-reply@technoworldbooks.in',
           subject,
           text: message,
           html,
+          headers: {
+            'Auto-Submitted': 'auto-generated',
+            'X-Auto-Response-Suppress': 'All',
+            'Precedence': 'bulk',
+          },
         });
 
         isDelivered = true;
@@ -767,7 +789,7 @@ export class EmailService {
       await prisma.emailLog.create({
         data: {
           toEmail,
-          senderEmail: effectiveSenderEmail || 'system@technoworldbooks.com',
+          senderEmail: effectiveSenderEmail || 'system@technoworldbooks.in',
           senderName: config.senderName,
           subject,
           message,

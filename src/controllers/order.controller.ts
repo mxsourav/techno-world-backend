@@ -95,9 +95,19 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
 
     let existingUser = authenticatedUserId ? await prisma.user.findUnique({ where: { id: authenticatedUserId } }) : null;
 
-    const orderEmail = (existingUser?.email || req.body.email || req.body.customerEmail || address?.email || '').trim().toLowerCase();
-    const orderPhone = (existingUser?.phone || req.body.phone || req.body.customerPhone || address?.phone || '').trim();
-    const orderName = (existingUser?.name || req.body.name || address?.fullName || address?.name || 'Customer').trim();
+    const finalOrderEmail = (
+      req.body.customerEmail?.trim() ||
+      req.body.email?.trim() ||
+      req.body.contactEmail?.trim() ||
+      req.body.shippingAddress?.email?.trim() ||
+      address?.email?.trim() ||
+      existingUser?.email?.trim() ||
+      (req as any).user?.email?.trim() ||
+      ''
+    ).toLowerCase();
+    const orderEmail = finalOrderEmail;
+    const orderPhone = (req.body.customerPhone || req.body.phone || address?.phone || existingUser?.phone || '').trim();
+    const orderName = (req.body.customerName || req.body.name || address?.fullName || address?.name || existingUser?.name || 'Customer').trim();
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ success: false, message: 'Items are required' });

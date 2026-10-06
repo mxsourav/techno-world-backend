@@ -201,6 +201,7 @@ export const uploadBookGalleryImages = async (req: Request, res: Response, next:
         coverUrl: newCoverUrl,
         coverPublicId: newCoverPublicId,
         galleryUrls: JSON.stringify(allGalleryImages.map((img) => img.secureUrl)),
+        galleryPublicIds: JSON.stringify(allGalleryImages.map((img) => img.publicId)),
       },
     });
 
@@ -284,6 +285,7 @@ export const deleteBookImage = async (req: Request, res: Response, next: NextFun
         coverUrl: nextCoverUrl,
         coverPublicId: nextCoverPublicId,
         galleryUrls: JSON.stringify(remainingImages.map((img) => img.secureUrl)),
+        galleryPublicIds: JSON.stringify(remainingImages.map((img) => img.publicId)),
       },
     });
 
@@ -341,6 +343,7 @@ export const reorderBookImages = async (req: Request, res: Response, next: NextF
         coverUrl: firstImage ? firstImage.secureUrl : undefined,
         coverPublicId: firstImage ? firstImage.publicId : undefined,
         galleryUrls: JSON.stringify(orderedImages.map((img) => img.secureUrl)),
+        galleryPublicIds: JSON.stringify(orderedImages.map((img) => img.publicId)),
       },
     });
 

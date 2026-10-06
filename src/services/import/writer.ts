@@ -23,11 +23,11 @@ export class Writer {
     const errors: { row: number; message: string }[] = [];
 
     // Helper to map an ExcelRow to book fields and relation lists
-    const mapRowToBook = (row: ExcelRow, assignedId?: string) => {
+    const mapRowToBook = (row: ExcelRow, assignedId?: string, existing?: any) => {
       const id = assignedId || randomUUID();
       const title = row.title.trim();
       const uniqueToken = row.isbn13 || row.isbn10 || row.sku || row.bookCode || randomUUID().substring(0, 8);
-      const slug = Normalizer.generateSlug(title, uniqueToken);
+      const slug = (existing && existing.slug) ? existing.slug : Normalizer.generateSlug(title, uniqueToken);
 
       const categoryId = row.subcategory
         ? (categoryMap.get(row.subcategory) || categoryMap.get(row.subcategory.toLowerCase().trim()))
@@ -89,7 +89,13 @@ export class Writer {
         barcode: row.barcode || null,
         series: row.series || null,
         volume: row.volume || null,
-        coverUrl: row.coverUrl || null,
+        coverUrl: row.coverUrl || existing?.coverUrl || null,
+        coverPublicId: row.coverPublicId || existing?.coverPublicId || null,
+        galleryUrls: (row.galleryUrls && row.galleryUrls !== '[]') ? row.galleryUrls : (existing?.galleryUrls || '[]'),
+        galleryPublicIds: (row.galleryPublicIds && row.galleryPublicIds !== '[]') ? row.galleryPublicIds : (existing?.galleryPublicIds || '[]'),
+        previewPdfUrl: row.previewPdfUrl || existing?.previewPdfUrl || null,
+        previewPdfPublicId: row.previewPdfPublicId || existing?.previewPdfPublicId || null,
+        isDeleted: false,
         categoryId: categoryId || null,
         bookTypeId: bookTypeId || null,
         publisherId: publisherId || null,
@@ -106,6 +112,7 @@ export class Writer {
       const booksToInsert: any[] = [];
       const authorRelations: { A: string; B: string }[] = [];
       const subjectRelations: { A: string; B: string }[] = [];
+      const bookImagesToInsert: any[] = [];
 
       for (const row of toAdd) {
         try {
@@ -117,6 +124,41 @@ export class Writer {
           }
           for (const sId of subjectIds) {
             subjectRelations.push({ A: id, B: sId });
+          }
+
+          if (bookData.coverUrl) {
+            bookImagesToInsert.push({
+              id: randomUUID(),
+              bookId: id,
+              publicId: bookData.coverPublicId || `cover_${bookData.slug}`,
+              secureUrl: bookData.coverUrl,
+              resourceType: 'image',
+              sortOrder: 0,
+              isCover: true,
+            });
+          }
+
+          if (row.galleryUrls) {
+            try {
+              const gUrls = JSON.parse(row.galleryUrls);
+              const gIds = row.galleryPublicIds ? JSON.parse(row.galleryPublicIds) : [];
+              if (Array.isArray(gUrls)) {
+                gUrls.forEach((u: string, idx: number) => {
+                  const pubId = gIds[idx] || `gallery_${idx}_${bookData.slug}`;
+                  if (pubId !== bookData.coverPublicId) {
+                    bookImagesToInsert.push({
+                      id: randomUUID(),
+                      bookId: id,
+                      publicId: pubId,
+                      secureUrl: u,
+                      resourceType: 'image',
+                      sortOrder: idx + 1,
+                      isCover: false,
+                    });
+                  }
+                });
+              }
+            } catch {}
           }
         } catch (e: any) {
           errors.push({ row: row.row, message: `Data mapping failed: ${e.message}` });
@@ -143,6 +185,18 @@ export class Writer {
               errors.push({ row: 0, message: `Insert failed: ${e.message}` });
             }
           }
+        }
+      }
+
+      // Bulk insert BookImage records if any were extracted
+      if (bookImagesToInsert.length > 0) {
+        try {
+          await prisma.bookImage.createMany({
+            data: bookImagesToInsert,
+            skipDuplicates: true,
+          });
+        } catch (imgErr: any) {
+          console.warn('Batch BookImage insert warning:', imgErr.message);
         }
       }
 
@@ -198,7 +252,22 @@ export class Writer {
         const existingBooks = orConditions.length > 0
           ? await prisma.book.findMany({
               where: { OR: orConditions },
-              select: { id: true, slug: true, isbn13: true, isbn10: true, bookCode: true, sku: true, stock: true }
+              select: {
+                id: true,
+                slug: true,
+                isbn13: true,
+                isbn10: true,
+                bookCode: true,
+                sku: true,
+                stock: true,
+                coverUrl: true,
+                coverPublicId: true,
+                galleryUrls: true,
+                galleryPublicIds: true,
+                previewPdfUrl: true,
+                previewPdfPublicId: true,
+                isDeleted: true,
+              }
             })
           : [];
 
@@ -269,7 +338,7 @@ export class Writer {
             try {
               const existing = findExisting(row);
               if (existing) {
-                const { id, bookData, authorIds, subjectIds } = mapRowToBook(row, existing.id);
+                const { id, bookData, authorIds, subjectIds } = mapRowToBook(row, existing.id, existing);
                 updatedBookIds.push(id);
 
                 bulkValues.push(Prisma.sql`(
@@ -379,7 +448,7 @@ export class Writer {
                 try {
                   const existing = findExisting(row);
                   if (existing) {
-                    const { bookData } = mapRowToBook(row, existing.id);
+                    const { bookData } = mapRowToBook(row, existing.id, existing);
                     await prisma.book.update({
                       where: { id: existing.id },
                       data: bookData

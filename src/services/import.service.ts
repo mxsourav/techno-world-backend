@@ -1,7 +1,7 @@
 import * as xlsx from 'xlsx';
 import { z } from 'zod';
 import { prisma } from '../config/database.js';
-
+import { CloudinaryService } from './cloudinary.service.js';
 
 const ExcelRowSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -24,6 +24,11 @@ const ExcelRowSchema = z.object({
   sku: z.string().optional(),
   description: z.string().optional(),
   coverUrl: z.string().optional(),
+  coverPublicId: z.string().optional(),
+  galleryUrls: z.string().optional(),
+  galleryPublicIds: z.string().optional(),
+  previewPdfUrl: z.string().optional(),
+  previewPdfPublicId: z.string().optional(),
   pages: z.coerce.number().optional(),
   publicationDate: z.string().optional(),
   publicationYear: z.coerce.number().optional(),
@@ -137,7 +142,12 @@ export class ImportService {
         stock: row['Stock'] ?? row.stock,
         sku: row['SKU'] || row.sku,
         description: row['Description'] || row.description,
-        coverUrl: row['Cover Image'] || row.coverUrl,
+        coverUrl: row['Cover Image'] || row['Cover URL'] || row['Thumbnail URL'] || row.coverUrl || row.thumbnail_url,
+        coverPublicId: row['Cover Public ID'] || row['Thumbnail Public ID'] || row.coverPublicId || row.thumbnail_public_id,
+        galleryUrls: row['Gallery Images'] || row['Gallery URLs'] || row.galleryUrls || row.gallery_urls,
+        galleryPublicIds: row['Gallery Public IDs'] || row.galleryPublicIds || row.gallery_public_ids,
+        previewPdfUrl: row['Preview PDF URL'] || row['Preview PDF'] || row['Sample PDF'] || row.previewPdfUrl || row.preview_pdf_url,
+        previewPdfPublicId: row['Preview PDF Public ID'] || row.previewPdfPublicId || row.preview_pdf_public_id,
         pages: row['Pages'] || row.pages,
         publicationDate: row['Publication Date'] || row.publicationDate,
         publicationYear: row['Publication Year'] || row.publicationYear,
@@ -154,6 +164,43 @@ export class ImportService {
         series: row['Series'] || row.series,
         volume: row['Volume'] || row.volume,
       };
+
+      // Smart Cloudinary Public ID Extraction if missing
+      if (mappedRow.coverUrl && !mappedRow.coverPublicId) {
+        const extracted = CloudinaryService.extractPublicIdFromUrl(String(mappedRow.coverUrl));
+        if (extracted) {
+          mappedRow.coverPublicId = extracted.publicId;
+        }
+      }
+
+      if (mappedRow.previewPdfUrl && !mappedRow.previewPdfPublicId) {
+        const extracted = CloudinaryService.extractPublicIdFromUrl(String(mappedRow.previewPdfUrl));
+        if (extracted) {
+          mappedRow.previewPdfPublicId = extracted.publicId;
+        }
+      }
+
+      if (mappedRow.galleryUrls) {
+        let gUrls: string[] = [];
+        try {
+          const rawG = String(mappedRow.galleryUrls).trim();
+          if (rawG.startsWith('[')) {
+            gUrls = JSON.parse(rawG);
+          } else {
+            gUrls = rawG.split(/[;,]/).map((u: string) => u.trim()).filter(Boolean);
+          }
+        } catch {
+          gUrls = [];
+        }
+        mappedRow.galleryUrls = JSON.stringify(gUrls);
+
+        if (!mappedRow.galleryPublicIds && gUrls.length > 0) {
+          const extractedIds = gUrls
+            .map((u) => CloudinaryService.extractPublicIdFromUrl(u)?.publicId)
+            .filter(Boolean) as string[];
+          mappedRow.galleryPublicIds = JSON.stringify(extractedIds);
+        }
+      }
 
       const parsed = ExcelRowSchema.safeParse(mappedRow);
       if (!parsed.success) {

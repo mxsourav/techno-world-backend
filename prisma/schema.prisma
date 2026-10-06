@@ -112,12 +112,14 @@ model Book {
   coverUrl               String?
   coverPublicId          String?
   galleryUrls            String?            @default("[]")
+  galleryPublicIds       String?            @default("[]")
   previewPdfUrl          String?
   previewPdfPublicId     String?
   previewPdfResourceType String?            @default("raw")
 
   status                 BookStatus         @default(DRAFT)
   visibility             Boolean            @default(true)
+  isDeleted              Boolean            @default(false)
   isFeatured             Boolean            @default(false)
   isTrending             Boolean            @default(false)
   isNewArrival           Boolean            @default(false)
@@ -155,6 +157,8 @@ model Book {
   @@index([publisherId])
   @@index([status])
   @@index([slug])
+  @@index([isDeleted])
+  @@index([coverPublicId])
 }
 
 model Category {

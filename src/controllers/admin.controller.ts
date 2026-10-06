@@ -196,6 +196,7 @@ export const deleteBook = async (req: Request, res: Response, next: NextFunction
   try {
     const { id } = req.params;
     const forcePermanent = req.query.permanent === 'true';
+    const purgeMedia = req.query.purgeMedia === 'true';
 
     const book = await prisma.book.findUnique({
       where: { id },
@@ -207,46 +208,43 @@ export const deleteBook = async (req: Request, res: Response, next: NextFunction
       return;
     }
 
-    // 1. Delete all Cloudinary assets and folders associated with this book
-    try {
-      await CloudinaryService.deleteBookMedia(book);
-    } catch (cleanupErr) {
-      console.warn(`[Cloudinary] Asset cleanup warning for book ${book.slug}:`, cleanupErr);
-    }
-
-    // 2. Check if this book is referenced in historical customer orders
+    // 1. Check if this book is referenced in historical customer orders
     const orderItemCount = await prisma.orderItem.count({ where: { bookId: id } });
 
-    if (orderItemCount > 0 && !forcePermanent) {
-      // SOFT DELETE (Archive): Preserves customer order history, tax invoices, and accounting records
+    if (!forcePermanent || orderItemCount > 0) {
+      // SOFT DELETE (Archive): Preserves customer order history, tax invoices, and media asset linkages.
+      // Cloudinary media assets are intentionally kept intact so re-adding or unarchiving the book works seamlessly.
       await prisma.$transaction([
         prisma.cartItem.deleteMany({ where: { bookId: id } }),
         prisma.wishlistItem.deleteMany({ where: { bookId: id } }),
-        prisma.bookImage.deleteMany({ where: { bookId: id } }),
         prisma.book.update({
           where: { id },
           data: {
+            isDeleted: true,
             status: 'ARCHIVED',
             visibility: false,
             stock: 0,
-            coverUrl: null,
-            coverPublicId: null,
-            galleryUrls: '[]',
-            previewPdfUrl: null,
-            previewPdfPublicId: null,
           },
         }),
       ]);
 
       res.status(200).json({
         success: true,
-        message: 'Book has past customer orders. Safely archived (soft-deleted) and media deleted from Cloudinary.',
+        message: 'Book has been safely archived (soft-deleted). Cloudinary media assets and order histories preserved.',
         archived: true,
       });
       return;
     }
 
-    // 3. HARD DELETE (for test books or books without order history)
+    // 2. HARD DELETE (only when forcePermanent is requested and 0 order items exist)
+    if (purgeMedia || forcePermanent) {
+      try {
+        await CloudinaryService.deleteBookMedia(book);
+      } catch (cleanupErr) {
+        console.warn(`[Cloudinary] Asset cleanup warning for book ${book.slug}:`, cleanupErr);
+      }
+    }
+
     await prisma.$transaction([
       prisma.cartItem.deleteMany({ where: { bookId: id } }),
       prisma.wishlistItem.deleteMany({ where: { bookId: id } }),
@@ -254,11 +252,10 @@ export const deleteBook = async (req: Request, res: Response, next: NextFunction
       prisma.inventoryHistory.deleteMany({ where: { bookId: id } }),
       prisma.bookQuestion.deleteMany({ where: { bookId: id } }),
       prisma.bookImage.deleteMany({ where: { bookId: id } }),
-      ...(forcePermanent ? [prisma.orderItem.deleteMany({ where: { bookId: id } })] : []),
       prisma.book.delete({ where: { id } }),
     ]);
 
-    res.status(200).json({ success: true, message: 'Book and associated media deleted successfully from database and Cloudinary' });
+    res.status(200).json({ success: true, message: 'Book permanently deleted from database and Cloudinary storage purged.' });
   } catch (error) {
     next(error);
   }

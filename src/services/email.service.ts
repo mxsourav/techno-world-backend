@@ -149,7 +149,7 @@ export class EmailService {
         </p>
         <div style="margin-top: 12px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 11px; color: #475569; display: inline-block; max-width: 90%; text-align: center;">
           <strong style="color: #0f172a;">&#9888; Automated Notification &bull; Do Not Reply:</strong><br/>
-          This is an automated system email from an unmonitored mailbox. Direct replies cannot be received or answered. For inquiries or assistance, message us on WhatsApp or reach out to <a href="mailto:care@technoworldbooks.in" style="color: #047857; font-weight: 600; text-decoration: none;">care@technoworldbooks.in</a>.
+          This is an automated system email from an unmonitored mailbox. Direct replies cannot be received or answered. For inquiries or assistance, message us on WhatsApp or reach out to <a href="mailto:support@technoworldbooks.in" style="color: #047857; font-weight: 600; text-decoration: none;">support@technoworldbooks.in</a>.
         </div>
         <p style="margin: 10px 0 0; font-size: 10.5px; color: #94a3b8;">
           You received this email because you placed an order or requested updates on <a href="https://technoworldbooks.in" style="color: #64748b; text-decoration: underline;">technoworldbooks.in</a>.

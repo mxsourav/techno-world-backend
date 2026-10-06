@@ -44,3 +44,23 @@ Configure this webhook in the Razorpay dashboard:
 `https://<your-api-host>/api/v1/payments/razorpay/webhook`
 
 The checkout receives the public key from the server, so moving to production only requires replacing the three server-side values with the corresponding Live Mode values. Never expose `RAZORPAY_KEY_SECRET` or `RAZORPAY_WEBHOOK_SECRET` to the frontend.
+
+## WhatsApp B2B enquiry alerts
+
+After a B2B enquiry is saved, the API can send an alert to the institutional sales admin through the Meta WhatsApp Cloud API. Add these server-side environment variables when the Meta app and WhatsApp business phone number are ready:
+
+```env
+WHATSAPP_META_ACCESS_TOKEN=EA...
+WHATSAPP_META_PHONE_NUMBER_ID=1234567890
+WHATSAPP_ADMIN_PHONE_NUMBER=919876543210
+WHATSAPP_META_API_VERSION=v21.0
+```
+
+`WHATSAPP_ADMIN_PHONE_NUMBER` must be in international format (country code included, without spaces). The alert uses a plain text message when the Meta account allows it. For business-initiated messages outside WhatsApp's 24-hour customer-service window, create an approved Meta template and configure it:
+
+```env
+WHATSAPP_META_TEMPLATE_NAME=b2b_enquiry_alert
+WHATSAPP_META_TEMPLATE_LANGUAGE=en_US
+```
+
+The approved template must contain five body text placeholders in this order: organization name, representative name, phone, requirements, and enquiry ID. WhatsApp delivery is best-effort: a Meta outage or missing configuration is logged and does not make a successfully saved enquiry fail.

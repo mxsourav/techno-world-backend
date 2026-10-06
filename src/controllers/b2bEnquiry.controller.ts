@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database.js';
 import { emailService } from '../services/email.service.js';
 import { logger } from '../config/logger.js';
+import { whatsappService } from '../services/whatsapp.service.js';
 import type { B2BEnquiryStatus } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 
@@ -138,6 +139,20 @@ export const submitB2BEnquiry = async (req: Request, res: Response, next: NextFu
         message: alertMessage,
       })
       .catch((err) => logger.warn(`Failed to dispatch B2B internal alert email: ${err.message}`));
+
+    // 5. Notify the institutional sales admin on WhatsApp (best-effort)
+    whatsappService
+      .sendB2BEnquiryAlert({
+        enquiryId: enquiry.id,
+        organizationName: trimmedOrg,
+        representativeName: trimmedRep,
+        email: trimmedEmail,
+        phone: trimmedPhone,
+        timeline: trimmedTimeline,
+        requirements: trimmedRequirements,
+        attachedCartItemCount: sanitizedCartItems.length,
+      })
+      .catch((err) => logger.warn(`Failed to dispatch B2B WhatsApp alert: ${err.message}`));
 
     res.status(201).json({
       success: true,

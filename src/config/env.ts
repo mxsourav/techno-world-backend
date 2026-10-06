@@ -23,6 +23,12 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  WHATSAPP_META_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_META_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_ADMIN_PHONE_NUMBER: z.string().optional(),
+  WHATSAPP_META_API_VERSION: z.string().default('v21.0'),
+  WHATSAPP_META_TEMPLATE_NAME: z.string().optional(),
+  WHATSAPP_META_TEMPLATE_LANGUAGE: z.string().default('en_US'),
   // India Post Integration Configuration
   INDIAPOST_BASE_URL: z.string().default('https://test.cept.gov.in'),
   INDIAPOST_CUSTOMER_ID: z.string().default('3000064781'),

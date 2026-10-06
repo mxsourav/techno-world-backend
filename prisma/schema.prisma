@@ -849,6 +849,28 @@ model ContactMessage {
 }
 
 // ============================================================
+// B2B & INSTITUTIONAL QUOTE REQUESTS
+// ============================================================
+
+model B2BEnquiry {
+  id                 String           @id @default(uuid())
+  organizationName   String
+  representativeName String
+  email              String
+  phone              String
+  timeline           String?
+  requirements       String           @db.Text
+  attachedCartItems  Json?            @default("[]")
+  status             B2BEnquiryStatus @default(Pending)
+  adminNotes         String?          @default("") @db.Text
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================
 // BOOK IMAGES
 // ============================================================
 
@@ -1045,4 +1067,11 @@ enum ActivityAction {
   IMPORT
   EXPORT
   SETTINGS_CHANGE
+}
+
+enum B2BEnquiryStatus {
+  Pending
+  Contacted
+  Quoted
+  Closed
 }

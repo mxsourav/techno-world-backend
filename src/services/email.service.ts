@@ -2,6 +2,7 @@ import nodemailer, { Transporter } from 'nodemailer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 import { prisma } from '../config/database.js';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
@@ -205,6 +206,20 @@ export class EmailService {
   }
 
   /**
+   * Generates a short, opaque encrypted security reference code for buyer-facing communications
+   * so the customer never sees their internal database customer ID (e.g. TWC-10008) or UUID.
+   * Format: CR-9F2B8A1C (clean 8-character uppercase cryptographic hash)
+   */
+  public generateSecureCustomerRef(identifier?: string | null): string {
+    if (!identifier || identifier.trim() === '' || identifier === 'GUEST') {
+      return 'CR-GUEST';
+    }
+    const clean = identifier.trim();
+    const hash = crypto.createHash('sha256').update(`twb_buyer_ref_${clean}`).digest('hex');
+    return `CR-${hash.substring(0, 8).toUpperCase()}`;
+  }
+
+  /**
    * Builds machine-parseable tracking tokens and a 1-click mailto confirmation payload
    * for Tier 2 (TEAM) emails.
    */
@@ -215,16 +230,12 @@ export class EmailService {
     customerPhone?: string;
     subject?: string;
   }) {
-    const rawCid = (params.customerId || 'GUEST').trim();
-    const displayCid = rawCid.startsWith('TWC-') || rawCid.startsWith('CID-')
-      ? rawCid
-      : rawCid === 'GUEST'
-      ? 'GUEST'
-      : `CID-${rawCid}`;
     const ord = params.orderNumber || 'GENERAL';
-    const trackingToken = `[REF:ORD-${ord}|CID-${displayCid}]`;
-    const replySubject = `Re: ${trackingToken} Address Clarification Confirmation`;
-    const replyBody = `Order Reference: #${ord}\nCustomer ID: ${displayCid}\nCustomer Name: ${params.customerName || 'Valued Customer'}\nPhone: ${params.customerPhone || 'N/A'}\n\n------------------------------------\nMY CORRECT DELIVERY ADDRESS IS:\n[Please type full street address, landmark, city, state & pincode here]\n------------------------------------\n`;
+    const secureRef = this.generateSecureCustomerRef(params.customerId);
+
+    // Clean, crisp reply subject that never clutters mobile headers
+    const replySubject = `Re: Address Clarification - Order #${ord}`;
+    const replyBody = `Order Reference: #${ord}\nSecurity Reference: ${secureRef}\nCustomer Name: ${params.customerName || 'Valued Customer'}\nPhone: ${params.customerPhone || 'N/A'}\n\n------------------------------------\nMY CORRECT DELIVERY ADDRESS IS:\n[Please type full street address, landmark, city, state & pincode here]\n------------------------------------\n`;
 
     const mailtoUrl = `mailto:team@technoworldbooks.in?subject=${encodeURIComponent(replySubject)}&body=${encodeURIComponent(replyBody)}`;
 
@@ -244,18 +255,18 @@ export class EmailService {
       <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 6px; margin: 16px 0; font-family: monospace; font-size: 11px; color: #475569;">
         <tr>
           <td style="padding: 10px 14px;">
-            <strong style="color: #1E293B;">--- AUTO-MATCHING TRACKING METADATA (DO NOT REMOVE) ---</strong><br/>
-            <strong>Order Reference:</strong> ORD-#${ord}<br/>
-            <strong>Customer ID:</strong> ${displayCid}<br/>
+            <strong style="color: #1E293B;">--- ORDER VERIFICATION REFERENCE ---</strong><br/>
+            <strong>Order Reference:</strong> #${ord}<br/>
+            <strong>Security Ref:</strong> ${secureRef}<br/>
             <strong>Recipient:</strong> ${params.customerName || 'Customer'} (${params.customerPhone || 'N/A'})<br/>
-            <span style="font-size: 10px; color: #64748B;"><em>When you hit Reply, keeping this block intact ensures our system automatically matches your address confirmation to your order.</em></span>
+            <span style="font-size: 10px; color: #64748B;"><em>When you hit Reply, keeping this block intact ensures our team automatically matches your address confirmation to your order.</em></span>
           </td>
         </tr>
       </table>
     `;
 
     return {
-      trackingToken,
+      trackingToken: `[Ref: #${ord}]`,
       mailtoUrl,
       actionButtonHtml,
       metadataBoxHtml,
@@ -864,7 +875,7 @@ export class EmailService {
     // Prepare Auto-matching tokens if Tier 2 (TEAM)
     let extraContentHtml = '';
     let finalSubject = params.subject;
-    if (tier === 'TEAM' && params.orderNumber && !params.subject.includes('[REF:')) {
+    if (tier === 'TEAM' && params.orderNumber) {
       const autoMatch = this.buildAutoMatchingReplyPayload({
         orderNumber: params.orderNumber,
         customerId: params.customerId,
@@ -872,7 +883,15 @@ export class EmailService {
         customerPhone: params.customerPhone,
         subject: params.subject,
       });
-      finalSubject = `${params.subject} ${autoMatch.trackingToken}`;
+
+      // Keep email header subject line clean, uncluttered, and readable:
+      // If the subject already contains the order number, do NOT append redundant bracket tags.
+      if (!params.subject.includes(params.orderNumber) && !params.subject.includes('[Ref:')) {
+        finalSubject = `${params.subject} ${autoMatch.trackingToken}`;
+      } else {
+        finalSubject = params.subject;
+      }
+
       extraContentHtml = `${autoMatch.actionButtonHtml}\n${autoMatch.metadataBoxHtml}`;
     }
 

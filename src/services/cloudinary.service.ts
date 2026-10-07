@@ -1,5 +1,6 @@
 import streamifier from 'node:stream';
 import { cloudinary, isCloudinaryConfigured } from '../config/cloudinary.js';
+import { env } from '../config/env.js';
 
 export interface CloudinaryUploadOptions {
   folder: string;
@@ -280,7 +281,7 @@ export class CloudinaryService {
       format?: string;
     } = {}
   ): string {
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    const cloudName = env.CLOUDINARY_CLOUD_NAME;
     if (!cloudName) {
       return `https://res.cloudinary.com/placeholder/image/upload/${publicId}`;
     }

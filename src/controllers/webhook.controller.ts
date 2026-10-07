@@ -69,16 +69,19 @@ export const handleRazorpayWebhook = async (req: Request, res: Response): Promis
  */
 export const handleIndiaPostWebhook = async (req: Request, res: Response): Promise<void> => {
   try {
-    // 1. IP Whitelisting Verification (using sanitized req.ip via trusted reverse proxy)
+    if (!env.INDIAPOST_WEBHOOK_SECRET) {
+      logger.error('India Post Webhook secret is not configured');
+      res.status(503).json({ success: false, message: 'Webhook authentication is not configured' });
+      return;
+    }
+
+    // 1. IP allowlisting uses req.ip only after an explicitly configured proxy chain.
     const clientIp = req.ip || '';
     const allowedIps = env.INDIAPOST_ALLOWED_IPS.split(',').map((ip) => ip.trim()).filter(Boolean);
 
     const isIpAllowed =
       allowedIps.includes('*') ||
-      allowedIps.includes(clientIp) ||
-      clientIp === '127.0.0.1' ||
-      clientIp === '::1' ||
-      clientIp === '::ffff:127.0.0.1';
+      allowedIps.includes(clientIp);
 
     if (!isIpAllowed) {
       logger.warn('Unauthorized India Post Webhook IP attempt: ' + clientIp);
@@ -86,23 +89,20 @@ export const handleIndiaPostWebhook = async (req: Request, res: Response): Promi
       return;
     }
 
-    // 2. Cryptographic Timing-Safe Secret Verification (if secret configured)
-    if (env.INDIAPOST_WEBHOOK_SECRET) {
-      const secretHeader = (req.headers['x-indiapost-secret'] || req.headers['x-webhook-secret']) as string;
-      const expectedSecret = env.INDIAPOST_WEBHOOK_SECRET;
-      if (!secretHeader || typeof secretHeader !== 'string') {
-        logger.warn('Missing or invalid India Post Webhook Secret Header');
-        res.status(401).json({ success: false, message: 'Invalid webhook authentication secret' });
-        return;
-      }
+    // 2. Cryptographic timing-safe secret verification is mandatory.
+    const secretHeader = req.headers['x-indiapost-secret'] || req.headers['x-webhook-secret'];
+    if (typeof secretHeader !== 'string') {
+      logger.warn('Missing or invalid India Post Webhook Secret Header');
+      res.status(401).json({ success: false, message: 'Invalid webhook authentication secret' });
+      return;
+    }
 
-      const expectedBuf = Buffer.from(expectedSecret, 'utf8');
-      const providedBuf = Buffer.from(secretHeader, 'utf8');
-      if (expectedBuf.length !== providedBuf.length || !crypto.timingSafeEqual(expectedBuf, providedBuf)) {
-        logger.warn('Invalid India Post Webhook Secret Header');
-        res.status(401).json({ success: false, message: 'Invalid webhook authentication secret' });
-        return;
-      }
+    const expectedBuf = Buffer.from(env.INDIAPOST_WEBHOOK_SECRET, 'utf8');
+    const providedBuf = Buffer.from(secretHeader, 'utf8');
+    if (expectedBuf.length !== providedBuf.length || !crypto.timingSafeEqual(expectedBuf, providedBuf)) {
+      logger.warn('Invalid India Post Webhook Secret Header');
+      res.status(401).json({ success: false, message: 'Invalid webhook authentication secret' });
+      return;
     }
 
     // 3. Payload Validation with Zod Schema

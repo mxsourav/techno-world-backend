@@ -11,6 +11,7 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(8),
   JWT_ACCESS_EXPIRY: z.string().default('7d'),
   JWT_REFRESH_EXPIRY: z.string().default('30d'),
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   CLOUDINARY_CLOUD_NAME: z.string().optional(),
   CLOUDINARY_API_KEY: z.string().optional(),
@@ -35,8 +36,8 @@ const envSchema = z.object({
   INDIAPOST_CONTRACT_ID: z.string().default('41585456'),
   INDIAPOST_USERNAME: z.string().default('9999999999'),
   INDIAPOST_PASSWORD: z.string().default('Dop@1234'),
-  INDIAPOST_WEBHOOK_SECRET: z.string().optional(),
-  INDIAPOST_ALLOWED_IPS: z.string().default('127.0.0.1,::1'),
+  INDIAPOST_WEBHOOK_SECRET: z.string().min(1).optional(),
+  INDIAPOST_ALLOWED_IPS: z.string().default(''),
   INDIAPOST_USE_SANDBOX_FALLBACK: z.string().default('true'),
 });
 

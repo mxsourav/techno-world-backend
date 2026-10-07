@@ -2,9 +2,8 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 
 export const generateTokens = (userId: string, role: string) => {
-  const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN';
-  const accessExpiry = isAdmin ? '30d' : (env.JWT_ACCESS_EXPIRY || '7d');
-  const refreshExpiry = isAdmin ? '60d' : (env.JWT_REFRESH_EXPIRY || '30d');
+  const accessExpiry = env.JWT_ACCESS_EXPIRY;
+  const refreshExpiry = env.JWT_REFRESH_EXPIRY;
 
   const accessToken = jwt.sign(
     { userId, role },

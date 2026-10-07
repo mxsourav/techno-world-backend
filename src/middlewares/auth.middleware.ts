@@ -70,7 +70,17 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  req.user = decoded;
+  const currentUser = await prisma.user.findUnique({
+    where: { id: decoded.userId },
+    select: { id: true, role: true, isActive: true },
+  });
+
+  if (!currentUser || !currentUser.isActive) {
+    res.status(401).json({ success: false, message: 'Account is inactive or no longer exists' });
+    return;
+  }
+
+  req.user = { userId: currentUser.id, role: currentUser.role };
   next();
 };
 

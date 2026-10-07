@@ -1,25 +1,20 @@
 import { v2 as cloudinary } from 'cloudinary';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const getCloudName = (): string =>
-  process.env.CLOUDINARY_CLOUD_NAME || 'tcsmyxe2';
-const getApiKey = (): string =>
-  process.env.CLOUDINARY_API_KEY || '369481197139156';
-const getApiSecret = (): string =>
-  process.env.CLOUDINARY_API_SECRET || 'TzFuSl3HKQVmCxZ-UkF-sdpOhpo';
+import { env } from './env.js';
 
 export const isCloudinaryConfigured = (): boolean => {
-  return Boolean(getCloudName() && getApiKey() && getApiSecret());
+  return Boolean(
+    env.CLOUDINARY_CLOUD_NAME &&
+    env.CLOUDINARY_API_KEY &&
+    env.CLOUDINARY_API_SECRET
+  );
 };
 
 export const configureCloudinary = () => {
   if (isCloudinaryConfigured()) {
     cloudinary.config({
-      cloud_name: getCloudName(),
-      api_key: getApiKey(),
-      api_secret: getApiSecret(),
+      cloud_name: env.CLOUDINARY_CLOUD_NAME,
+      api_key: env.CLOUDINARY_API_KEY,
+      api_secret: env.CLOUDINARY_API_SECRET,
       secure: true,
     });
   }
@@ -28,4 +23,3 @@ export const configureCloudinary = () => {
 configureCloudinary();
 
 export { cloudinary };
-

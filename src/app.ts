@@ -21,8 +21,8 @@ dotenv.config();
 
 const app = express();
 
-// Trust reverse proxy (Cloudflare, Render, Vercel, Hostinger, Nginx) so req.ip and secure cookies work reliably
-app.set('trust proxy', true);
+// Trust only the explicitly configured number of reverse-proxy hops.
+app.set('trust proxy', env.TRUST_PROXY_HOPS);
 
 app.use(
   helmet({

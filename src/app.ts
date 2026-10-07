@@ -21,8 +21,8 @@ dotenv.config();
 
 const app = express();
 
-// Trust reverse proxy (Cloudflare, Render, Vercel, Hostinger, Nginx) so req.ip and secure cookies work reliably
-app.set('trust proxy', true);
+// Trust 1st hop reverse proxy (Nginx on GCP) so req.ip and secure cookies work reliably
+app.set('trust proxy', 1);
 
 app.use(
   helmet({
@@ -42,8 +42,6 @@ const trustedProductionDomains = [
   'https://technoworldbooks.in',
   'https://www.technoworldbooks.in',
   'https://admin.technoworldbooks.in',
-  'https://techno-world-books.vercel.app',
-  'https://techno-world-admin.vercel.app',
 ];
 
 app.use(

@@ -6,6 +6,7 @@ export const generalLimiter = rateLimit({
   message: { success: false, message: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
 });
 
 export const authLimiter = rateLimit({
@@ -15,6 +16,7 @@ export const authLimiter = rateLimit({
   message: { success: false, message: 'Too many authentication attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
 });
 
 export const importLimiter = rateLimit({
@@ -23,6 +25,7 @@ export const importLimiter = rateLimit({
   message: { success: false, message: 'Too many import requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
 });
 
 export const adminLimiter = rateLimit({
@@ -31,6 +34,7 @@ export const adminLimiter = rateLimit({
   message: { success: false, message: 'Too many admin requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
 });
 
 export const formSubmissionLimiter = rateLimit({
@@ -39,4 +43,5 @@ export const formSubmissionLimiter = rateLimit({
   message: { success: false, message: 'Too many submissions from this connection. Please wait 15 minutes before trying again.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false },
 });

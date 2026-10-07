@@ -342,7 +342,7 @@ export class EmailService {
     return `
       <tr>
         <td align="center" style="padding: 24px 10px 8px 10px;">
-          <p class="text-muted" style="margin: 0 0 6px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 13px; font-weight: 600; color: #262524;">
+          <p class="text-muted" style="margin: 0 0 6px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12.5px; font-weight: 600; color: #262524; font-variant-numeric: lining-nums tabular-nums;">
             Techno World Books &bull; College Street, Kolkata &bull; Delivering Across India
           </p>
           <p class="text-muted" style="margin: 0 0 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; color: #6E6D68; line-height: 1.6;">
@@ -419,7 +419,7 @@ export class EmailService {
                     <img src="${logoSrc}" alt="Techno World Books" width="40" height="40" style="display: block; border-radius: 8px; border: 0; outline: none; text-decoration: none;" />
                   </td>
                   <td valign="middle" style="padding-left: 14px;">
-                    <div style="font-family: 'Georgia', 'Times New Roman', serif; font-size: 19px; font-weight: 700; color: #FFFFFF; letter-spacing: 0.2px; line-height: 1.2;">
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 19px; font-weight: 700; color: #FFFFFF; letter-spacing: 0.2px; line-height: 1.2; font-variant-numeric: lining-nums tabular-nums;">
                       Techno World Books
                     </div>
                     <div style="font-size: 11px; color: #A7F3D0; font-weight: 500; margin-top: 2px;">
@@ -500,7 +500,7 @@ export class EmailService {
       .trim();
 
     const content = `
-      <h1 class="text-primary" style="margin: 0 0 14px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 21px; font-weight: 700; color: #262524; line-height: 1.35;">
+      <h1 class="text-primary" style="margin: 0 0 14px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 20px; font-weight: 700; color: #1E293B; line-height: 1.35; font-variant-numeric: lining-nums tabular-nums;">
         ${cleanHeading}
       </h1>
       ${statusPill}
@@ -577,7 +577,7 @@ export class EmailService {
     const itemsHtml = `
       <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="card" style="background-color: #FAF9F5; border: 1px solid #EAE8E2; border-radius: 8px; margin: 18px 0; padding: 14px 18px;">
         <tr>
-          <td colspan="3" style="font-family: 'Georgia', serif; font-size: 14px; font-weight: 700; color: #262524; padding-bottom: 8px; border-bottom: 2px solid #EAE8E2;">
+          <td colspan="3" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; color: #1E293B; padding-bottom: 8px; border-bottom: 2px solid #EAE8E2; font-variant-numeric: lining-nums tabular-nums;">
             Order Summary (${(items || []).reduce((acc, i) => acc + i.quantity, 0)} Items)
           </td>
         </tr>
@@ -694,7 +694,7 @@ export class EmailService {
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="card" style="background-color: #FFFFFF; border: 1px solid #EAE8E2; border-radius: 8px; margin: 16px 0;">
             <tr>
               <td style="padding: 14px 16px;">
-                <h4 class="text-primary" style="margin: 0 0 6px; font-family: 'Georgia', serif; font-size: 13px; font-weight: 700; color: #262524;">Any concern with your parcel?</h4>
+                <h4 class="text-primary" style="margin: 0 0 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; color: #1E293B;">Any concern with your parcel?</h4>
                 <p class="text-muted" style="margin: 0; font-size: 12px; color: #6E6D68; line-height: 1.5;">
                   If any title arrived damaged or missing, please write directly to our helpdesk at <b>support@technoworldbooks.in</b> or message on WhatsApp: <b>+91 747 913 5626</b> with your order reference.
                 </p>
@@ -753,7 +753,7 @@ export class EmailService {
     }
 
     const contentHtml = `
-      <h1 class="text-primary" style="margin: 0 0 14px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 22px; font-weight: 700; color: #262524; line-height: 1.35;">
+      <h1 class="text-primary" style="margin: 0 0 14px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 20px; font-weight: 700; color: #1E293B; line-height: 1.35; font-variant-numeric: lining-nums tabular-nums;">
         ${headline}
       </h1>
       
@@ -783,7 +783,7 @@ export class EmailService {
           <tr>
             <td align="center" style="padding: 18px 14px; text-align: center;">
               <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 700; color: #14432B; text-transform: uppercase; letter-spacing: 0.5px;">TechnoWallet Instant Refund</div>
-              <div style="font-family: 'Georgia', 'Times New Roman', serif; font-size: 28px; font-weight: 700; color: #14432B; margin: 6px 0;">+₹${params.refundAmount.toFixed(2)}</div>
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 26px; font-weight: 700; color: #14432B; margin: 6px 0; font-variant-numeric: lining-nums tabular-nums;">+₹${params.refundAmount.toFixed(2)}</div>
               <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; color: #262524;">Refund of Delivery Charge for Order #${params.childOrderNumber}</div>
               <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #6E6D68; margin-top: 4px;">Updated TechnoWallet Balance: <strong style="color: #262524;">₹${params.newWalletBalance.toFixed(2)}</strong></div>
             </td>
@@ -801,7 +801,7 @@ export class EmailService {
       `;
 
     const contentHtml = `
-      <h1 class="text-primary" style="margin: 0 0 14px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 22px; font-weight: 700; color: #262524; line-height: 1.35;">
+      <h1 class="text-primary" style="margin: 0 0 14px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 20px; font-weight: 700; color: #1E293B; line-height: 1.35; font-variant-numeric: lining-nums tabular-nums;">
         Orders Consolidated for Unified Delivery
       </h1>
 
@@ -1208,7 +1208,7 @@ export class EmailService {
       : 'Welcome Back: Your Techno World Books Account is Activated';
 
     const contentHtml = `
-      <h2 class="text-primary" style="margin: 0 0 12px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 20px; font-weight: 700; color: #262524;">
+      <h2 class="text-primary" style="margin: 0 0 12px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 700; color: #1E293B; font-variant-numeric: lining-nums tabular-nums;">
         Dear ${params.recipientName || 'Valued Customer'},
       </h2>
 
@@ -1280,7 +1280,7 @@ export class EmailService {
       : `Update: ${params.points} TechnoPoints deducted from your account`;
 
     const contentHtml = `
-      <h2 class="text-primary" style="margin: 0 0 12px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 20px; font-weight: 700; color: #262524;">
+      <h2 class="text-primary" style="margin: 0 0 12px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 700; color: #1E293B; font-variant-numeric: lining-nums tabular-nums;">
         Hello ${params.recipientName || 'Book Lover'},
       </h2>
 
@@ -1297,7 +1297,7 @@ export class EmailService {
             <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: ${isCredit ? '#14432B' : '#92400E'};">
               ${isCredit ? 'Points Credited' : 'Points Deducted'}
             </div>
-            <div style="font-family: 'Georgia', 'Times New Roman', serif; font-size: 32px; font-weight: 700; margin: 6px 0; color: ${isCredit ? '#14432B' : '#B45309'};">
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 28px; font-weight: 700; margin: 6px 0; color: ${isCredit ? '#14432B' : '#B45309'}; font-variant-numeric: lining-nums tabular-nums;">
               ${isCredit ? `+${params.points}` : `-${params.points}`} <span style="font-size: 16px; font-weight: 600;">pts</span>
             </div>
             <div style="font-size: 13px; font-weight: 600; color: #6E6D68;">

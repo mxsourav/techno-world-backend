@@ -22,9 +22,28 @@ export const getCategories = async (req: Request, res: Response, next: NextFunct
 export const getCategoryBySlug = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { slug } = req.params;
-    const category = await prisma.category.findUnique({
-      where: { slug },
+    if (!slug || typeof slug !== 'string' || !slug.trim()) {
+      res.status(404).json({
+        success: false,
+        message: 'Category not found',
+      });
+      return;
+    }
+
+    const cleanSlug = slug.trim();
+
+    const queryPromise = prisma.category.findFirst({
+      where: {
+        OR: [{ slug: cleanSlug }, { id: cleanSlug }],
+        isActive: true,
+      },
     });
+
+    const timeoutPromise = new Promise<null>((_, reject) =>
+      setTimeout(() => reject(new Error('Database query timed out')), 6000)
+    );
+
+    const category = await Promise.race([queryPromise, timeoutPromise]);
 
     if (!category) {
       res.status(404).json({
@@ -39,7 +58,14 @@ export const getCategoryBySlug = async (req: Request, res: Response, next: NextF
       message: 'Category fetched successfully',
       data: category,
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message === 'Database query timed out') {
+      res.status(503).json({
+        success: false,
+        message: 'Service temporarily unavailable. Please retry shortly.',
+      });
+      return;
+    }
     next(error);
   }
 };

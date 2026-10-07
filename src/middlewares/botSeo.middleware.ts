@@ -94,6 +94,25 @@ function buildHtml(opts: {
 </html>`;
 }
 
+function build404Html(title: string, message = 'The requested page or book is not available.'): string {
+  const safeTitle = esc(title);
+  const safeMessage = esc(message);
+  return `<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${safeTitle}</title>
+  <meta name="robots" content="noindex, nofollow" />
+</head>
+<body style="font-family: system-ui, -apple-system, sans-serif; padding: 40px; text-align: center;">
+  <h1>${safeTitle}</h1>
+  <p>${safeMessage}</p>
+  <p><a href="${BASE_URL}/" style="color: #065f46; text-decoration: underline;">Return to Bookstore Homepage</a></p>
+</body>
+</html>`;
+}
+
 // ---------------------------------------------------------------------------
 // Route renderers
 // ---------------------------------------------------------------------------
@@ -107,7 +126,7 @@ async function renderHome(): Promise<string> {
       url: BASE_URL,
       potentialAction: {
         '@type': 'SearchAction',
-        target: { '@type': 'EntryPoint', urlTemplate: `${BASE_URL}/listing?search={search_term_string}` },
+        target: { '@type': 'EntryPoint', urlTemplate: `${BASE_URL}/search?search={search_term_string}` },
         'query-input': 'required name=search_term_string',
       },
     },
@@ -166,8 +185,11 @@ async function renderHome(): Promise<string> {
 }
 
 async function renderBook(slug: string): Promise<string | null> {
-  const book = await prisma.book.findUnique({
-    where: { slug },
+  const book = await prisma.book.findFirst({
+    where: {
+      OR: [{ slug }, { id: slug }],
+      status: 'PUBLISHED',
+    },
     select: {
       title: true,
       seoTitle: true,
@@ -249,8 +271,11 @@ async function renderBook(slug: string): Promise<string | null> {
 }
 
 async function renderCategory(slug: string): Promise<string | null> {
-  const category = await prisma.category.findUnique({
-    where: { slug },
+  const category = await prisma.category.findFirst({
+    where: {
+      OR: [{ slug }, { id: slug }],
+      isActive: true,
+    },
     select: {
       name: true,
       description: true,
@@ -293,8 +318,11 @@ async function renderCategory(slug: string): Promise<string | null> {
 }
 
 async function renderBlog(slug: string): Promise<string | null> {
-  const post = await prisma.blogPost.findUnique({
-    where: { slug },
+  const post = await prisma.blogPost.findFirst({
+    where: {
+      OR: [{ slug }, { id: slug }],
+      isActive: true,
+    },
     select: {
       title: true,
       excerpt: true,
@@ -362,29 +390,75 @@ export async function botSeoMiddleware(
     return;
   }
 
+  let isCatalogRoute = false;
+
   try {
     let html: string | null = null;
 
     if (pathname === '/' || pathname === '') {
-      html = await renderHome();
+      html = await Promise.race([
+        renderHome(),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Bot SEO render timeout')), 5000))
+      ]);
     } else {
-      const bookSlug = pathname.match(/^\/book\/([^/?#]+)$/)?.[1];
-      const categorySlug = pathname.match(/^\/category\/([^/?#]+)$/)?.[1];
-      const blogSlug = pathname.match(/^\/blog\/([^/?#]+)$/)?.[1];
+      const bookMatch = pathname.match(/^\/book\/([^/?#]+)\/?$/i);
+      const categoryMatch = pathname.match(/^\/category\/([^/?#]+)\/?$/i);
+      const blogMatch = pathname.match(/^\/blog\/([^/?#]+)\/?$/i);
 
-      if (bookSlug) html = await renderBook(decodeURIComponent(bookSlug));
-      else if (categorySlug) html = await renderCategory(decodeURIComponent(categorySlug));
-      else if (blogSlug) html = await renderBlog(decodeURIComponent(blogSlug));
+      if (bookMatch) {
+        isCatalogRoute = true;
+        let slug = bookMatch[1];
+        try { slug = decodeURIComponent(slug); } catch {}
+        html = await Promise.race([
+          renderBook(slug),
+          new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Bot SEO render timeout')), 5000))
+        ]);
+      } else if (categoryMatch) {
+        isCatalogRoute = true;
+        let slug = categoryMatch[1];
+        try { slug = decodeURIComponent(slug); } catch {}
+        html = await Promise.race([
+          renderCategory(slug),
+          new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Bot SEO render timeout')), 5000))
+        ]);
+      } else if (blogMatch) {
+        isCatalogRoute = true;
+        let slug = blogMatch[1];
+        try { slug = decodeURIComponent(slug); } catch {}
+        html = await Promise.race([
+          renderBlog(slug),
+          new Promise<null>((_, reject) => setTimeout(() => reject(new Error('Bot SEO render timeout')), 5000))
+        ]);
+      }
     }
 
-    if (!html) return next();
+    if (html) {
+      setCache(cacheKey, html);
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.set('X-Bot-SEO', 'RENDERED');
+      res.status(200).send(html);
+      return;
+    }
 
-    setCache(cacheKey, html);
-    res.set('Content-Type', 'text/html; charset=utf-8');
-    res.set('X-Bot-SEO', 'RENDERED');
-    res.status(200).send(html);
+    if (isCatalogRoute) {
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.set('X-Robots-Tag', 'noindex, nofollow');
+      res.status(404).send(
+        build404Html('Page Not Found | Techno World Books', 'The requested book, category, or article does not exist or has been removed.')
+      );
+      return;
+    }
+
+    return next();
   } catch (_err) {
-    // DB errors must never break normal user traffic
+    if (isCatalogRoute || pathname === '/' || pathname === '') {
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.set('Retry-After', '30');
+      res.status(503).send(
+        '<!DOCTYPE html><html lang="en"><head><title>Service Temporarily Unavailable</title><meta name="robots" content="noindex, nofollow" /></head><body style="font-family:sans-serif;padding:40px;text-align:center;"><h1>Service Temporarily Unavailable</h1><p>Our server is currently experiencing high load. Please retry in 30 seconds.</p></body></html>'
+      );
+      return;
+    }
     return next();
   }
 }

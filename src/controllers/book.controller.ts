@@ -228,8 +228,22 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
 export const getBookBySlug = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { slug } = req.params;
-    const book = await prisma.book.findUnique({
-      where: { slug, status: 'PUBLISHED' },
+    if (!slug || typeof slug !== 'string' || !slug.trim()) {
+      res.status(404).json({
+        success: false,
+        message: 'Book not found',
+      });
+      return;
+    }
+
+    const cleanSlug = slug.trim();
+
+    // Query with 6-second timeout race guard to protect against hanging DB connections
+    const queryPromise = prisma.book.findFirst({
+      where: {
+        OR: [{ slug: cleanSlug }, { id: cleanSlug }],
+        status: 'PUBLISHED',
+      },
       include: {
         authors: true,
         publisher: true,
@@ -239,6 +253,12 @@ export const getBookBySlug = async (req: Request, res: Response, next: NextFunct
         images: { orderBy: { sortOrder: 'asc' } },
       },
     });
+
+    const timeoutPromise = new Promise<null>((_, reject) =>
+      setTimeout(() => reject(new Error('Database query timed out')), 6000)
+    );
+
+    const book = await Promise.race([queryPromise, timeoutPromise]);
 
     if (!book) {
       res.status(404).json({
@@ -253,7 +273,14 @@ export const getBookBySlug = async (req: Request, res: Response, next: NextFunct
       message: 'Book fetched successfully',
       data: mapBookToFrontendShape(book),
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message === 'Database query timed out') {
+      res.status(503).json({
+        success: false,
+        message: 'Service temporarily unavailable. Please retry shortly.',
+      });
+      return;
+    }
     next(error);
   }
 };

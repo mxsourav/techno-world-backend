@@ -829,23 +829,23 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
         let notifType = 'order_status';
 
         if (status === 'CONFIRMED') {
-          notifTitle = `✅ Order Confirmed: #${order.orderNumber}`;
+          notifTitle = `Order Confirmed: #${order.orderNumber}`;
           notifMsg = `Your order #${order.orderNumber} (₹${order.totalAmount}) has been approved by the bookstore and is confirmed!`;
           notifType = 'order_confirmed';
         } else if (status === 'PROCESSING') {
-          notifTitle = `📦 Packing Order: #${order.orderNumber}`;
+          notifTitle = `Packing Order: #${order.orderNumber}`;
           notifMsg = `Order #${order.orderNumber} is being carefully packed and prepared for India Post dispatch.`;
           notifType = 'order_processing';
         } else if (status === 'SHIPPED') {
-          notifTitle = `🚚 Dispatched: #${order.orderNumber}`;
+          notifTitle = `Dispatched: #${order.orderNumber}`;
           notifMsg = `Order #${order.orderNumber} has been dispatched via India Post Speed Post. Tracking: ${order.trackingNumber || 'Active'}`;
           notifType = 'order_shipped';
         } else if (status === 'DELIVERED') {
-          notifTitle = `🎉 Order Delivered: #${order.orderNumber}`;
+          notifTitle = `Order Delivered: #${order.orderNumber}`;
           notifMsg = `Your package for order #${order.orderNumber} has been successfully delivered. Enjoy your reading!`;
           notifType = 'order_delivered';
         } else if (status === 'CANCELLED') {
-          notifTitle = `❌ Order Cancelled: #${order.orderNumber}`;
+          notifTitle = `Order Cancelled: #${order.orderNumber}`;
           notifMsg = `Order #${order.orderNumber} was cancelled. Reason: ${reason || 'Fulfillment unavailable'}. Any deducted payment will be refunded.`;
           notifType = 'order_cancelled';
         }
@@ -936,6 +936,8 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
           recipientEmail,
           recipientName,
           orderNumber: order.orderNumber,
+          customerId: order.user?.customerId || order.userId || undefined,
+          customerPhone: order.address?.phone || order.user?.phone || undefined,
           subject: emailContent.subject,
           message: emailContent.text,
           attachments: invoiceAttachment,
@@ -991,8 +993,8 @@ export const sendOrderCustomEmail = async (req: Request, res: Response, next: Ne
         recipientEmail: emailTo,
         recipientName: nameTo,
         orderNumber: order.orderNumber,
-        customerId: order.userId || undefined,
-        customerPhone: order.address?.phone || undefined,
+        customerId: order.user?.customerId || order.userId || undefined,
+        customerPhone: order.address?.phone || order.user?.phone || undefined,
         subject: subject || `Urgent: Delivery Address Clarification for Order #${order.orderNumber}`,
         message: addrSummary ? `${message}\n\nCurrent Address on File:\n${addrSummary}` : message,
       });
@@ -1003,6 +1005,8 @@ export const sendOrderCustomEmail = async (req: Request, res: Response, next: Ne
         orderNumber: order.orderNumber,
         recipientEmail: emailTo,
         recipientName: nameTo,
+        customerId: order.user?.customerId || order.userId || undefined,
+        customerPhone: order.address?.phone || order.user?.phone || undefined,
         subject,
         message,
         templateType: templateType || 'CUSTOM',

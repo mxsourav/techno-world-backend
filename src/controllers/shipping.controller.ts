@@ -171,6 +171,8 @@ async function sendDispatchEmail(orderId: string, trackingNumber?: string | null
         recipientEmail,
         recipientName,
         orderNumber: fullOrder.orderNumber,
+        customerId: fullOrder.user?.customerId || fullOrder.userId || undefined,
+        customerPhone: fullOrder.address?.phone || fullOrder.user?.phone || undefined,
         subject: emailContent.subject,
         message: emailContent.text,
         attachments: invoiceAttachment,
@@ -184,7 +186,7 @@ async function sendDispatchEmail(orderId: string, trackingNumber?: string | null
       await prisma.notification.create({
         data: {
           userId: fullOrder.userId,
-          title: `🚚 Dispatched: #${fullOrder.orderNumber}`,
+          title: `Dispatched: #${fullOrder.orderNumber}`,
           message: `Order #${fullOrder.orderNumber} has been dispatched via ${carrier || 'India Post'}.${trackingNumber ? ` Tracking No: ${trackingNumber}` : ''}`,
           type: 'order_shipped',
           link: '/profile?tab=orders',

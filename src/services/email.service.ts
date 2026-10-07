@@ -215,11 +215,16 @@ export class EmailService {
     customerPhone?: string;
     subject?: string;
   }) {
-    const cid = params.customerId || 'GUEST';
+    const rawCid = (params.customerId || 'GUEST').trim();
+    const displayCid = rawCid.startsWith('TWC-') || rawCid.startsWith('CID-')
+      ? rawCid
+      : rawCid === 'GUEST'
+      ? 'GUEST'
+      : `CID-${rawCid}`;
     const ord = params.orderNumber || 'GENERAL';
-    const trackingToken = `[REF:ORD-${ord}|CID-${cid}]`;
+    const trackingToken = `[REF:ORD-${ord}|CID-${displayCid}]`;
     const replySubject = `Re: ${trackingToken} Address Clarification Confirmation`;
-    const replyBody = `Order Reference: #${ord}\nCustomer ID: ${cid}\nCustomer Name: ${params.customerName || 'Valued Customer'}\nPhone: ${params.customerPhone || 'N/A'}\n\n------------------------------------\nMY CORRECT DELIVERY ADDRESS IS:\n[Please type full street address, landmark, city, state & pincode here]\n------------------------------------\n`;
+    const replyBody = `Order Reference: #${ord}\nCustomer ID: ${displayCid}\nCustomer Name: ${params.customerName || 'Valued Customer'}\nPhone: ${params.customerPhone || 'N/A'}\n\n------------------------------------\nMY CORRECT DELIVERY ADDRESS IS:\n[Please type full street address, landmark, city, state & pincode here]\n------------------------------------\n`;
 
     const mailtoUrl = `mailto:team@technoworldbooks.in?subject=${encodeURIComponent(replySubject)}&body=${encodeURIComponent(replyBody)}`;
 
@@ -228,7 +233,7 @@ export class EmailService {
         <tr>
           <td align="center" style="border-radius: 8px; background-color: #2563EB;">
             <a href="${mailtoUrl}" target="_blank" style="display: inline-block; background-color: #2563EB; color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 700; text-decoration: none; padding: 13px 26px; border-radius: 8px; border: 1px solid #1D4ED8;">
-              ⚡ Click Here to Reply with Address Confirmation
+              Click Here to Reply with Address Confirmation
             </a>
           </td>
         </tr>
@@ -241,7 +246,7 @@ export class EmailService {
           <td style="padding: 10px 14px;">
             <strong style="color: #1E293B;">--- AUTO-MATCHING TRACKING METADATA (DO NOT REMOVE) ---</strong><br/>
             <strong>Order Reference:</strong> ORD-#${ord}<br/>
-            <strong>Customer ID:</strong> CID-${cid}<br/>
+            <strong>Customer ID:</strong> ${displayCid}<br/>
             <strong>Recipient:</strong> ${params.customerName || 'Customer'} (${params.customerPhone || 'N/A'})<br/>
             <span style="font-size: 10px; color: #64748B;"><em>When you hit Reply, keeping this block intact ensures our system automatically matches your address confirmation to your order.</em></span>
           </td>

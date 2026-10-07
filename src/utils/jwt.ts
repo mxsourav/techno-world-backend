@@ -3,8 +3,9 @@ import { env } from '../config/env.js';
 
 export const generateTokens = (userId: string, role: string) => {
   const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN';
-  const accessExpiry = isAdmin ? '30d' : (env.JWT_ACCESS_EXPIRY || '7d');
-  const refreshExpiry = isAdmin ? '60d' : (env.JWT_REFRESH_EXPIRY || '30d');
+  // 30-Day Session Mode: Keep users and admins logged in seamlessly for 30 days
+  const accessExpiry = '30d';
+  const refreshExpiry = '60d';
 
   const accessToken = jwt.sign(
     { userId, role },

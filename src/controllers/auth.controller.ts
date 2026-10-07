@@ -104,7 +104,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       data: {
         userId: user.id,
         refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         userAgent: req.headers['user-agent'] || 'Unknown',
         ipAddress: req.ip || 'Unknown'
       }
@@ -114,7 +114,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       httpOnly: true,
       secure: env.NODE_ENV === 'production',
       sameSite: env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 15 * 60 * 1000 // 15 minutes
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
     });
 
     res.cookie('refreshToken', refreshToken, {
@@ -122,7 +122,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       secure: env.NODE_ENV === 'production',
       sameSite: env.NODE_ENV === 'production' ? 'strict' : 'lax',
       path: '/api/v1/auth/refresh',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      maxAge: 60 * 24 * 60 * 60 * 1000 // 60 days
     });
 
     // Ensure testing bonus (at least 150 points & ₹50 cash)
@@ -196,7 +196,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
         data: {
           userId: user.id,
           refreshToken: newRefreshToken,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
           userAgent: req.headers['user-agent'] || 'Unknown',
           ipAddress: req.ip || 'Unknown'
         }
@@ -207,7 +207,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
       httpOnly: true,
       secure: env.NODE_ENV === 'production',
       sameSite: env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 15 * 60 * 1000
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
     });
 
     res.cookie('refreshToken', newRefreshToken, {
@@ -215,7 +215,7 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
       secure: env.NODE_ENV === 'production',
       sameSite: env.NODE_ENV === 'production' ? 'strict' : 'lax',
       path: '/api/v1/auth/refresh',
-      maxAge: 7 * 24 * 60 * 60 * 1000
+      maxAge: 60 * 24 * 60 * 60 * 1000 // 60 days
     });
 
     res.status(200).json({
@@ -318,7 +318,7 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
       data: {
         userId: user.id,
         refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         userAgent: req.headers['user-agent'] || 'Google OAuth Bypass Agent',
         ipAddress: req.ip || '127.0.0.1',
       },
@@ -329,7 +329,7 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
       httpOnly: true,
       secure: (env.NODE_ENV as string) === 'production',
       sameSite: (env.NODE_ENV as string) === 'production' ? 'strict' : 'lax',
-      maxAge: 15 * 60 * 1000,
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
     });
 
     res.cookie('refreshToken', refreshToken, {
@@ -337,7 +337,7 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
       secure: (env.NODE_ENV as string) === 'production',
       sameSite: (env.NODE_ENV as string) === 'production' ? 'strict' : 'lax',
       path: '/api/v1/auth/refresh',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 60 * 24 * 60 * 60 * 1000 // 60 days
     });
 
     // Ensure testing bonus (at least 150 points & ₹50 cash)
@@ -509,7 +509,7 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
       data: {
         userId: user.id,
         refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         userAgent: req.headers['user-agent'] || 'Google GIS Client',
         ipAddress: req.ip || '127.0.0.1',
       },
@@ -520,7 +520,7 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
       httpOnly: true,
       secure: (env.NODE_ENV as string) === 'production',
       sameSite: (env.NODE_ENV as string) === 'production' ? 'strict' : 'lax',
-      maxAge: 15 * 60 * 1000,
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
     });
 
     res.cookie('refreshToken', refreshToken, {
@@ -528,7 +528,7 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
       secure: (env.NODE_ENV as string) === 'production',
       sameSite: (env.NODE_ENV as string) === 'production' ? 'strict' : 'lax',
       path: '/api/v1/auth/refresh',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 60 * 24 * 60 * 60 * 1000 // 60 days
     });
 
     const bonus = await ensureUserTestingBonus(user.id);
@@ -643,7 +643,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       data: {
         userId: user.id,
         refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         userAgent: req.headers['user-agent'] || 'Unknown',
         ipAddress: req.ip || 'Unknown',
       },
@@ -653,7 +653,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       httpOnly: true,
       secure: (env.NODE_ENV as string) === 'production',
       sameSite: (env.NODE_ENV as string) === 'production' ? 'strict' : 'lax',
-      maxAge: 15 * 60 * 1000,
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
     });
 
     res.cookie('refreshToken', refreshToken, {
@@ -661,7 +661,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       secure: (env.NODE_ENV as string) === 'production',
       sameSite: (env.NODE_ENV as string) === 'production' ? 'strict' : 'lax',
       path: '/api/v1/auth/refresh',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 60 * 24 * 60 * 60 * 1000 // 60 days
     });
 
     const bonus = await ensureUserTestingBonus(user.id);

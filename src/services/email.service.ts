@@ -231,20 +231,19 @@ export class EmailService {
     subject?: string;
   }) {
     const ord = params.orderNumber || 'GENERAL';
-    const secureRef = this.generateSecureCustomerRef(params.customerId);
 
-    // Clean, crisp reply subject that never clutters mobile headers
+    // Clean, crisp reply subject with only the unique order number
     const replySubject = `Re: Address Clarification - Order #${ord}`;
-    const replyBody = `Order Reference: #${ord}\nSecurity Reference: ${secureRef}\nCustomer Name: ${params.customerName || 'Valued Customer'}\nPhone: ${params.customerPhone || 'N/A'}\n\n------------------------------------\nMY CORRECT DELIVERY ADDRESS IS:\n[Please type full street address, landmark, city, state & pincode here]\n------------------------------------\n`;
+    const replyBody = `Order Reference: #${ord}\nCustomer Name: ${params.customerName || 'Valued Customer'}\nPhone: ${params.customerPhone || 'N/A'}\n\n------------------------------------\nMY CORRECT DELIVERY ADDRESS IS:\n[Please type full street address, landmark, city, state & pincode here]\n------------------------------------\n`;
 
     const mailtoUrl = `mailto:team@technoworldbooks.in?subject=${encodeURIComponent(replySubject)}&body=${encodeURIComponent(replyBody)}`;
 
     const actionButtonHtml = `
-      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 22px auto; text-align: center;">
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 24px auto; text-align: center;">
         <tr>
           <td align="center" style="border-radius: 8px; background-color: #2563EB;">
-            <a href="${mailtoUrl}" target="_blank" style="display: inline-block; background-color: #2563EB; color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 700; text-decoration: none; padding: 13px 26px; border-radius: 8px; border: 1px solid #1D4ED8;">
-              Click Here to Reply with Address Confirmation
+            <a href="${mailtoUrl}" target="_blank" style="display: inline-block; background-color: #2563EB; color: #FFFFFF !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 8px; border: 1px solid #1D4ED8;">
+              Confirm Delivery Address
             </a>
           </td>
         </tr>
@@ -252,14 +251,12 @@ export class EmailService {
     `;
 
     const metadataBoxHtml = `
-      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 6px; margin: 16px 0; font-family: monospace; font-size: 11px; color: #475569;">
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F8FAFC; border: 1px dashed #CBD5E1; border-radius: 6px; margin: 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; color: #475569;">
         <tr>
-          <td style="padding: 10px 14px;">
-            <strong style="color: #1E293B;">--- ORDER VERIFICATION REFERENCE ---</strong><br/>
-            <strong>Order Reference:</strong> #${ord}<br/>
-            <strong>Security Ref:</strong> ${secureRef}<br/>
+          <td style="padding: 12px 16px;">
+            <strong style="color: #1E293B;">Order Reference: #${ord}</strong><br/>
             <strong>Recipient:</strong> ${params.customerName || 'Customer'} (${params.customerPhone || 'N/A'})<br/>
-            <span style="font-size: 10px; color: #64748B;"><em>When you hit Reply, keeping this block intact ensures our team automatically matches your address confirmation to your order.</em></span>
+            <span style="font-size: 10.5px; color: #64748B;">Please click the button above or reply directly with your complete delivery address.</span>
           </td>
         </tr>
       </table>
@@ -316,7 +313,7 @@ export class EmailService {
           <tr>
             <td class="footer-note" style="background-color: #EFF6FF; border: 1px solid #BFDBFE; color: #1E40AF; border-radius: 8px; padding: 12px 18px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; line-height: 1.5;">
               <div style="font-weight: 700; letter-spacing: 0.3px; margin-bottom: 2px; color: #1E3A8A;">
-                ✉ Action Requested &bull; Replies Welcome
+                Action Requested &bull; Replies Welcome
               </div>
               <div style="color: #1E40AF; font-size: 11px;">
                 You can <b>reply directly to this email</b> to reach our operational desk at <a href="mailto:team@technoworldbooks.in" style="color: #2563EB; font-weight: 700; text-decoration: underline;">team@technoworldbooks.in</a>, or message on WhatsApp: <a href="https://wa.me/917479135626" style="color: #2563EB; font-weight: 700; text-decoration: underline;">+91 747 913 5626</a>.
@@ -331,7 +328,7 @@ export class EmailService {
           <tr>
             <td class="footer-note" style="background-color: #F0FDF4; border: 1px solid #BBF7D0; color: #166534; border-radius: 8px; padding: 12px 18px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; line-height: 1.5;">
               <div style="font-weight: 700; letter-spacing: 0.3px; margin-bottom: 2px; color: #14532D;">
-                💬 Customer Care Helpdesk
+                Customer Care Helpdesk
               </div>
               <div style="color: #166534; font-size: 11px;">
                 Need help with a book or account? Reply directly to <a href="mailto:${effectiveReplyEmail}" style="color: #15803D; font-weight: 700; text-decoration: underline;">${effectiveReplyEmail}</a>, or message on WhatsApp: <a href="https://wa.me/917479135626" style="color: #15803D; font-weight: 700; text-decoration: underline;">+91 747 913 5626</a>.
@@ -350,9 +347,9 @@ export class EmailService {
           </p>
           <p class="text-muted" style="margin: 0 0 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; color: #6E6D68; line-height: 1.6;">
             Office: 90/6A, Mahatma Gandhi Rd, College Street, Kolkata, WB 700007<br/>
-            Direct Phone: <a href="tel:+917479135626" style="color: #14432B; text-decoration: none; font-weight: 600;">+91 747 913 5626</a> &bull; 
-            WhatsApp: <a href="https://wa.me/917479135626" style="color: #14432B; text-decoration: none; font-weight: 600;">Chat on WhatsApp</a> &bull; 
-            Official Store: <a href="https://technoworldbooks.in" style="color: #14432B; text-decoration: none; font-weight: 600;">technoworldbooks.in</a>
+            Direct Phone: <a href="tel:+917479135626" style="color: #15803D; text-decoration: none; font-weight: 600;">+91 747 913 5626</a> &bull; 
+            WhatsApp: <a href="https://wa.me/917479135626" style="color: #15803D; text-decoration: none; font-weight: 600;">Chat on WhatsApp</a> &bull; 
+            Official Store: <a href="https://technoworldbooks.in" style="color: #15803D; text-decoration: none; font-weight: 600;">technoworldbooks.in</a>
           </p>
 
           ${noticeBox}
@@ -496,9 +493,15 @@ export class EmailService {
       </table>
     ` : '';
 
+    const cleanHeading = title
+      .replace(/\[REF:[^\]]+\]/gi, '')
+      .replace(/\[Ref:[^\]]+\]/gi, '')
+      .replace(/\s*-\s*Techno World Books/gi, '')
+      .trim();
+
     const content = `
-      <h1 class="text-primary" style="margin: 0 0 14px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 22px; font-weight: 700; color: #262524; line-height: 1.35;">
-        ${title}
+      <h1 class="text-primary" style="margin: 0 0 14px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 21px; font-weight: 700; color: #262524; line-height: 1.35;">
+        ${cleanHeading}
       </h1>
       ${statusPill}
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.55; color: #262524; text-align: left;">
@@ -874,22 +877,24 @@ export class EmailService {
 
     // Prepare Auto-matching tokens if Tier 2 (TEAM)
     let extraContentHtml = '';
-    let finalSubject = params.subject;
+    let finalSubject = params.subject
+      .replace(/\[REF:[^\]]+\]/gi, '')
+      .replace(/\[Ref:[^\]]+\]/gi, '')
+      .replace(/\s*-\s*Techno World Books/gi, '')
+      .trim();
+
     if (tier === 'TEAM' && params.orderNumber) {
       const autoMatch = this.buildAutoMatchingReplyPayload({
         orderNumber: params.orderNumber,
         customerId: params.customerId,
         customerName: params.recipientName,
         customerPhone: params.customerPhone,
-        subject: params.subject,
+        subject: finalSubject,
       });
 
       // Keep email header subject line clean, uncluttered, and readable:
-      // If the subject already contains the order number, do NOT append redundant bracket tags.
-      if (!params.subject.includes(params.orderNumber) && !params.subject.includes('[Ref:')) {
-        finalSubject = `${params.subject} ${autoMatch.trackingToken}`;
-      } else {
-        finalSubject = params.subject;
+      if (!finalSubject.includes(params.orderNumber)) {
+        finalSubject = `${finalSubject} (Order #${params.orderNumber})`;
       }
 
       extraContentHtml = `${autoMatch.actionButtonHtml}\n${autoMatch.metadataBoxHtml}`;
@@ -1363,10 +1368,43 @@ export class EmailService {
       ];
     }
 
-    return prisma.emailLog.findMany({
+    const logs = await prisma.emailLog.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       take: limit,
+    });
+
+    const orderNumbers = Array.from(new Set(logs.map((l) => l.orderNumber).filter(Boolean))) as string[];
+    const emails = Array.from(new Set(logs.map((l) => l.toEmail).filter(Boolean))) as string[];
+
+    const [orders, users] = await Promise.all([
+      orderNumbers.length > 0
+        ? prisma.order.findMany({
+            where: { orderNumber: { in: orderNumbers } },
+            select: { orderNumber: true, userId: true, user: { select: { id: true, customerId: true } } },
+          })
+        : [],
+      emails.length > 0
+        ? prisma.user.findMany({
+            where: { email: { in: emails } },
+            select: { id: true, email: true, customerId: true },
+          })
+        : [],
+    ]);
+
+    const orderMap = new Map(orders.map((o) => [o.orderNumber, o]));
+    const userMap = new Map(users.map((u) => [u.email.toLowerCase(), u]));
+
+    return logs.map((l) => {
+      const ord = l.orderNumber ? orderMap.get(l.orderNumber) : undefined;
+      const usr = userMap.get(l.toEmail.toLowerCase());
+      const customerId = ord?.user?.customerId || usr?.customerId || null;
+      const userId = ord?.userId || usr?.id || null;
+      return {
+        ...l,
+        customerId,
+        userId,
+      };
     });
   }
 }

@@ -123,7 +123,7 @@ export class EmailService {
     };
   }
 
-  public wrapInDocument(title: string, contentHtml: string, subtitle = 'Official Order Communication'): string {
+  public wrapInDocument(title: string, contentHtml: string, subtitle = 'Official Order Communication', logoUrl?: string): string {
     return `<!DOCTYPE html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -163,7 +163,7 @@ export class EmailService {
     <tr>
       <td align="center" style="padding: 0;">
         <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 0 auto;">
-          ${this.generateBrandedHeader(subtitle)}
+          ${this.generateBrandedHeader(subtitle, logoUrl)}
           <tr>
             <td style="padding: 0;">
               <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="card" style="background-color: #FFFFFF; border: 1px solid #EAE8E2; border-radius: 8px; border-collapse: separate; overflow: hidden;">
@@ -196,14 +196,15 @@ export class EmailService {
     `;
   }
 
-  public generateBrandedHeader(subtitle = 'Official Order Communication'): string {
+  public generateBrandedHeader(subtitle = 'Official Order Communication', logoUrl?: string): string {
+    const effectiveLogoUrl = logoUrl || 'https://res.cloudinary.com/tcsmyxe2/image/upload/v1789254075/techno_world_white_logo.png';
     return `
       <tr>
         <td align="center" style="padding: 0 0 20px 0;">
           <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
             <tr>
-              <td align="center" valign="middle" style="width: 52px; height: 52px; background-color: #14432B; border-radius: 50%; color: #FFFFFF; font-family: 'Georgia', 'Times New Roman', serif; font-size: 20px; font-weight: bold; letter-spacing: 1px; text-align: center; line-height: 52px;">
-                TW
+              <td align="center" valign="middle" style="width: 56px; height: 56px; background-color: #14432B; border-radius: 50%; text-align: center; vertical-align: middle; padding: 0;">
+                <img src="${effectiveLogoUrl}" alt="Techno World Books" width="44" height="44" style="display: block; width: 44px; height: 44px; margin: 0 auto; border: 0; outline: none; text-decoration: none; -ms-interpolation-mode: bicubic;" />
               </td>
             </tr>
           </table>
@@ -258,7 +259,7 @@ export class EmailService {
     `;
   }
 
-  public generateBrandedHtml(title: string, message: string, orderNumber?: string, totalAmount?: number): string {
+  public generateBrandedHtml(title: string, message: string, orderNumber?: string, totalAmount?: number, logoUrl?: string): string {
     const isTestEmail = title.includes('Test') || message.includes('verification test');
     const statusPill = isTestEmail
       ? this.renderStatusPill('Status: System Verified & Active', '#DEF7EC', '#03543F')
@@ -304,7 +305,7 @@ export class EmailService {
       ${orderBox}
     `;
 
-    return this.wrapInDocument(title, content, orderNumber ? `Order #${orderNumber}` : 'Official Order Communication');
+    return this.wrapInDocument(title, content, orderNumber ? `Order #${orderNumber}` : 'Official Order Communication', logoUrl);
   }
 
   public generateLifecycleEmailHtml(params: {
@@ -726,7 +727,7 @@ export class EmailService {
 
     const config = await this.getEffectiveSmtpConfig();
     const timestamp = new Date().toISOString();
-    const html = customHtml || this.generateBrandedHtml(params.subject, params.message, params.orderNumber, params.totalAmount);
+    const html = customHtml || this.generateBrandedHtml(params.subject, params.message, params.orderNumber, params.totalAmount, config.logoUrl);
     
     const effectiveSenderEmail = config.senderEmail || config.user;
     const sender = effectiveSenderEmail
@@ -895,7 +896,7 @@ export class EmailService {
     const effectiveSenderEmail = config.senderEmail || config.user;
     const subject = '✅ Techno World Books — Email System Connection Test';
     const message = `Hello! This is a verification test from your Techno World Books Admin Panel.\n\nSender: ${effectiveSenderEmail}\nTime: ${new Date().toLocaleString('en-IN')}`;
-    const html = this.generateBrandedHtml(subject, message);
+    const html = this.generateBrandedHtml(subject, message, undefined, undefined, config.logoUrl);
     const sender = `"${config.senderName}" <${effectiveSenderEmail || 'test@technoworldbooks.in'}>`;
 
     let isDelivered = false;

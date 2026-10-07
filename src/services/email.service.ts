@@ -291,72 +291,29 @@ export class EmailService {
     const allowReply = canReply !== undefined ? canReply : config.canReply;
     const effectiveReplyEmail = replyEmail || config.replyTo || 'support@technoworldbooks.in';
 
-    let noticeBox = '';
+    let replyNoteHtml = '';
     if (tier === 'ORDERS' || !allowReply) {
-      noticeBox = `
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto; max-width: 500px; width: 100%;">
-          <tr>
-            <td class="footer-note" style="background-color: #18181B; color: #FFFFFF; border-radius: 8px; padding: 12px 18px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; line-height: 1.5;">
-              <div style="font-weight: 700; letter-spacing: 0.3px; margin-bottom: 2px; color: #FFFFFF;">
-                Automated Order Notification (No-Reply)
-              </div>
-              <div style="color: #D4D4D8; font-size: 10.5px;">
-                This is an automated order notification. <b>Please do not reply to this email.</b> For order assistance, write directly to <a href="mailto:support@technoworldbooks.in" style="color: #86EFAC; text-decoration: underline; font-weight: 600;">support@technoworldbooks.in</a> or message on WhatsApp: <a href="https://wa.me/917479135626" style="color: #86EFAC; text-decoration: underline; font-weight: 600;">+91 747 913 5626</a>.
-              </div>
-            </td>
-          </tr>
-        </table>
-      `;
-    } else if (tier === 'TEAM') {
-      noticeBox = `
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto; max-width: 500px; width: 100%;">
-          <tr>
-            <td class="footer-note" style="background-color: #EFF6FF; border: 1px solid #BFDBFE; color: #1E40AF; border-radius: 8px; padding: 12px 18px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; line-height: 1.5;">
-              <div style="font-weight: 700; letter-spacing: 0.3px; margin-bottom: 2px; color: #1E3A8A;">
-                Action Requested &bull; Replies Welcome
-              </div>
-              <div style="color: #1E40AF; font-size: 11px;">
-                You can <b>reply directly to this email</b> to reach our operational desk at <a href="mailto:team@technoworldbooks.in" style="color: #2563EB; font-weight: 700; text-decoration: underline;">team@technoworldbooks.in</a>, or message on WhatsApp: <a href="https://wa.me/917479135626" style="color: #2563EB; font-weight: 700; text-decoration: underline;">+91 747 913 5626</a>.
-              </div>
-            </td>
-          </tr>
-        </table>
+      replyNoteHtml = `
+        <div style="font-size: 11px; color: #94A3B8; margin-bottom: 8px;">
+          Automated order notification. For help, email <a href="mailto:support@technoworldbooks.in" style="color: #15803D; font-weight: 600; text-decoration: underline;">support@technoworldbooks.in</a> or WhatsApp: <a href="https://wa.me/917479135626" style="color: #15803D; font-weight: 600; text-decoration: underline;">+91 747 913 5626</a>.
+        </div>
       `;
     } else {
-      noticeBox = `
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto; max-width: 500px; width: 100%;">
-          <tr>
-            <td class="footer-note" style="background-color: #F0FDF4; border: 1px solid #BBF7D0; color: #166534; border-radius: 8px; padding: 12px 18px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; line-height: 1.5;">
-              <div style="font-weight: 700; letter-spacing: 0.3px; margin-bottom: 2px; color: #14532D;">
-                Customer Care Helpdesk
-              </div>
-              <div style="color: #166534; font-size: 11px;">
-                Need help with a book or account? Reply directly to <a href="mailto:${effectiveReplyEmail}" style="color: #15803D; font-weight: 700; text-decoration: underline;">${effectiveReplyEmail}</a>, or message on WhatsApp: <a href="https://wa.me/917479135626" style="color: #15803D; font-weight: 700; text-decoration: underline;">+91 747 913 5626</a>.
-              </div>
-            </td>
-          </tr>
-        </table>
+      replyNoteHtml = `
+        <div style="font-size: 11px; color: #64748B; margin-bottom: 8px;">
+          You can reply directly to this email (<a href="mailto:${effectiveReplyEmail}" style="color: #2563EB; font-weight: 600; text-decoration: underline;">${effectiveReplyEmail}</a>) or WhatsApp <a href="https://wa.me/917479135626" style="color: #15803D; font-weight: 600; text-decoration: underline;">+91 747 913 5626</a>.
+        </div>
       `;
     }
 
     return `
       <tr>
-        <td align="center" style="padding: 24px 10px 8px 10px;">
-          <p class="text-muted" style="margin: 0 0 6px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12.5px; font-weight: 600; color: #262524; font-variant-numeric: lining-nums tabular-nums;">
-            Techno World Books &bull; College Street, Kolkata &bull; Delivering Across India
-          </p>
-          <p class="text-muted" style="margin: 0 0 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; color: #6E6D68; line-height: 1.6;">
-            Office: 90/6A, Mahatma Gandhi Rd, College Street, Kolkata, WB 700007<br/>
-            Direct Phone: <a href="tel:+917479135626" style="color: #15803D; text-decoration: none; font-weight: 600;">+91 747 913 5626</a> &bull; 
-            WhatsApp: <a href="https://wa.me/917479135626" style="color: #15803D; text-decoration: none; font-weight: 600;">Chat on WhatsApp</a> &bull; 
-            Official Store: <a href="https://technoworldbooks.in" style="color: #15803D; text-decoration: none; font-weight: 600;">technoworldbooks.in</a>
-          </p>
-
-          ${noticeBox}
-
-          <p class="text-muted" style="margin: 14px 0 0 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 10.5px; color: #A1A1AA;">
-            You received this email regarding your order or inquiry on <a href="https://technoworldbooks.in" style="color: #6E6D68; text-decoration: underline;">technoworldbooks.in</a>.
-          </p>
+        <td align="center" style="padding: 18px 20px 14px 20px; border-top: 1px solid #F1F0EA; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          ${replyNoteHtml}
+          <div style="font-size: 11px; color: #64748B; line-height: 1.5; margin-top: 6px;">
+            <strong style="color: #334155;">Techno World Books</strong> &bull; College Street, Kolkata 700007<br/>
+            Store: <a href="https://technoworldbooks.in" style="color: #15803D; font-weight: 600; text-decoration: none;">technoworldbooks.in</a>
+          </div>
         </td>
       </tr>
     `;
@@ -371,8 +328,7 @@ export class EmailService {
     canReply?: boolean,
     replyEmail?: string
   ): string {
-    const rawLogo = getWhiteLogoBase64();
-    const logoSrc = logoUrl || (rawLogo ? `data:image/png;base64,${rawLogo}` : 'https://technoworldbooks.in/icon.png');
+    const logoSrc = logoUrl || 'https://technoworldbooks.in/icon.png';
     const footerHtml = this.generateBrandedFooter(tier, canReply, replyEmail);
 
     return `<!DOCTYPE html>
@@ -412,17 +368,21 @@ export class EmailService {
         <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; width: 100%; background-color: #FFFFFF; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid #EAE8E2;" class="card">
           <!-- Brand Header -->
           <tr>
-            <td class="brand-header" style="background: linear-gradient(135deg, #14432B 0%, #0A2618 100%); padding: 22px 28px; text-align: left;">
-              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+            <td class="brand-header" align="center" style="background: linear-gradient(135deg, #14432B 0%, #0A2618 100%); padding: 22px 16px 20px 16px; text-align: center;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center" style="margin: 0 auto; text-align: center;">
                 <tr>
-                  <td valign="middle">
-                    <img src="${logoSrc}" alt="Techno World Books" width="40" height="40" style="display: block; border-radius: 8px; border: 0; outline: none; text-decoration: none;" />
+                  <td align="center" style="padding-bottom: 8px;">
+                    <a href="https://technoworldbooks.in" target="_blank" style="text-decoration: none; display: inline-block;">
+                      <img src="${logoSrc}" alt="Techno World Books" width="44" height="44" style="display: block; margin: 0 auto; border-radius: 10px; border: 0; outline: none; text-decoration: none;" />
+                    </a>
                   </td>
-                  <td valign="middle" style="padding-left: 14px;">
-                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 19px; font-weight: 700; color: #FFFFFF; letter-spacing: 0.2px; line-height: 1.2; font-variant-numeric: lining-nums tabular-nums;">
+                </tr>
+                <tr>
+                  <td align="center">
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 19px; font-weight: 700; color: #FFFFFF; letter-spacing: 0.3px; line-height: 1.25; font-variant-numeric: lining-nums tabular-nums;">
                       Techno World Books
                     </div>
-                    <div style="font-size: 11px; color: #A7F3D0; font-weight: 500; margin-top: 2px;">
+                    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; color: #A7F3D0; font-weight: 500; margin-top: 4px; font-variant-numeric: lining-nums tabular-nums;">
                       ${subtitle} &bull; College Street, Kolkata
                     </div>
                   </td>
@@ -433,7 +393,7 @@ export class EmailService {
 
           <!-- Main Body -->
           <tr>
-            <td style="padding: 28px 24px 20px 24px;">
+            <td style="padding: 26px 22px 22px 22px;">
               ${contentHtml}
             </td>
           </tr>

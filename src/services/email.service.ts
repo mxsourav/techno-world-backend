@@ -63,6 +63,8 @@ export interface SendOrderEmailParams {
   trackingNumber?: string | null;
   shippingMethod?: string | null;
   attachments?: EmailAttachment[];
+  replyTo?: string;
+  canReply?: boolean;
 }
 
 export interface OrderMergeRefundEmailParams {
@@ -95,13 +97,13 @@ export class EmailService {
       if (setting?.value) {
         const parsed = JSON.parse(setting.value);
         return {
-          senderEmail: parsed.senderEmail || parsed.user || env.SMTP_USER || '',
+          senderEmail: parsed.senderEmail || parsed.user || env.SMTP_USER || 'orders@technoworldbooks.in',
           senderName: parsed.senderName || 'Techno World Books',
-          host: parsed.host || env.SMTP_HOST || 'smtp.gmail.com',
-          port: Number(parsed.port) || Number(env.SMTP_PORT) || 587,
-          user: parsed.user || env.SMTP_USER || '',
-          pass: parsed.pass || env.SMTP_PASS || '',
-          secure: parsed.secure ?? (Number(parsed.port) === 465),
+          host: parsed.host || env.SMTP_HOST || 'smtp.hostinger.com',
+          port: Number(parsed.port) || Number(env.SMTP_PORT) || 465,
+          user: parsed.user || env.SMTP_USER || 'orders@technoworldbooks.in',
+          pass: parsed.pass || env.SMTP_PASS || 'Aksad@301206',
+          secure: parsed.secure ?? (Number(parsed.port) === 465 || true),
           resendApiKey: parsed.resendApiKey || '',
           logoUrl: parsed.logoUrl || '',
         };
@@ -111,19 +113,26 @@ export class EmailService {
     }
 
     return {
-      senderEmail: env.SMTP_USER || '',
+      senderEmail: env.SMTP_USER || 'orders@technoworldbooks.in',
       senderName: 'Techno World Books',
-      host: env.SMTP_HOST || 'smtp.gmail.com',
-      port: Number(env.SMTP_PORT) || 587,
-      user: env.SMTP_USER || '',
-      pass: env.SMTP_PASS || '',
-      secure: Number(env.SMTP_PORT) === 465,
+      host: env.SMTP_HOST || 'smtp.hostinger.com',
+      port: Number(env.SMTP_PORT) || 465,
+      user: env.SMTP_USER || 'orders@technoworldbooks.in',
+      pass: env.SMTP_PASS || 'Aksad@301206',
+      secure: Number(env.SMTP_PORT) === 465 || true,
       resendApiKey: '',
       logoUrl: '',
     };
   }
 
-  public wrapInDocument(title: string, contentHtml: string, subtitle = 'Official Order Communication', logoUrl?: string): string {
+  public wrapInDocument(
+    title: string,
+    contentHtml: string,
+    subtitle = 'Official Order Communication',
+    logoUrl?: string,
+    canReply = true,
+    replyEmail = 'orders@technoworldbooks.in'
+  ): string {
     return `<!DOCTYPE html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -175,7 +184,7 @@ export class EmailService {
               </table>
             </td>
           </tr>
-          ${this.generateBrandedFooter()}
+          ${this.generateBrandedFooter(canReply, replyEmail)}
         </table>
       </td>
     </tr>
@@ -225,7 +234,35 @@ export class EmailService {
     `;
   }
 
-  public generateBrandedFooter(): string {
+  public generateBrandedFooter(canReply = true, replyEmail = 'orders@technoworldbooks.in'): string {
+    const feedbackBox = canReply ? `
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto; max-width: 500px; width: 100%;">
+        <tr>
+          <td class="footer-note" style="background-color: #F0FDF4; border: 1px solid #BBF7D0; color: #166534; border-radius: 8px; padding: 12px 18px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; line-height: 1.5;">
+            <div style="font-weight: 700; letter-spacing: 0.3px; margin-bottom: 3px; color: #14532D;">
+              ✉ Need Help or Have Questions?
+            </div>
+            <div style="color: #166534; font-size: 11px;">
+              You can <b>reply directly to this email</b> to reach our desk at <a href="mailto:${replyEmail}" style="color: #15803D; font-weight: 600; text-decoration: underline;">${replyEmail}</a>, or message on WhatsApp: <a href="https://wa.me/917479135626" style="color: #15803D; font-weight: 600; text-decoration: underline;">+91 747 913 5626</a>.
+            </div>
+          </td>
+        </tr>
+      </table>
+    ` : `
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto; max-width: 500px; width: 100%;">
+        <tr>
+          <td class="footer-note" style="background-color: #18181B; color: #FFFFFF; border-radius: 8px; padding: 12px 18px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; line-height: 1.5;">
+            <div style="font-weight: 700; letter-spacing: 0.3px; margin-bottom: 3px; color: #FFFFFF;">
+              Automated Notification
+            </div>
+            <div style="color: #D4D4D8; font-size: 10.5px;">
+              For customer support or order assistance, write directly to <a href="mailto:support@technoworldbooks.in" style="color: #86EFAC; text-decoration: none; font-weight: 600;">support@technoworldbooks.in</a>.
+            </div>
+          </td>
+        </tr>
+      </table>
+    `;
+
     return `
       <tr>
         <td align="center" style="padding: 24px 10px 8px 10px;">
@@ -235,31 +272,29 @@ export class EmailService {
           <p class="text-muted" style="margin: 0 0 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; color: #6E6D68; line-height: 1.6;">
             Office: 90/6A, Mahatma Gandhi Rd, College Street, Kolkata, WB 700007<br/>
             Direct Phone: <a href="tel:+917479135626" style="color: #14432B; text-decoration: none; font-weight: 600;">+91 747 913 5626</a> &bull; 
-            WhatsApp Support: <a href="https://wa.me/917479135626" style="color: #14432B; text-decoration: none; font-weight: 600;">Chat on WhatsApp</a>
+            WhatsApp: <a href="https://wa.me/917479135626" style="color: #14432B; text-decoration: none; font-weight: 600;">Chat on WhatsApp</a> &bull; 
+            Official Store: <a href="https://technoworldbooks.in" style="color: #14432B; text-decoration: none; font-weight: 600;">technoworldbooks.in</a>
           </p>
 
-          <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto; max-width: 500px;">
-            <tr>
-              <td class="footer-note" style="background-color: #18181B; color: #FFFFFF; border-radius: 8px; padding: 12px 18px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; line-height: 1.5;">
-                <div style="font-weight: 700; letter-spacing: 0.3px; margin-bottom: 3px; color: #FFFFFF;">
-                  &#9888; Automated Notification &bull; Do Not Reply
-                </div>
-                <div style="color: #D4D4D8; font-size: 10.5px;">
-                  This is an automated system email from an unmonitored mailbox. Direct replies cannot be received. For support, write to <a href="mailto:support@technoworldbooks.in" style="color: #86EFAC; text-decoration: none; font-weight: 600;">support@technoworldbooks.in</a>.
-                </div>
-              </td>
-            </tr>
-          </table>
+          ${feedbackBox}
 
           <p class="text-muted" style="margin: 14px 0 0 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 10.5px; color: #A1A1AA;">
-            You received this email because you placed an order or requested updates on <a href="https://technoworldbooks.in" style="color: #6E6D68; text-decoration: underline;">technoworldbooks.in</a>.
+            You received this email regarding your order or inquiry on <a href="https://technoworldbooks.in" style="color: #6E6D68; text-decoration: underline;">technoworldbooks.in</a>.
           </p>
         </td>
       </tr>
     `;
   }
 
-  public generateBrandedHtml(title: string, message: string, orderNumber?: string, totalAmount?: number, logoUrl?: string): string {
+  public generateBrandedHtml(
+    title: string,
+    message: string,
+    orderNumber?: string,
+    totalAmount?: number,
+    logoUrl?: string,
+    canReply = true,
+    replyEmail = 'orders@technoworldbooks.in'
+  ): string {
     const isTestEmail = title.includes('Test') || message.includes('verification test');
     const statusPill = isTestEmail
       ? this.renderStatusPill('Status: System Verified & Active', '#DEF7EC', '#03543F')
@@ -305,7 +340,7 @@ export class EmailService {
       ${orderBox}
     `;
 
-    return this.wrapInDocument(title, content, orderNumber ? `Order #${orderNumber}` : 'Official Order Communication', logoUrl);
+    return this.wrapInDocument(title, content, orderNumber ? `Order #${orderNumber}` : 'Official Order Communication', logoUrl, canReply, replyEmail);
   }
 
   public generateLifecycleEmailHtml(params: {
@@ -727,9 +762,15 @@ export class EmailService {
 
     const config = await this.getEffectiveSmtpConfig();
     const timestamp = new Date().toISOString();
-    const html = customHtml || this.generateBrandedHtml(params.subject, params.message, params.orderNumber, params.totalAmount, config.logoUrl);
-    
     const effectiveSenderEmail = config.senderEmail || config.user;
+    const canReply = params.canReply ?? true;
+    const effectiveReplyTo = params.replyTo || (
+      effectiveSenderEmail && effectiveSenderEmail.includes('support')
+        ? 'support@technoworldbooks.in'
+        : 'orders@technoworldbooks.in'
+    );
+    const html = customHtml || this.generateBrandedHtml(params.subject, params.message, params.orderNumber, params.totalAmount, config.logoUrl, canReply, effectiveReplyTo);
+    
     const sender = effectiveSenderEmail
       ? `"${config.senderName}" <${effectiveSenderEmail}>`
       : `"${config.senderName}" <orders@technoworldbooks.in>`;
@@ -752,13 +793,12 @@ export class EmailService {
         const resendPayload: any = {
           from: `${config.senderName} <onboarding@resend.dev>`,
           to: [targetEmail],
-          reply_to: 'no-reply@technoworldbooks.in',
+          reply_to: effectiveReplyTo,
           subject: params.subject,
           html: html,
           headers: {
             'Auto-Submitted': 'auto-generated',
-            'X-Auto-Response-Suppress': 'All',
-            'Precedence': 'bulk',
+            'X-Auto-Response-Suppress': 'OOF',
           },
         };
 
@@ -791,7 +831,7 @@ export class EmailService {
       }
     }
 
-    // 2. Try Direct SMTP (Gmail / Custom SMTP)
+    // 2. Try Direct SMTP (Hostinger / Custom SMTP)
     if (deliveryStatus !== 'DELIVERED' && config.user && config.pass) {
       try {
         const cleanPass = config.pass.replace(/\s+/g, '');
@@ -815,15 +855,14 @@ export class EmailService {
         const info = await transporter.sendMail({
           from: sender,
           to: targetEmail,
-          replyTo: 'no-reply@technoworldbooks.in',
+          replyTo: effectiveReplyTo,
           subject: params.subject,
           text: params.message,
           html: html,
           attachments: mailAttachments,
           headers: {
             'Auto-Submitted': 'auto-generated',
-            'X-Auto-Response-Suppress': 'All',
-            'Precedence': 'bulk',
+            'X-Auto-Response-Suppress': 'OOF',
           },
         });
 
@@ -843,7 +882,7 @@ export class EmailService {
       await prisma.emailLog.create({
         data: {
           toEmail: targetEmail,
-          senderEmail: effectiveSenderEmail || 'system@technoworldbooks.in',
+          senderEmail: effectiveSenderEmail || 'orders@technoworldbooks.in',
           senderName: config.senderName,
           subject: params.subject,
           message: params.message,
@@ -877,6 +916,8 @@ export class EmailService {
     templateType?: string;
     totalAmount?: number;
     attachments?: EmailAttachment[];
+    replyTo?: string;
+    canReply?: boolean;
   }): Promise<{ success: boolean; messageId: string; timestamp: string; status: string; note?: string }> {
     return this.sendOrderNotification({
       recipientEmail: params.recipientEmail,
@@ -886,6 +927,8 @@ export class EmailService {
       message: params.message,
       totalAmount: params.totalAmount,
       attachments: params.attachments,
+      replyTo: params.replyTo,
+      canReply: params.canReply ?? true,
     });
   }
 
@@ -929,7 +972,7 @@ export class EmailService {
         const info = await transporter.sendMail({
           from: sender,
           to: toEmail,
-          replyTo: 'no-reply@technoworldbooks.in',
+          replyTo: 'orders@technoworldbooks.in',
           subject,
           text: message,
           html,

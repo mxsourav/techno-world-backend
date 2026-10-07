@@ -992,6 +992,8 @@ export const sendOrderCustomEmail = async (req: Request, res: Response, next: Ne
       subject,
       message,
       templateType: templateType || 'CUSTOM',
+      replyTo: 'orders@technoworldbooks.in',
+      canReply: true,
     });
 
     // Create in-app Customer Notification for Admin Delay Notice or Custom message
@@ -1012,7 +1014,7 @@ export const sendOrderCustomEmail = async (req: Request, res: Response, next: Ne
     }
 
     // Append email record into order notes
-    const emailLogEntry = `[${new Date().toISOString()}] Admin Email Sent (${templateType || 'CUSTOM'}): "${subject}" -> ${emailTo}`;
+    const emailLogEntry = `[${new Date().toISOString()}] Admin Email Sent (${templateType || 'CUSTOM'} via orders@technoworldbooks.in): "${subject}" -> ${emailTo}`;
     const updatedNotes = order.notes ? `${order.notes}\n${emailLogEntry}` : emailLogEntry;
 
     await prisma.order.update({
@@ -1175,6 +1177,8 @@ export const batchSendOrderEmail = async (req: Request, res: Response, next: Nex
         subject,
         message,
         templateType: templateType || 'DELAY_NOTICE',
+        replyTo: 'orders@technoworldbooks.in',
+        canReply: true,
       });
 
       try {

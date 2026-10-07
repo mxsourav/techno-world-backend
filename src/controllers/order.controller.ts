@@ -984,17 +984,33 @@ export const sendOrderCustomEmail = async (req: Request, res: Response, next: Ne
       return;
     }
 
-    const dispatchResult = await emailService.sendOrderEmail({
-      orderId: order.id,
-      orderNumber: order.orderNumber,
-      recipientEmail: emailTo,
-      recipientName: nameTo,
-      subject,
-      message,
-      templateType: templateType || 'CUSTOM',
-      replyTo: 'orders@technoworldbooks.in',
-      canReply: true,
-    });
+    let dispatchResult;
+    if (templateType === 'ADDRESS_CLARIFICATION') {
+      const addrSummary = order.address ? `${order.address.fullName}, ${order.address.addressLine1}${order.address.addressLine2 ? ', ' + order.address.addressLine2 : ''}, ${order.address.city}, ${order.address.state} - ${order.address.pincode}, Ph: ${order.address.phone}` : undefined;
+      dispatchResult = await emailService.sendAddressClarificationEmail({
+        recipientEmail: emailTo,
+        recipientName: nameTo,
+        orderNumber: order.orderNumber,
+        customerId: order.userId || undefined,
+        customerPhone: order.address?.phone || undefined,
+        subject: subject || `Urgent: Delivery Address Clarification for Order #${order.orderNumber}`,
+        message: addrSummary ? `${message}\n\nCurrent Address on File:\n${addrSummary}` : message,
+      });
+    } else {
+      const isTeam = ['DELAY_NOTICE', 'ADDRESS_ISSUE', 'QUERY', 'B2B'].includes(templateType);
+      dispatchResult = await emailService.sendOrderEmail({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        recipientEmail: emailTo,
+        recipientName: nameTo,
+        subject,
+        message,
+        templateType: templateType || 'CUSTOM',
+        tier: isTeam ? 'TEAM' : 'ORDERS',
+        replyTo: isTeam ? 'team@technoworldbooks.in' : undefined,
+        canReply: isTeam,
+      });
+    }
 
     // Create in-app Customer Notification for Admin Delay Notice or Custom message
     try {

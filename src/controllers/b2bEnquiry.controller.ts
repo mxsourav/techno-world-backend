@@ -121,14 +121,17 @@ export const submitB2BEnquiry = async (req: Request, res: Response, next: NextFu
     emailService
       .sendOrderNotification({
         recipientEmail: trimmedEmail,
+        recipientName: trimmedRep,
         orderNumber: `B2B-${enquiry.id.slice(0, 8).toUpperCase()}`,
         subject: ackSubject,
         message: ackMessage,
+        tier: 'TEAM',
+        replyTo: 'team@technoworldbooks.in',
       })
       .catch((err) => logger.warn(`Failed to dispatch B2B customer ack email: ${err.message}`));
 
     // 4. Send Alert Email to Institutional Sales Inbox
-    const alertSubject = `🏛️ New B2B Quote Request: ${trimmedOrg} (${trimmedRep})`;
+    const alertSubject = `New B2B Quote Request: ${trimmedOrg} (${trimmedRep})`;
     const alertMessage = `A new institutional quote request has been submitted:\n\nOrganization: ${trimmedOrg}\nRepresentative: ${trimmedRep}\nEmail: ${trimmedEmail}\nPhone: ${trimmedPhone}\nTimeline: ${trimmedTimeline || 'None'}\n\nRequirements:\n${trimmedRequirements}\n${cartSummaryText}\n\nSubmitted At: ${new Date().toLocaleString('en-IN')}`;
 
     emailService
@@ -137,6 +140,7 @@ export const submitB2BEnquiry = async (req: Request, res: Response, next: NextFu
         orderNumber: `B2B-${enquiry.id.slice(0, 8).toUpperCase()}`,
         subject: alertSubject,
         message: alertMessage,
+        tier: 'TEAM',
       })
       .catch((err) => logger.warn(`Failed to dispatch B2B internal alert email: ${err.message}`));
 

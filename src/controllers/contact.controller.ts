@@ -74,14 +74,17 @@ export const submitContactMessage = async (req: Request, res: Response, next: Ne
     emailService
       .sendOrderNotification({
         recipientEmail: trimmedEmail,
+        recipientName: trimmedName,
         orderNumber: trimmedOrderNumber || 'INQUIRY',
         subject: ackSubject,
         message: ackMessage,
+        tier: 'SUPPORT',
+        replyTo: 'support@technoworldbooks.in',
       })
       .catch((err) => logger.warn(`Failed to dispatch customer contact ack email: ${err.message}`));
 
     // 4. Send alert email to store support inbox
-    const supportAlertSubject = `📩 New Website Inquiry from ${trimmedName}${trimmedOrderNumber ? ` (Order #${trimmedOrderNumber})` : ''}`;
+    const supportAlertSubject = `New Website Inquiry from ${trimmedName}${trimmedOrderNumber ? ` (Order #${trimmedOrderNumber})` : ''}`;
     const supportAlertMessage = `New message received from the website contact form:\n\nName: ${trimmedName}\nEmail: ${trimmedEmail}\nOrder Number: ${trimmedOrderNumber || 'N/A'}\nIP: ${ipAddress || 'Unknown'}\nTime: ${new Date().toLocaleString('en-IN')}\n\nMessage:\n${trimmedMessage}`;
 
     emailService
@@ -90,6 +93,7 @@ export const submitContactMessage = async (req: Request, res: Response, next: Ne
         orderNumber: trimmedOrderNumber || 'INQUIRY',
         subject: supportAlertSubject,
         message: supportAlertMessage,
+        tier: 'SUPPORT',
       })
       .catch((err) => logger.warn(`Failed to dispatch admin contact alert email: ${err.message}`));
 
@@ -175,6 +179,16 @@ export const updateContactMessageStatus = async (req: Request, res: Response, ne
       where: { id },
       data: updateData,
     });
+
+    if (reply && typeof reply === 'string' && reply.trim() && updated.email) {
+      emailService.sendSupportEmail({
+        recipientEmail: updated.email,
+        recipientName: updated.name,
+        subject: `Response to your inquiry #${updated.orderNumber || updated.id.slice(0, 8)} — Techno World Books Support`,
+        message: reply.trim(),
+        orderNumber: updated.orderNumber || updated.id.slice(0, 8),
+      }).catch((e: any) => logger.warn(`Failed to send contact reply email: ${e.message}`));
+    }
 
     res.status(200).json({
       success: true,

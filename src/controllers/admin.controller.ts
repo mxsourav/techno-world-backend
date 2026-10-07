@@ -905,7 +905,7 @@ export const updateSmtpSettings = async (req: Request, res: Response, next: Next
 // POST /api/v1/admin/smtp/test
 export const testSmtpSettings = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { toEmail, host, port, user, pass, senderEmail, senderName } = req.body;
+    const { toEmail, tier, host, port, user, pass, senderEmail, senderName } = req.body;
     if (!toEmail) {
       res.status(400).json({ success: false, message: 'Recipient email address is required for testing' });
       return;
@@ -922,6 +922,7 @@ export const testSmtpSettings = async (req: Request, res: Response, next: NextFu
     }
 
     const result = await emailService.sendTestEmail(toEmail, {
+      tier,
       host,
       port: port ? Number(port) : undefined,
       user,
@@ -936,12 +937,48 @@ export const testSmtpSettings = async (req: Request, res: Response, next: NextFu
   }
 };
 
+// POST /api/v1/admin/emails/send
+export const sendManualAdminEmail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { toEmail, tier = 'ORDERS', subject, message, orderNumber, customerName, customerId, customerPhone } = req.body;
+
+    if (!toEmail || !subject || !message) {
+      res.status(400).json({ success: false, message: 'Recipient email, subject, and message are required' });
+      return;
+    }
+
+    const { emailService } = await import('../services/email.service.js');
+    const result = await emailService.sendManualEmail({
+      toEmail: toEmail.trim(),
+      tier: tier as any,
+      subject: subject.trim(),
+      message: message.trim(),
+      orderNumber: orderNumber ? String(orderNumber).trim() : undefined,
+      customerName: customerName ? String(customerName).trim() : undefined,
+      customerId: customerId ? String(customerId).trim() : undefined,
+      customerPhone: customerPhone ? String(customerPhone).trim() : undefined,
+    });
+
+    res.status(200).json({
+      success: result.success,
+      message: result.success ? `Email sent successfully via Tier ${tier}!` : `Email saved to Outbox (${result.note || 'Delivery queued'})`,
+      data: result,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to dispatch manual email' });
+  }
+};
+
 // GET /api/v1/admin/emails
 export const getEmailLogs = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const limit = Number(req.query.limit) || 50;
+    const limit = Number(req.query.limit) || 100;
+    const tier = req.query.tier ? String(req.query.tier) : undefined;
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const search = req.query.search ? String(req.query.search) : undefined;
+
     const { emailService } = await import('../services/email.service.js');
-    const logs = await emailService.getRecentEmailLogs(limit);
+    const logs = await emailService.getRecentEmailLogs({ limit, tier, status, search });
     res.status(200).json({ success: true, count: logs.length, data: logs });
   } catch (error) {
     next(error);

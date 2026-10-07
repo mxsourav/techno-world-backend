@@ -783,13 +783,13 @@ export const getAdminSettings = async (req: Request, res: Response, next: NextFu
     });
 
     let smtpConfig = {
-      senderEmail: '',
+      senderEmail: 'orders@technoworldbooks.in',
       senderName: 'Techno World Books',
-      host: 'smtp.gmail.com',
-      port: 587,
-      user: '',
+      host: 'smtp.hostinger.com',
+      port: 465,
+      user: 'orders@technoworldbooks.in',
       pass: '',
-      secure: false,
+      secure: true,
     };
 
     if (smtpSetting?.value) {
@@ -877,13 +877,13 @@ export const updateSmtpSettings = async (req: Request, res: Response, next: Next
     const finalPass = (pass && pass !== '••••••••••••••••') ? pass.trim() : existingPass;
 
     const configToSave = {
-      senderEmail: (senderEmail || '').trim(),
+      senderEmail: (senderEmail || 'orders@technoworldbooks.in').trim(),
       senderName: (senderName || 'Techno World Books').trim(),
-      host: (host || 'smtp.gmail.com').trim(),
-      port: Number(port) || 587,
-      user: (user || '').trim(),
+      host: (host || 'smtp.hostinger.com').trim(),
+      port: Number(port) || 465,
+      user: (user || 'orders@technoworldbooks.in').trim(),
       pass: finalPass,
-      secure: Boolean(secure),
+      secure: secure !== undefined ? Boolean(secure) : (Number(port) === 465),
     };
 
     await prisma.systemSetting.upsert({

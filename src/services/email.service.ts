@@ -123,71 +123,188 @@ export class EmailService {
     };
   }
 
-  public generateBrandedHeader(subtitle = 'Official Customer Communications'): string {
-    const logoUrl = 'https://res.cloudinary.com/tcsmyxe2/image/upload/v1789254075/techno_world_white_logo.png';
-    const logoImg = `<img src="${logoUrl}" alt="Techno World Books" width="56" height="56" style="height: 56px; width: 56px; margin: 0 auto 10px; display: block; border: 0; outline: none; text-decoration: none;" />`;
+  public wrapInDocument(title: string, contentHtml: string, subtitle = 'Official Order Communication'): string {
+    return `<!DOCTYPE html>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>${title}</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style>
+    /* Dark mode overrides for clients that support it */
+    @media (prefers-color-scheme: dark) {
+      body, table, td { background-color: #121212 !important; color: #E4E4E7 !important; }
+      .email-bg { background-color: #121212 !important; }
+      .card { background-color: #1E1E1E !important; border-color: #333333 !important; }
+      .text-muted { color: #A1A1AA !important; }
+      .text-primary { color: #F4F4F5 !important; }
+      .footer-note { background-color: #000000 !important; color: #FFFFFF !important; }
+      .sub-badge { background-color: #27272A !important; border-color: #3F3F46 !important; color: #E4E4E7 !important; }
+      .item-row { border-color: #27272A !important; }
+      .order-table-head { background-color: #262626 !important; border-color: #333333 !important; color: #A1A1AA !important; }
+      .order-table-totals { background-color: #1E1E1E !important; border-color: #333333 !important; }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F9F8F6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%;">
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="email-bg" style="background-color: #F9F8F6; padding: 32px 12px; margin: 0;">
+    <tr>
+      <td align="center" style="padding: 0;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; margin: 0 auto;">
+          ${this.generateBrandedHeader(subtitle)}
+          <tr>
+            <td style="padding: 0;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="card" style="background-color: #FFFFFF; border: 1px solid #EAE8E2; border-radius: 8px; border-collapse: separate; overflow: hidden;">
+                <tr>
+                  <td style="padding: 28px 24px; text-align: left;">
+                    ${contentHtml}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          ${this.generateBrandedFooter()}
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+  }
 
+  public renderStatusPill(statusText: string, bg = '#E0EEFF', color = '#104E9F'): string {
     return `
-      <div style="background: linear-gradient(135deg, #042419 0%, #064e3b 50%, #047857 100%); padding: 24px 20px; border-radius: 14px; text-align: center; color: #ffffff;">
-        ${logoImg}
-        <h1 style="margin: 0; font-size: 21px; font-weight: 800; letter-spacing: -0.3px; color: #ffffff;">Techno World Books</h1>
-        <p style="margin: 4px 0 0; font-size: 12px; color: #a7f3d0; font-weight: 500;">${subtitle}</p>
-      </div>
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 0 18px 0;">
+        <tr>
+          <td style="background-color: ${bg}; color: ${color}; padding: 4px 14px; border-radius: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 600; line-height: 1.4; text-align: left;">
+            ${statusText}
+          </td>
+        </tr>
+      </table>
+    `;
+  }
+
+  public generateBrandedHeader(subtitle = 'Official Order Communication'): string {
+    return `
+      <tr>
+        <td align="center" style="padding: 0 0 20px 0;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+            <tr>
+              <td align="center" valign="middle" style="width: 52px; height: 52px; background-color: #14432B; border-radius: 50%; color: #FFFFFF; font-family: 'Georgia', 'Times New Roman', serif; font-size: 20px; font-weight: bold; letter-spacing: 1px; text-align: center; line-height: 52px;">
+                TW
+              </td>
+            </tr>
+          </table>
+          <div style="height: 12px; line-height: 12px; font-size: 12px;">&nbsp;</div>
+          <div class="text-primary" style="font-family: 'Georgia', 'Times New Roman', serif; font-size: 18px; font-weight: 700; color: #262524; letter-spacing: 1px; text-transform: uppercase; text-align: center;">
+            TECHNO WORLD BOOKS
+          </div>
+          <div style="height: 8px; line-height: 8px; font-size: 8px;">&nbsp;</div>
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+            <tr>
+              <td class="sub-badge" style="background-color: #F2F0E9; border: 1px solid #EAE8E2; border-radius: 12px; padding: 4px 14px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 600; color: #6E6D68; text-transform: uppercase; letter-spacing: 0.5px; text-align: center;">
+                ${subtitle}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
     `;
   }
 
   public generateBrandedFooter(): string {
     return `
-      <div style="border-top: 1px solid #e2e8f0; margin-top: 24px; padding-top: 18px; font-size: 12px; color: #64748b; text-align: center; line-height: 1.6;">
-        <p style="margin: 0 0 6px; font-weight: 600; color: #334155;">
-          Techno World Books &bull; College Street, Kolkata &bull; Delivering Across India
-        </p>
-        <p style="margin: 0; font-size: 11px;">
-          Office: 90/6A, Mahatma Gandhi Rd, College Street, Kolkata, WB 700007<br/>
-          Direct Phone: <a href="tel:+917479135626" style="color: #047857; text-decoration: none; font-weight: 600;">+91 747 913 5626</a> &bull; 
-          WhatsApp Support: <a href="https://wa.me/917479135626" style="color: #047857; text-decoration: none; font-weight: 600;">Chat on WhatsApp</a>
-        </p>
-        <div style="margin-top: 12px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 11px; color: #475569; display: inline-block; max-width: 90%; text-align: center;">
-          <strong style="color: #0f172a;">&#9888; Automated Notification &bull; Do Not Reply:</strong><br/>
-          This is an automated system email from an unmonitored mailbox. Direct replies cannot be received or answered. For inquiries or assistance, message us on WhatsApp or reach out to <a href="mailto:support@technoworldbooks.in" style="color: #047857; font-weight: 600; text-decoration: none;">support@technoworldbooks.in</a>.
-        </div>
-        <p style="margin: 10px 0 0; font-size: 10.5px; color: #94a3b8;">
-          You received this email because you placed an order or requested updates on <a href="https://technoworldbooks.in" style="color: #64748b; text-decoration: underline;">technoworldbooks.in</a>.
-        </p>
-      </div>
+      <tr>
+        <td align="center" style="padding: 24px 10px 8px 10px;">
+          <p class="text-muted" style="margin: 0 0 6px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 13px; font-weight: 600; color: #262524;">
+            Techno World Books &bull; College Street, Kolkata &bull; Delivering Across India
+          </p>
+          <p class="text-muted" style="margin: 0 0 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; color: #6E6D68; line-height: 1.6;">
+            Office: 90/6A, Mahatma Gandhi Rd, College Street, Kolkata, WB 700007<br/>
+            Direct Phone: <a href="tel:+917479135626" style="color: #14432B; text-decoration: none; font-weight: 600;">+91 747 913 5626</a> &bull; 
+            WhatsApp Support: <a href="https://wa.me/917479135626" style="color: #14432B; text-decoration: none; font-weight: 600;">Chat on WhatsApp</a>
+          </p>
+
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto; max-width: 500px;">
+            <tr>
+              <td class="footer-note" style="background-color: #18181B; color: #FFFFFF; border-radius: 8px; padding: 12px 18px; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; line-height: 1.5;">
+                <div style="font-weight: 700; letter-spacing: 0.3px; margin-bottom: 3px; color: #FFFFFF;">
+                  &#9888; Automated Notification &bull; Do Not Reply
+                </div>
+                <div style="color: #D4D4D8; font-size: 10.5px;">
+                  This is an automated system email from an unmonitored mailbox. Direct replies cannot be received. For support, write to <a href="mailto:support@technoworldbooks.in" style="color: #86EFAC; text-decoration: none; font-weight: 600;">support@technoworldbooks.in</a>.
+                </div>
+              </td>
+            </tr>
+          </table>
+
+          <p class="text-muted" style="margin: 14px 0 0 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 10.5px; color: #A1A1AA;">
+            You received this email because you placed an order or requested updates on <a href="https://technoworldbooks.in" style="color: #6E6D68; text-decoration: underline;">technoworldbooks.in</a>.
+          </p>
+        </td>
+      </tr>
     `;
   }
 
   public generateBrandedHtml(title: string, message: string, orderNumber?: string, totalAmount?: number): string {
-    return `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff; color: #1e293b;">
-        ${this.generateBrandedHeader('Official Order Communications')}
-        
-        <div style="padding: 24px 8px 8px; font-size: 14px; line-height: 1.6;">
-          <h2 style="margin-top: 0; font-size: 17px; font-weight: 700; color: #0f172a;">${title}</h2>
-          <div style="color: #334155; margin-top: 12px;">
-            ${message.replace(/\n/g, '<br/>')}
-          </div>
+    const isTestEmail = title.includes('Test') || message.includes('verification test');
+    const statusPill = isTestEmail
+      ? this.renderStatusPill('Status: System Verified & Active', '#DEF7EC', '#03543F')
+      : '';
 
-          ${orderNumber ? `
-            <div style="margin-top: 20px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; font-size: 13px;">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <span style="color: #64748b;">Order Reference:</span>
-                <span style="font-weight: 700; color: #0f172a;">#${orderNumber}</span>
-              </div>
+    const orderBox = orderNumber ? `
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="card" style="background-color: #FFFFFF; border: 1px solid #EAE8E2; border-radius: 8px; margin: 20px 0; overflow: hidden;">
+        <tr>
+          <td style="padding: 14px 18px; background-color: #FAF9F5; border-bottom: 1px solid #EAE8E2;">
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td class="text-muted" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #6E6D68;">
+                  Order Reference:
+                </td>
+                <td align="right" class="text-primary" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 700; color: #262524;">
+                  #${orderNumber}
+                </td>
+              </tr>
               ${totalAmount !== undefined ? `
-                <div style="display: flex; justify-content: space-between;">
-                  <span style="color: #64748b;">Total Amount:</span>
-                  <span style="font-weight: 800; color: #047857;">₹${Number(totalAmount).toFixed(2)}</span>
-                </div>
+                <tr>
+                  <td class="text-muted" style="padding-top: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #6E6D68;">
+                    Total Amount:
+                  </td>
+                  <td align="right" style="padding-top: 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 800; color: #14432B;">
+                    ₹${Number(totalAmount).toFixed(2)}
+                  </td>
+                </tr>
               ` : ''}
-            </div>
-          ` : ''}
-        </div>
+            </table>
+          </td>
+        </tr>
+      </table>
+    ` : '';
 
-        ${this.generateBrandedFooter()}
+    const content = `
+      <h1 class="text-primary" style="margin: 0 0 14px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 22px; font-weight: 700; color: #262524; line-height: 1.35;">
+        ${title}
+      </h1>
+      ${statusPill}
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.55; color: #262524; text-align: left;">
+        ${message.replace(/\n/g, '<br/>')}
       </div>
+      ${orderBox}
     `;
+
+    return this.wrapInDocument(title, content, orderNumber ? `Order #${orderNumber}` : 'Official Order Communication');
   }
 
   public generateLifecycleEmailHtml(params: {
@@ -228,51 +345,80 @@ export class EmailService {
 
     const itemsHtml = items.length > 0
       ? `
-        <div style="margin: 20px 0; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
-          <div style="background: #f8fafc; padding: 10px 14px; font-size: 11.5px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between;">
-            <span>Ordered Item(s)</span>
-            <span>Qty &bull; Price</span>
-          </div>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="card" style="background-color: #FFFFFF; border: 1px solid #EAE8E2; border-radius: 8px; margin: 22px 0; border-collapse: separate; overflow: hidden;">
+          <tr>
+            <td colspan="3" class="order-table-head" style="background-color: #FAF9F5; padding: 10px 16px; border-bottom: 1px solid #EAE8E2; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 700; color: #6E6D68; text-transform: uppercase; letter-spacing: 0.5px;">
+              Order Items &bull; #${orderNumber}
+            </td>
+          </tr>
           ${items.map((it, idx) => `
-            <div style="padding: 12px 14px; border-bottom: ${idx === items.length - 1 ? 'none' : '1px solid #f1f5f9'}; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
-              <div>
-                <p style="margin: 0; font-size: 13px; font-weight: 700; color: #0f172a; line-height: 1.4;">${it.title}</p>
-                ${it.sku ? `<p style="margin: 3px 0 0; font-size: 11px; color: #64748b;">SKU / Code: <b>${it.sku}</b></p>` : ''}
-              </div>
-              <div style="text-align: right; shrink-0; font-size: 12.5px; font-weight: 600; color: #334155; white-space: nowrap;">
+            <tr class="item-row">
+              <td width="58" valign="top" style="padding: 14px 10px 14px 16px; border-bottom: ${idx === items.length - 1 ? '1px solid #EAE8E2' : '1px solid #F2F0E9'};">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="46" style="background-color: #F2F0E9; border-radius: 4px; border: 1px solid #EAE8E2; text-align: center;">
+                  <tr>
+                    <td height="54" align="center" valign="middle" style="font-family: 'Georgia', serif; font-size: 20px; color: #14432B; line-height: 54px;">
+                      📖
+                    </td>
+                  </tr>
+                </table>
+              </td>
+              <td valign="top" style="padding: 14px 12px; border-bottom: ${idx === items.length - 1 ? '1px solid #EAE8E2' : '1px solid #F2F0E9'};">
+                <div class="text-primary" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 700; color: #262524; line-height: 1.4;">
+                  ${it.title}
+                </div>
+                ${it.sku ? `
+                  <div class="text-muted" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; color: #6E6D68; margin-top: 3px;">
+                    SKU: ${it.sku}
+                  </div>
+                ` : ''}
+              </td>
+              <td valign="top" align="right" style="padding: 14px 16px 14px 12px; border-bottom: ${idx === items.length - 1 ? '1px solid #EAE8E2' : '1px solid #F2F0E9'}; white-space: nowrap; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; color: #262524;">
                 ${it.quantity} &times; ₹${it.price.toFixed(2)}
-              </div>
-            </div>
+              </td>
+            </tr>
           `).join('')}
           
-          <div style="background: #fafafa; padding: 12px 14px; border-top: 1px solid #e2e8f0; font-size: 12px;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 3px; color: #64748b;">
-              <span>Subtotal:</span>
-              <span>₹${subtotal.toFixed(2)}</span>
-            </div>
-            ${shippingCharge > 0 ? `
-              <div style="display: flex; justify-content: space-between; margin-bottom: 3px; color: #64748b;">
-                <span>Delivery:</span>
-                <span>₹${shippingCharge.toFixed(2)}</span>
-              </div>
-            ` : `
-              <div style="display: flex; justify-content: space-between; margin-bottom: 3px; color: #047857; font-weight: 600;">
-                <span>Delivery:</span>
-                <span>FREE</span>
-              </div>
-            `}
-            ${discountAmount > 0 ? `
-              <div style="display: flex; justify-content: space-between; margin-bottom: 3px; color: #047857; font-weight: 600;">
-                <span>Discounts & Rewards:</span>
-                <span>-₹${discountAmount.toFixed(2)}</span>
-              </div>
-            ` : ''}
-            <div style="display: flex; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0; font-size: 14px; font-weight: 800; color: #0f172a;">
-              <span>Total Paid / Payable:</span>
-              <span style="color: #047857;">₹${totalAmount.toFixed(2)}</span>
-            </div>
-          </div>
-        </div>
+          <tr>
+            <td colspan="3" class="order-table-totals" style="padding: 16px; background-color: #FAF9F5;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td class="text-muted" style="padding: 3px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #6E6D68;">
+                    Subtotal:
+                  </td>
+                  <td align="right" class="text-muted" style="padding: 3px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #6E6D68;">
+                    ₹${subtotal.toFixed(2)}
+                  </td>
+                </tr>
+                <tr>
+                  <td class="text-muted" style="padding: 3px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #6E6D68;">
+                    Delivery:
+                  </td>
+                  <td align="right" style="padding: 3px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: ${shippingCharge > 0 ? '#6E6D68' : '#14432B'}; font-weight: ${shippingCharge > 0 ? 'normal' : '600'};">
+                    ${shippingCharge > 0 ? `₹${shippingCharge.toFixed(2)}` : 'FREE'}
+                  </td>
+                </tr>
+                ${discountAmount > 0 ? `
+                  <tr>
+                    <td style="padding: 3px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #14432B; font-weight: 600;">
+                      Discounts & Rewards:
+                    </td>
+                    <td align="right" style="padding: 3px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #14432B; font-weight: 600;">
+                      -₹${discountAmount.toFixed(2)}
+                    </td>
+                  </tr>
+                ` : ''}
+                <tr>
+                  <td style="padding-top: 8px; border-top: 1px solid #EAE8E2; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; font-weight: 800; color: #262524;">
+                    Total Paid / Payable:
+                  </td>
+                  <td align="right" style="padding-top: 8px; border-top: 1px solid #EAE8E2; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15px; font-weight: 800; color: #14432B;">
+                    ₹${totalAmount.toFixed(2)}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
       `
       : '';
 
@@ -287,20 +433,16 @@ export class EmailService {
         subject = `Order Confirmed: #${orderNumber} — Techno World Books`;
         headline = `Thank you for your order, ${safeName}!`;
         messageBody = `
-          <p style="margin: 0 0 12px; color: #334155; line-height: 1.6;">
+          <p style="margin: 0 0 12px; color: #262524; line-height: 1.6;">
             We have received your order <b>#${orderNumber}</b> and it is confirmed. Our team at College Street has initiated procurement and stock verification.
           </p>
-          ${paymentMethod ? `<p style="margin: 0 0 8px; font-size: 12.5px; color: #64748b;">Payment Method: <b>${paymentMethod}</b></p>` : ''}
-          ${deliveryAddress ? `<p style="margin: 0 0 8px; font-size: 12.5px; color: #64748b;">Shipping to: <b>${deliveryAddress}</b></p>` : ''}
-          <p style="margin: 12px 0 0; color: #334155; line-height: 1.6;">
+          ${paymentMethod ? `<p class="text-muted" style="margin: 0 0 8px; font-size: 12.5px; color: #6E6D68;">Payment Method: <b style="color: #262524;">${paymentMethod}</b></p>` : ''}
+          ${deliveryAddress ? `<p class="text-muted" style="margin: 0 0 8px; font-size: 12.5px; color: #6E6D68;">Shipping to: <b style="color: #262524;">${deliveryAddress}</b></p>` : ''}
+          <p style="margin: 12px 0 0; color: #262524; line-height: 1.6;">
             You will receive another update as soon as your package moves to our packing and dispatch counter.
           </p>
         `;
-        actionBadge = `
-          <div style="background: #ecfdf5; border-left: 4px solid #059669; padding: 12px 16px; border-radius: 6px; margin: 16px 0; font-size: 13px; color: #065f46;">
-            <b>Status:</b> Order Confirmed &bull; Preparing for Packing
-          </div>
-        `;
+        actionBadge = this.renderStatusPill('Status: Order Confirmed &bull; Preparing for Packing', '#E6F4EA', '#137333');
         plainTextMessage = `Hello ${safeName},\n\nYour order #${orderNumber} has been received and confirmed. Total: ₹${totalAmount.toFixed(2)}.\nOur College Street team is preparing your books.`;
         break;
 
@@ -308,21 +450,17 @@ export class EmailService {
         subject = `Packing in Progress: Order #${orderNumber} — Techno World Books`;
         headline = `We are packing your books, ${safeName}`;
         messageBody = `
-          <p style="margin: 0 0 12px; color: #334155; line-height: 1.6;">
+          <p style="margin: 0 0 12px; color: #262524; line-height: 1.6;">
             Your order <b>#${orderNumber}</b> is currently being packed at our College Street dispatch desk.
           </p>
-          <p style="margin: 0 0 12px; color: #334155; line-height: 1.6;">
+          <p style="margin: 0 0 12px; color: #262524; line-height: 1.6;">
             Each book is inspected for physical condition and carefully wrapped to protect corners and binding during transit.
           </p>
-          <p style="margin: 0; color: #334155; line-height: 1.6;">
+          <p style="margin: 0; color: #262524; line-height: 1.6;">
             Once handed over for delivery, we will send your consignment tracking number.
           </p>
         `;
-        actionBadge = `
-          <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 6px; margin: 16px 0; font-size: 13px; color: #1e40af;">
-            <b>Status:</b> Packing & Inspection &bull; Preparing Consignment
-          </div>
-        `;
+        actionBadge = this.renderStatusPill('Status: Packing & Inspection', '#E0EEFF', '#104E9F');
         plainTextMessage = `Hello ${safeName},\n\nOrder #${orderNumber} is now being packed at our dispatch counter.`;
         break;
 
@@ -330,40 +468,48 @@ export class EmailService {
         subject = `Dispatched: Order #${orderNumber} is on its way! — Techno World Books`;
         headline = `Your books are on the way, ${safeName}!`;
         messageBody = `
-          <p style="margin: 0 0 12px; color: #334155; line-height: 1.6;">
+          <p style="margin: 0 0 12px; color: #262524; line-height: 1.6;">
             Great news! Order <b>#${orderNumber}</b> has been handed over for delivery.
           </p>
           ${trackingNumber ? `
-            <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 10px; padding: 14px 16px; margin: 16px 0;">
-              <span style="font-size: 11px; font-weight: 700; color: #15803d; text-transform: uppercase; letter-spacing: 0.5px;">Consignment Details</span>
-              <p style="margin: 4px 0 0; font-size: 16px; font-weight: 800; color: #0f172a; font-family: monospace;">
-                Tracking No: ${trackingNumber}
-              </p>
-              <p style="margin: 4px 0 0; font-size: 12px; color: #334155;">
-                Carrier: <b>India Post / Postal Network</b> &bull; Service: <b>${shippingMethod || 'Standard Post'}</b>
-              </p>
-              <div style="margin-top: 10px;">
-                <a href="https://www.indiapost.gov.in/_layouts/15/DOP.Portal.Tracking/TrackConsignment.aspx" target="_blank" style="display: inline-block; background: #047857; color: #ffffff; text-decoration: none; padding: 7px 14px; border-radius: 6px; font-size: 12px; font-weight: 700;">
-                  Track on India Post Portal &rarr;
-                </a>
-              </div>
-            </div>
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="card" style="background-color: #FFFFFF; border: 1px solid #EAE8E2; border-radius: 8px; margin: 18px 0; overflow: hidden;">
+              <tr>
+                <td style="padding: 16px 18px; background-color: #FAF9F5; border-bottom: 1px solid #EAE8E2;">
+                  <span style="font-size: 11px; font-weight: 700; color: #14432B; text-transform: uppercase; letter-spacing: 0.5px;">Consignment Details</span>
+                  <p class="text-primary" style="margin: 6px 0 0; font-size: 16px; font-weight: 700; color: #262524; font-family: monospace;">
+                    Tracking No: ${trackingNumber}
+                  </p>
+                  <p class="text-muted" style="margin: 4px 0 0; font-size: 12px; color: #6E6D68;">
+                    Carrier: <b>India Post / Postal Network</b> &bull; Service: <b>${shippingMethod || 'Standard Post'}</b>
+                  </p>
+                  <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin-top: 12px;">
+                    <tr>
+                      <td align="center" style="background-color: #14432B; border-radius: 6px;">
+                        <a href="https://www.indiapost.gov.in/_layouts/15/DOP.Portal.Tracking/TrackConsignment.aspx" target="_blank" style="display: inline-block; padding: 8px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 700; color: #FFFFFF; text-decoration: none;">
+                          Track on India Post Portal &rarr;
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
           ` : `
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; margin: 14px 0; font-size: 12.5px; color: #475569;">
-              Dispatched via postal service. Tracking details will update once scanned by the transit hub.
-            </div>
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="card" style="background-color: #FAF9F5; border: 1px solid #EAE8E2; border-radius: 8px; margin: 14px 0;">
+              <tr>
+                <td class="text-muted" style="padding: 12px 14px; font-size: 12.5px; color: #6E6D68;">
+                  Dispatched via postal service. Tracking details will update once scanned by the transit hub.
+                </td>
+              </tr>
+            </table>
           `}
           ${hasInvoiceAttachment ? `
-            <p style="margin: 12px 0 0; font-size: 12px; color: #64748b;">
+            <p class="text-muted" style="margin: 12px 0 0; font-size: 12px; color: #6E6D68;">
               &bull; <i>Official Tax Invoice (PDF) is attached to this email for your records.</i>
             </p>
           ` : ''}
         `;
-        actionBadge = `
-          <div style="background: #faf5ff; border-left: 4px solid #a855f7; padding: 12px 16px; border-radius: 6px; margin: 16px 0; font-size: 13px; color: #6b21a8;">
-            <b>Status:</b> Dispatched &bull; In Transit
-          </div>
-        `;
+        actionBadge = this.renderStatusPill('Status: Dispatched &bull; In Transit', '#F3E8FF', '#6B21A8');
         plainTextMessage = `Hello ${safeName},\n\nOrder #${orderNumber} has been dispatched.${trackingNumber ? ` Tracking Number: ${trackingNumber}` : ''}`;
         break;
 
@@ -371,40 +517,50 @@ export class EmailService {
         subject = `Delivered: Order #${orderNumber} — Enjoy your reading!`;
         headline = `Package Delivered, ${safeName}!`;
         messageBody = `
-          <p style="margin: 0 0 12px; color: #334155; line-height: 1.6;">
+          <p style="margin: 0 0 12px; color: #262524; line-height: 1.6;">
             Our records indicate that your package for order <b>#${orderNumber}</b> has been delivered. We hope the books reached you in excellent condition!
           </p>
 
-          <div style="background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 12px; padding: 16px; margin: 18px 0; text-align: center;">
-            <p style="margin: 0 0 6px; font-size: 15px; font-weight: 800; color: #065f46;">
-              &starf;&starf;&starf;&starf;&starf; How was your book delivery experience?
-            </p>
-            <p style="margin: 0 0 12px; font-size: 12px; color: #047857; line-height: 1.5;">
-              As an independent academic bookstore, your honest review helps fellow students and readers discover genuine editions.
-            </p>
-            <a href="https://maps.google.com/?q=Techno+World+Books+College+Street+Kolkata" target="_blank" style="display: inline-block; background: #047857; color: #ffffff; text-decoration: none; padding: 9px 18px; border-radius: 8px; font-size: 12.5px; font-weight: 700;">
-              Leave a Google Review &rarr;
-            </a>
-          </div>
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="card" style="background-color: #FAF9F5; border: 1px solid #EAE8E2; border-radius: 8px; margin: 18px 0; overflow: hidden; text-align: center;">
+            <tr>
+              <td style="padding: 18px; text-align: center;">
+                <p style="margin: 0 0 6px; font-family: 'Georgia', 'Times New Roman', serif; font-size: 15px; font-weight: 700; color: #14432B;">
+                  &starf;&starf;&starf;&starf;&starf; How was your book delivery experience?
+                </p>
+                <p class="text-muted" style="margin: 0 0 14px; font-size: 12px; color: #6E6D68; line-height: 1.5;">
+                  As an independent academic bookstore, your honest review helps fellow students and readers discover genuine editions.
+                </p>
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                  <tr>
+                    <td align="center" style="background-color: #14432B; border-radius: 6px;">
+                      <a href="https://maps.google.com/?q=Techno+World+Books+College+Street+Kolkata" target="_blank" style="display: inline-block; padding: 8px 18px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 700; color: #FFFFFF; text-decoration: none;">
+                        Leave a Google Review &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
 
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin: 16px 0;">
-            <h4 style="margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #0f172a;">Any concern with your parcel?</h4>
-            <p style="margin: 0; font-size: 12px; color: #475569; line-height: 1.5;">
-              If any title arrived damaged, missing, or requires assistance, please message our support desk immediately via WhatsApp at <b>+91 747 913 5626</b> with your order reference. We are committed to making it right.
-            </p>
-          </div>
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="card" style="background-color: #FFFFFF; border: 1px solid #EAE8E2; border-radius: 8px; margin: 16px 0;">
+            <tr>
+              <td style="padding: 14px 16px;">
+                <h4 class="text-primary" style="margin: 0 0 6px; font-family: 'Georgia', serif; font-size: 13px; font-weight: 700; color: #262524;">Any concern with your parcel?</h4>
+                <p class="text-muted" style="margin: 0; font-size: 12px; color: #6E6D68; line-height: 1.5;">
+                  If any title arrived damaged, missing, or requires assistance, please message our support desk immediately via WhatsApp at <b>+91 747 913 5626</b> with your order reference. We are committed to making it right.
+                </p>
+              </td>
+            </tr>
+          </table>
 
           ${hasInvoiceAttachment ? `
-            <p style="margin: 12px 0 0; font-size: 12px; color: #64748b;">
+            <p class="text-muted" style="margin: 12px 0 0; font-size: 12px; color: #6E6D68;">
               &bull; <i>Final Tax Invoice (PDF) is attached to this email.</i>
             </p>
           ` : ''}
         `;
-        actionBadge = `
-          <div style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 12px 16px; border-radius: 6px; margin: 16px 0; font-size: 13px; color: #166534;">
-            <b>Status:</b> Successfully Delivered
-          </div>
-        `;
+        actionBadge = this.renderStatusPill('Status: Successfully Delivered', '#DEF7EC', '#03543F');
         plainTextMessage = `Hello ${safeName},\n\nOrder #${orderNumber} has been delivered. If you have any questions or concerns, reach our desk on WhatsApp: +91 747 913 5626.`;
         break;
 
@@ -412,24 +568,24 @@ export class EmailService {
         subject = `Order Cancellation Notice: #${orderNumber} — Techno World Books`;
         headline = `Notice regarding Order #${orderNumber}`;
         messageBody = `
-          <p style="margin: 0 0 12px; color: #334155; line-height: 1.6;">
+          <p style="margin: 0 0 12px; color: #262524; line-height: 1.6;">
             Dear ${safeName}, we are writing to inform you that order <b>#${orderNumber}</b> has been cancelled.
           </p>
-          <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 12px 14px; margin: 14px 0; font-size: 12.5px; color: #991b1b;">
-            <b>Reason:</b> ${cancelReason || 'Fulfillment unavailable from publisher stock at this time.'}
-          </div>
-          <p style="margin: 0 0 12px; color: #334155; line-height: 1.6;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; margin: 14px 0;">
+            <tr>
+              <td style="padding: 12px 14px; font-size: 12.5px; color: #991B1B;">
+                <b>Reason:</b> ${cancelReason || 'Fulfillment unavailable from publisher stock at this time.'}
+              </td>
+            </tr>
+          </table>
+          <p style="margin: 0 0 12px; color: #262524; line-height: 1.6;">
             <b>Refund Policy:</b> If any online payment was deducted, a 100% full refund has been initiated to your original payment method. Depending on your bank or UPI provider, the credited amount reflects in 3–5 business days. Any Techno Points or TechnoWallet balance used has been restored to your account.
           </p>
-          <p style="margin: 0; color: #334155; line-height: 1.6;">
+          <p style="margin: 0; color: #262524; line-height: 1.6;">
             If you have any questions or feel this was in error, please contact our team directly on WhatsApp: <b>+91 747 913 5626</b>.
           </p>
         `;
-        actionBadge = `
-          <div style="background: #fff1f2; border-left: 4px solid #f43f5e; padding: 12px 16px; border-radius: 6px; margin: 16px 0; font-size: 13px; color: #9f1239;">
-            <b>Status:</b> Cancelled &bull; Refund Initiated
-          </div>
-        `;
+        actionBadge = this.renderStatusPill('Status: Cancelled &bull; Refund Initiated', '#FDE8E8', '#9B1C1C');
         plainTextMessage = `Hello ${safeName},\n\nOrder #${orderNumber} was cancelled. Reason: ${cancelReason || 'Fulfillment unavailable'}. Any deducted payment will be refunded in 3-5 business days.`;
         break;
 
@@ -437,39 +593,33 @@ export class EmailService {
         subject = `Order Received: #${orderNumber} (Pending Review) — Techno World Books`;
         headline = `We have received your order, ${safeName}`;
         messageBody = `
-          <p style="margin: 0 0 12px; color: #334155; line-height: 1.6;">
+          <p style="margin: 0 0 12px; color: #262524; line-height: 1.6;">
             Thank you for shopping with Techno World Books! Your order <b>#${orderNumber}</b> has been received and placed in our verification queue.
           </p>
-          <p style="margin: 0 0 12px; color: #334155; line-height: 1.6;">
+          <p style="margin: 0 0 12px; color: #262524; line-height: 1.6;">
             Our store managers review edition availability and dispatch schedules before confirming. You will receive an email confirmation as soon as your order is approved.
           </p>
         `;
-        actionBadge = `
-          <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; margin: 16px 0; font-size: 13px; color: #92400e;">
-            <b>Status:</b> Awaiting Store Confirmation
-          </div>
-        `;
+        actionBadge = this.renderStatusPill('Status: Awaiting Store Confirmation', '#FEF3C7', '#92400E');
         plainTextMessage = `Hello ${safeName},\n\nOrder #${orderNumber} has been received and is pending store confirmation.`;
         break;
     }
 
-    const html = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff; color: #1e293b;">
-        ${this.generateBrandedHeader(`Order #${orderNumber}`)}
-        
-        <div style="padding: 20px 6px 6px; font-size: 14px;">
-          <h2 style="margin: 0 0 10px; font-size: 17px; font-weight: 800; color: #0f172a;">${headline}</h2>
-          
-          ${actionBadge}
-          
-          ${messageBody}
-          
-          ${itemsHtml}
-        </div>
-
-        ${this.generateBrandedFooter()}
+    const contentHtml = `
+      <h1 class="text-primary" style="margin: 0 0 14px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 22px; font-weight: 700; color: #262524; line-height: 1.35;">
+        ${headline}
+      </h1>
+      
+      ${actionBadge}
+      
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #262524; text-align: left;">
+        ${messageBody}
       </div>
+      
+      ${itemsHtml}
     `;
+
+    const html = this.wrapInDocument(subject, contentHtml, `Order #${orderNumber}`);
 
     return { subject, html, text: plainTextMessage };
   }
@@ -481,62 +631,76 @@ export class EmailService {
 
     const refundBadgeHtml = params.refundAmount > 0
       ? `
-        <div style="margin: 20px 0; background: #ecfdf5; border: 2px solid #059669; border-radius: 12px; padding: 18px; text-align: center;">
-          <span style="font-size: 12px; font-weight: 800; color: #047857; text-transform: uppercase; letter-spacing: 0.5px;">TechnoWallet Instant Refund</span>
-          <div style="font-size: 28px; font-weight: 900; color: #065f46; margin: 6px 0;">+₹${params.refundAmount.toFixed(2)}</div>
-          <div style="font-size: 13px; font-weight: 700; color: #0f172a;">Refund of Delivery Charge for Order #${params.childOrderNumber}</div>
-          <div style="font-size: 12px; color: #334155; margin-top: 4px;">Updated TechnoWallet Balance: <b>₹${params.newWalletBalance.toFixed(2)}</b></div>
-        </div>
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 20px;">
-          <h4 style="margin: 0 0 6px; font-size: 12.5px; font-weight: 800; color: #0f172a;">
-            Why Your TechnoWallet Balance is 100% Cash-Equivalent:
-          </h4>
-          <ul style="margin: 0; padding-left: 20px; font-size: 12px; color: #475569; line-height: 1.6;">
-            <li><b>No Expiry Date:</b> Unlike promotional coins, your TechnoWallet balance never expires.</li>
-            <li><b>Zero Restrictions:</b> Usable on any academic, medical, engineering, or competitive book.</li>
-            <li><b>100% Usable:</b> You can use your entire balance toward any future purchase.</li>
-          </ul>
-        </div>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F2F9F5; border: 1px solid #B8E0CB; border-radius: 6px; margin: 0 0 16px 0;">
+          <tr>
+            <td align="center" style="padding: 18px 14px; text-align: center;">
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 700; color: #14432B; text-transform: uppercase; letter-spacing: 0.5px;">TechnoWallet Instant Refund</div>
+              <div style="font-family: 'Georgia', 'Times New Roman', serif; font-size: 28px; font-weight: 700; color: #14432B; margin: 6px 0;">+₹${params.refundAmount.toFixed(2)}</div>
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; color: #262524;">Refund of Delivery Charge for Order #${params.childOrderNumber}</div>
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #6E6D68; margin-top: 4px;">Updated TechnoWallet Balance: <strong style="color: #262524;">₹${params.newWalletBalance.toFixed(2)}</strong></div>
+            </td>
+          </tr>
+        </table>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F9F8F6; border: 1px solid #EAE8E2; border-radius: 6px; margin: 0 0 16px 0;">
+          <tr>
+            <td style="padding: 14px 16px;">
+              <div style="font-family: 'Georgia', 'Times New Roman', serif; font-size: 13px; font-weight: 700; color: #262524; margin-bottom: 6px;">Why Your TechnoWallet Balance is 100% Cash-Equivalent:</div>
+              <ul style="margin: 0; padding-left: 18px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #6E6D68; line-height: 1.6;">
+                <li><strong style="color: #262524;">No Expiry Date:</strong> Unlike promotional coins, your TechnoWallet balance never expires.</li>
+                <li><strong style="color: #262524;">Zero Restrictions:</strong> Usable on any academic, medical, engineering, or competitive book.</li>
+                <li><strong style="color: #262524;">100% Usable:</strong> You can use your entire balance toward any future purchase.</li>
+              </ul>
+            </td>
+          </tr>
+        </table>
       `
       : `
-        <div style="margin: 20px 0; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 14px; text-align: center; color: #166534; font-size: 13px; font-weight: 700;">
-          Both orders have been combined into a single parcel for united dispatch at zero extra delivery charge.
-        </div>
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F2F9F5; border: 1px solid #B8E0CB; border-radius: 6px; margin: 0 0 16px 0;">
+          <tr>
+            <td align="center" style="padding: 14px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; color: #14432B; text-align: center;">
+              Both orders have been combined into a single parcel for united dispatch at zero extra delivery charge.
+            </td>
+          </tr>
+        </table>
       `;
 
-    const customHtml = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff; color: #1e293b;">
-        ${this.generateBrandedHeader('Consolidated Parcel Notice')}
-        
-        <div style="padding: 20px 6px 6px; font-size: 14px; line-height: 1.6;">
-          <h2 style="margin: 0 0 10px; font-size: 17px; font-weight: 800; color: #0f172a;">Dear ${params.customerName || 'Valued Customer'},</h2>
-          <p style="color: #334155; margin-top: 6px;">
-            Your subsequent order <b>#${params.childOrderNumber}</b> has been combined with your existing order <b>#${params.parentOrderNumber}</b> into a single package for unified dispatch.
-          </p>
+    const contentHtml = `
+      <h2 class="text-primary" style="margin: 0 0 12px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 20px; font-weight: 700; color: #262524;">
+        Dear ${params.customerName || 'Valued Customer'},
+      </h2>
+      <p style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.6; color: #44423E; margin: 0 0 16px 0;">
+        Your subsequent order <strong style="color: #262524;">#${params.childOrderNumber}</strong> has been combined with your existing order <strong style="color: #262524;">#${params.parentOrderNumber}</strong> into a single package for unified dispatch.
+      </p>
 
-          ${refundBadgeHtml}
+      ${refundBadgeHtml}
 
-          <div style="margin-top: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; font-size: 12px; color: #64748b;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-              <span>Primary Consignment:</span>
-              <span style="font-weight: 700; color: #0f172a;">#${params.parentOrderNumber}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between;">
-              <span>Merged Add-on Order:</span>
-              <span style="font-weight: 700; color: #0f172a;">#${params.childOrderNumber}</span>
-            </div>
-          </div>
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F9F8F6; border: 1px solid #EAE8E2; border-radius: 6px; margin: 0 0 16px 0;">
+        <tr>
+          <td style="padding: 12px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #6E6D68;">
+            Primary Consignment:
+          </td>
+          <td align="right" style="padding: 12px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 700; color: #262524;">
+            #${params.parentOrderNumber}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding: 0 16px 12px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #6E6D68;">
+            Merged Add-on Order:
+          </td>
+          <td align="right" style="padding: 0 16px 12px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 700; color: #262524;">
+            #${params.childOrderNumber}
+          </td>
+        </tr>
+      </table>
 
-          ${params.attachments && params.attachments.length > 0 ? `
-            <p style="margin: 14px 0 0; font-size: 12px; color: #64748b;">
-              &bull; <i>Combined Tax Invoice (PDF) is attached to this email.</i>
-            </p>
-          ` : ''}
-        </div>
-
-        ${this.generateBrandedFooter()}
-      </div>
+      ${params.attachments && params.attachments.length > 0 ? `
+        <p style="margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; color: #6E6D68; font-style: italic;">
+          &bull; Combined Tax Invoice (PDF) is attached to this email.
+        </p>
+      ` : ''}
     `;
+
+    const customHtml = this.wrapInDocument(subject, contentHtml, 'Consolidated Parcel Notice');
 
     return this.sendOrderNotification({
       recipientEmail: params.recipientEmail,
@@ -829,52 +993,56 @@ export class EmailService {
 
     const headerSubtitle = isSuspended ? 'Account Security Notice' : 'Account Status Update';
 
-    const customHtml = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff; color: #1e293b;">
-        ${this.generateBrandedHeader(headerSubtitle)}
+    const contentHtml = `
+      <h2 class="text-primary" style="margin: 0 0 12px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 20px; font-weight: 700; color: #262524;">
+        Dear ${params.recipientName || 'Valued Customer'},
+      </h2>
 
-        <div style="padding: 24px 8px 8px; font-size: 14px; line-height: 1.6;">
-          <h2 style="margin: 0 0 12px; font-size: 18px; font-weight: 800; color: #0f172a;">
-            Dear ${params.recipientName || 'Valued Customer'},
-          </h2>
-
-          ${isSuspended ? `
-            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 16px; margin: 16px 0; color: #991b1b;">
-              <p style="margin: 0; font-weight: 700; font-size: 14px;">Account Status: Suspended</p>
-              <p style="margin: 6px 0 0; font-size: 13px; color: #b91c1c; line-height: 1.5;">
+      ${isSuspended ? `
+        ${this.renderStatusPill('Account Status: Suspended', '#FDE8E8', '#9B1C1C')}
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #FEF2F2; border: 1px solid #FECACA; border-radius: 6px; margin: 0 0 16px 0;">
+          <tr>
+            <td style="padding: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+              <div style="font-size: 14px; font-weight: 700; color: #991B1B; margin-bottom: 4px;">Account Status: Suspended</div>
+              <div style="font-size: 13px; color: #B91C1C; line-height: 1.5;">
                 Your customer account on Techno World Books has been temporarily suspended by our administration desk.
-              </p>
+              </div>
               ${params.reason ? `
-                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #f87171; font-size: 12.5px; color: #7f1d1d;">
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #F87171; font-size: 12.5px; color: #7F1D1D;">
                   <strong>Reason recorded:</strong> ${params.reason}
                 </div>
               ` : ''}
-            </div>
+            </td>
+          </tr>
+        </table>
 
-            <p style="color: #475569; font-size: 13px; margin: 14px 0;">
-              While suspended, you will not be able to log in or place new book orders. Any existing orders currently in transit will continue to be processed and delivered as scheduled.
-            </p>
+        <p style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #6E6D68; font-size: 13px; line-height: 1.6; margin: 0 0 14px 0;">
+          While suspended, you will not be able to log in or place new book orders. Any existing orders currently in transit will continue to be processed and delivered as scheduled.
+        </p>
 
-            <p style="color: #475569; font-size: 13px; margin: 14px 0;">
-              If you believe this action was taken in error or if you wish to appeal this review, please get in touch directly with our support helpdesk at College Street, Kolkata.
-            </p>
-          ` : `
-            <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 12px; padding: 16px; margin: 16px 0; color: #065f46;">
-              <p style="margin: 0; font-weight: 700; font-size: 14px;">Account Status: Active & In Good Standing</p>
-              <p style="margin: 6px 0 0; font-size: 13px; color: #047857; line-height: 1.5;">
+        <p style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #6E6D68; font-size: 13px; line-height: 1.6; margin: 0;">
+          If you believe this action was taken in error or if you wish to appeal this review, please get in touch directly with our support helpdesk at College Street, Kolkata.
+        </p>
+      ` : `
+        ${this.renderStatusPill('Account Status: Active & In Good Standing', '#E6F4EA', '#137333')}
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F2F9F5; border: 1px solid #B8E0CB; border-radius: 6px; margin: 0 0 16px 0;">
+          <tr>
+            <td style="padding: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+              <div style="font-size: 14px; font-weight: 700; color: #14432B; margin-bottom: 4px;">Account Status: Active &amp; In Good Standing</div>
+              <div style="font-size: 13px; color: #166534; line-height: 1.5;">
                 We are pleased to inform you that your customer account on Techno World Books is now active. You may log in anytime to browse our collection, track your dispatches, and enjoy member privileges.
-              </p>
-            </div>
+              </div>
+            </td>
+          </tr>
+        </table>
 
-            <p style="color: #475569; font-size: 13px; margin: 14px 0;">
-              Thank you for being part of our reading community!
-            </p>
-          `}
-        </div>
-
-        ${this.generateBrandedFooter()}
-      </div>
+        <p style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #6E6D68; font-size: 13px; line-height: 1.6; margin: 0;">
+          Thank you for being part of our reading community!
+        </p>
+      `}
     `;
+
+    const customHtml = this.wrapInDocument(subject, contentHtml, headerSubtitle);
 
     await this.sendOrderNotification({
       recipientEmail: targetEmail,
@@ -905,48 +1073,46 @@ export class EmailService {
       ? `You have received ${params.points} TechnoPoints!`
       : `Update: ${params.points} TechnoPoints deducted from your account`;
 
-    const customHtml = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff; color: #1e293b;">
-        ${this.generateBrandedHeader('TechnoPoints Loyalty Rewards')}
+    const contentHtml = `
+      <h2 class="text-primary" style="margin: 0 0 12px 0; font-family: 'Georgia', 'Times New Roman', serif; font-size: 20px; font-weight: 700; color: #262524;">
+        Hello ${params.recipientName || 'Book Lover'},
+      </h2>
 
-        <div style="padding: 24px 8px 8px; font-size: 14px; line-height: 1.6;">
-          <h2 style="margin: 0 0 12px; font-size: 18px; font-weight: 800; color: #0f172a;">
-            Hello ${params.recipientName || 'Book Lover'},
-          </h2>
+      <p style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #44423E; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
+        ${isCredit
+          ? 'Great news! Bonus TechnoPoints have been credited to your loyalty balance by our team.'
+          : 'This is a notification regarding an adjustment to your TechnoPoints loyalty balance.'
+        }
+      </p>
 
-          <p style="color: #334155; margin-top: 6px;">
-            ${isCredit
-              ? 'Great news! Bonus TechnoPoints have been credited to your loyalty balance by our team.'
-              : 'This is a notification regarding an adjustment to your TechnoPoints loyalty balance.'
-            }
-          </p>
-
-          <div style="background: ${isCredit ? '#f0fdf4' : '#fffbeb'}; border: 1px solid ${isCredit ? '#bbf7d0' : '#fde68a'}; border-radius: 12px; padding: 18px; margin: 20px 0; text-align: center;">
-            <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: ${isCredit ? '#166534' : '#92400e'};">
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: ${isCredit ? '#F2F9F5' : '#FFFBEB'}; border: 1px solid ${isCredit ? '#B8E0CB' : '#FDE68A'}; border-radius: 6px; margin: 0 0 18px 0;">
+        <tr>
+          <td align="center" style="padding: 20px 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center;">
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: ${isCredit ? '#14432B' : '#92400E'};">
               ${isCredit ? 'Points Credited' : 'Points Deducted'}
             </div>
-            <div style="font-size: 32px; font-weight: 900; margin: 6px 0; color: ${isCredit ? '#15803d' : '#b45309'};">
-              ${isCredit ? `+${params.points}` : `-${params.points}`} <span style="font-size: 18px; font-weight: 600;">pts</span>
+            <div style="font-family: 'Georgia', 'Times New Roman', serif; font-size: 32px; font-weight: 700; margin: 6px 0; color: ${isCredit ? '#14432B' : '#B45309'};">
+              ${isCredit ? `+${params.points}` : `-${params.points}`} <span style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; font-weight: 600;">pts</span>
             </div>
-            <div style="font-size: 13px; font-weight: 600; color: #475569;">
-              New Balance: <strong style="color: #0f172a;">${params.newBalance} TechnoPoints</strong>
+            <div style="font-size: 13px; font-weight: 600; color: #6E6D68;">
+              New Balance: <strong style="color: #262524;">${params.newBalance} TechnoPoints</strong>
             </div>
 
             ${params.reason ? `
-              <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed ${isCredit ? '#86efac' : '#fcd34d'}; font-size: 12px; color: #475569;">
-                <b>Note:</b> ${params.reason}
+              <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed ${isCredit ? '#A7F3D0' : '#FCD34D'}; font-size: 12px; color: #6E6D68;">
+                <strong style="color: #262524;">Note:</strong> ${params.reason}
               </div>
             ` : ''}
-          </div>
+          </td>
+        </tr>
+      </table>
 
-          <p style="color: #64748b; font-size: 12.5px; margin: 14px 0;">
-            TechnoPoints can be redeemed directly at checkout towards discounts on any academic or literature books across our catalog.
-          </p>
-        </div>
-
-        ${this.generateBrandedFooter()}
-      </div>
+      <p style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #6E6D68; font-size: 12.5px; line-height: 1.6; margin: 0;">
+        TechnoPoints can be redeemed directly at checkout towards discounts on any academic or literature books across our catalog.
+      </p>
     `;
+
+    const customHtml = this.wrapInDocument(subject, contentHtml, 'TechnoPoints Loyalty Rewards');
 
     await this.sendOrderNotification({
       recipientEmail: targetEmail,

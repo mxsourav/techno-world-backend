@@ -72,7 +72,7 @@ export const submitBookRequest = async (req: Request, res: Response, next: NextF
 
     // 3. Customer Acknowledgment Email
     const ackSubject = `We're sourcing your requested book: "${trimmedTitle}" — Techno World Books`;
-    const ackMessage = `Hello,\n\nThank you for requesting "${trimmedTitle}" by ${trimmedAuthor}!\n\nOur College Street sourcing team has received your request and is checking our extensive publisher and distributor network across Kolkata and India.\n\nDetails Submitted:\n- Book: ${trimmedTitle}\n- Author: ${trimmedAuthor}\n${trimmedPublisher ? `- Publisher: ${trimmedPublisher}\n` : ''}${trimmedEdition ? `- Edition: ${trimmedEdition}\n` : ''}${trimmedNotes ? `- Notes: ${trimmedNotes}\n` : ''}\nAs soon as we locate copies or pricing, we will contact you directly via email or WhatsApp.\n\nWarm regards,\nTechno World Books\nCollege Street, Kolkata · Delivering Across India\nWhatsApp Support: +91 747 913 5626`;
+    const ackMessage = `Hello,\n\nThank you for requesting "${trimmedTitle}" by ${trimmedAuthor}!\n\nOur procurement team has received your request and is checking our extensive publisher and distributor network across Kolkata and India.\n\nDetails Submitted:\n- Book: ${trimmedTitle}\n- Author: ${trimmedAuthor}\n${trimmedPublisher ? `- Publisher: ${trimmedPublisher}\n` : ''}${trimmedEdition ? `- Edition: ${trimmedEdition}\n` : ''}${trimmedNotes ? `- Notes: ${trimmedNotes}\n` : ''}\nAs soon as we locate copies or pricing, we will contact you directly via email or WhatsApp.\n\nWarm regards,\nTechno World Books\nDelivering Across India\nWhatsApp Support: +91 747 913 5626`;
 
     emailService
       .sendOrderNotification({
@@ -98,7 +98,7 @@ export const submitBookRequest = async (req: Request, res: Response, next: NextF
 
     res.status(201).json({
       success: true,
-      message: `Your request for "${trimmedTitle}" has been received! Our College Street team will check publisher availability and reach out to you shortly.`,
+      message: `Your request for "${trimmedTitle}" has been received! Our procurement team will check publisher availability and reach out to you shortly.`,
       data: requestRecord,
     });
   } catch (error) {

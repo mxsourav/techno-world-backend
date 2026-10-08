@@ -579,7 +579,7 @@ export class EmailService {
         headline = `Thank you, ${safeName}! Your order is confirmed.`;
         messageBody = `
           <p style="margin: 0 0 12px; color: #262524; line-height: 1.6;">
-            We are preparing your books at our College Street facility in Kolkata. Our fulfillment team is packaging each title securely with moisture-resistant protection.
+            We are preparing your books at our fulfillment facility in Kolkata. Our fulfillment team is packaging each title securely with moisture-resistant protection.
           </p>
           ${paymentMethod ? `<p style="margin: 0 0 10px; font-size: 12.5px; color: #6E6D68;"><b>Payment Method:</b> ${paymentMethod}</p>` : ''}
           ${deliveryAddress ? `<p style="margin: 0 0 10px; font-size: 12.5px; color: #6E6D68;"><b>Delivery Address:</b> ${deliveryAddress}</p>` : ''}
@@ -596,7 +596,7 @@ export class EmailService {
         headline = `Your books are being packed with care, ${safeName}`;
         messageBody = `
           <p style="margin: 0 0 12px; color: #262524; line-height: 1.6;">
-            Our College Street warehouse staff has picked the titles for order <b>#${orderNumber}</b>. The parcel is currently undergoing quality inspection and tamper-proof sealing.
+            Our fulfillment staff has picked the titles for order <b>#${orderNumber}</b>. The parcel is currently undergoing quality inspection and tamper-proof sealing.
           </p>
         `;
         actionBadge = this.renderStatusPill('Status: In Quality Check & Packaging', '#E8F0FE', '#1A73E8');

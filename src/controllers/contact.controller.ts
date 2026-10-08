@@ -67,7 +67,7 @@ export const submitContactMessage = async (req: Request, res: Response, next: Ne
 
     // 3. Send automated customer receipt acknowledgment email asynchronously
     const ackSubject = `We've received your message — Techno World Books`;
-    const ackMessage = `Hello ${trimmedName},\n\nThank you for reaching out to Techno World Books! Our College Street customer service team has received your message.\n\n${
+    const ackMessage = `Hello ${trimmedName},\n\nThank you for reaching out to Techno World Books! Our customer support team has received your message.\n\n${
       trimmedOrderNumber ? `Order Reference: #${trimmedOrderNumber}\n\n` : ''
     }Your Message:\n"${trimmedMessage}"\n\nWe typically review and reply to all queries within business hours (Monday to Saturday, 10:00 AM – 8:00 PM).\n\nWarm regards,\nTechno World Books Team\n90/6A Mahatma Gandhi Rd, College Street, Kolkata 700007\nWhatsApp: +91 747 913 5626`;
 
@@ -99,7 +99,7 @@ export const submitContactMessage = async (req: Request, res: Response, next: Ne
 
     res.status(201).json({
       success: true,
-      message: 'Your message has been received! Our College Street team will reply within 24 hours.',
+      message: 'Your message has been received! Our customer support team will reply within 24 hours.',
       data: {
         id: contactMessage.id,
         createdAt: contactMessage.createdAt,

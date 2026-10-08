@@ -94,10 +94,24 @@ export const getBlogPosts = async (req: Request, res: Response, next: NextFuncti
 export const getBlogPostBySlug = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { slug } = req.params;
+    if (!slug || typeof slug !== 'string' || !slug.trim()) {
+      res.status(404).json({ success: false, message: 'Blog post not found' });
+      return;
+    }
 
-    const post = await prisma.blogPost.findUnique({
-      where: { slug },
+    const cleanSlug = slug.trim();
+
+    const queryPromise = prisma.blogPost.findFirst({
+      where: {
+        OR: [{ slug: cleanSlug }, { id: cleanSlug }],
+      },
     });
+
+    const timeoutPromise = new Promise<null>((_, reject) =>
+      setTimeout(() => reject(new Error('Database query timed out')), 6000)
+    );
+
+    const post = await Promise.race([queryPromise, timeoutPromise]);
 
     if (!post) {
       res.status(404).json({ success: false, message: 'Blog post not found' });

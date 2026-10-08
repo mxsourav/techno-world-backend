@@ -92,6 +92,7 @@ export interface PricingResult {
   totalAmount: number;
   pointsUsed?: number;
   pointsDiscount?: number;
+  maxPointsAllowed?: number;
   walletUsed?: number;
   walletDiscount?: number;
   userPointsBalance?: number;
@@ -623,13 +624,17 @@ export class PricingEngine {
       const reqPoints = (!isNaN(rawPoints) && isFinite(rawPoints) && rawPoints > 0)
         ? Math.floor(rawPoints)
         : 0;
-      const maxUsablePoints = Math.min(userPointsBalance, grossPayable);
+      // BUSINESS RULE: TechnoPoints (loyalty coins) discount is strictly capped at max 15% of book subtotal.
+      // Coins apply to book items only, NEVER to shipping or COD courier handling charges.
+      const maxAllowedPointsBySubtotal = Math.floor(Math.max(0, payableSubtotal) * 0.15);
+      const maxUsablePoints = Math.min(userPointsBalance, maxAllowedPointsBySubtotal, Math.max(0, payableSubtotal));
       pointsUsed = Math.min(reqPoints, maxUsablePoints);
       pointsDiscount = pointsUsed;
 
       const remainingPayableAfterPoints = Math.max(0, grossPayable - pointsDiscount);
 
       // Sanitize input walletUsed (must be non-negative finite number)
+      // TechnoWallet cash has ZERO percentage restrictions (100% usable on entire payable amount).
       const rawWallet = Number(input.walletUsed);
       const reqWallet = (!isNaN(rawWallet) && isFinite(rawWallet) && rawWallet > 0)
         ? Number(rawWallet.toFixed(2))
@@ -653,6 +658,7 @@ export class PricingEngine {
     result.walletDiscount = walletDiscount;
     result.userPointsBalance = userPointsBalance;
     result.userWalletBalance = userWalletBalance;
+    result.maxPointsAllowed = input.userId ? Math.min(userPointsBalance, Math.floor(Math.max(0, payableSubtotal) * 0.15)) : 0;
 
     result.totalAmount = Math.max(0, Number((grossPayable - pointsDiscount - walletDiscount).toFixed(2)));
     result.totalSavings = result.itemDiscountTotal + result.promotionDiscount + pointsDiscount + walletDiscount;

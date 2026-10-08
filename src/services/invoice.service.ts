@@ -25,7 +25,7 @@ const SELLER = {
   tagline: 'Online Academic & Medical Bookstore Division',
   address: '90/6A, Mahatma Gandhi Rd, opp. Grace Cinema,\nCalcutta University, College Street, Kolkata, WB 700007',
   phone: '+91 747 913 5626',
-  email: 'support@technoworldbooks.com',
+  email: 'support@technoworldbooks.in',
   hsn: '4901',       // HSN code for printed books (GST exempt)
   sacShipping: '9968' // SAC code for postal/courier services
 };

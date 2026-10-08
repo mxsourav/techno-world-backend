@@ -23,7 +23,7 @@ export const login = async (data: z.infer<typeof loginSchema>) => {
   const { accessToken, refreshToken } = generateTokens(user.id, user.role);
 
   const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 7);
+  expiresAt.setDate(expiresAt.getDate() + 30); // 30-Day Session Mode
 
   await prisma.session.create({
     data: {

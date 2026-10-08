@@ -80,6 +80,23 @@ export function errorHandler(
     return;
   }
 
+  // 4b. Prisma Connection & Timeout Errors (P1001, P1002, P1008, P1017, PrismaClientInitializationError)
+  const isPrismaTimeoutOrConnError =
+    err.name === 'PrismaClientInitializationError' ||
+    ['P1001', 'P1002', 'P1008', 'P1017'].includes((err as any).code) ||
+    (typeof err.message === 'string' && (err.message.includes("Can't reach database server") || err.message.includes('Connection pool timeout')));
+
+  if (isPrismaTimeoutOrConnError) {
+    logger.error({ requestId, statusCode: 503, message: err.message, code: (err as any).code });
+    res.setHeader('Retry-After', '30');
+    res.status(503).json({
+      success: false,
+      message: 'Database service is temporarily unavailable. Please retry in 30 seconds.',
+      requestId,
+    });
+    return;
+  }
+
   // 5. Multer / File Upload Validation Errors
   if (
     err.name === 'MulterError' ||

@@ -126,21 +126,42 @@ app.use(
 app.use(botSeoMiddleware);
 app.get('/sitemap.xml', generateSitemap);
 app.get('/robots.txt', (_req, res) => {
-  res.type('text/plain');
+  const filePath = path.resolve('../app/public/robots.txt');
+  if (fs.existsSync(filePath)) {
+    res.type('text/plain; charset=utf-8');
+    return res.sendFile(filePath);
+  }
+  res.type('text/plain; charset=utf-8');
   res.send(
-`# Techno World Books API Server
+`# Techno World Books — robots.txt
 User-agent: *
-Allow: /api/v1/books
-Allow: /api/v1/categories
-Allow: /api/v1/cms
-Allow: /api/v1/analytics/pulse
-Allow: /sitemap.xml
-Allow: /health
-Disallow: /api/v1/admin
-Disallow: /api/v1/orders
-Disallow: /api/v1/profile
-Disallow: /api/v1/auth
-Disallow: /docs
+Disallow: /admin/
+Disallow: /admin
+Disallow: /api/
+Disallow: /checkout/
+Disallow: /checkout
+Disallow: /cart/
+Disallow: /cart
+Disallow: /account/
+Disallow: /account
+Disallow: /profile/
+Disallow: /profile
+Disallow: /my-orders/
+Disallow: /my-orders
+Disallow: /order-success/
+Disallow: /order-success
+Disallow: /wishlist/
+Disallow: /wishlist
+Disallow: /*?*sort=
+Disallow: /*?*filter=
+Disallow: /*?*order=
+Disallow: /*?*b2b=
+Disallow: /*?*session=
+Disallow: /*?*token=
+Allow: /
+
+Sitemap: https://technoworldbooks.in/sitemap.xml
+Sitemap: https://www.technoworldbooks.in/sitemap.xml
 `
   );
 });

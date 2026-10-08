@@ -1,0 +1,30 @@
+name: Deploy Backend to GCP VM
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Remote Deployment on GCP
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCP_VM_HOST }}
+          username: ${{ secrets.GCP_VM_USERNAME || 'technoworldbookswebsite' }}
+          key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            echo 'Updating Techno World Backend...'
+            cd /home/technoworldbookswebsite/techno-world-backend
+            git pull origin main
+            npm install --production=false
+            npx prisma generate
+            npx prisma db push
+            npm run build
+            pm2 restart server
+            echo 'Deployment finished successfully!'

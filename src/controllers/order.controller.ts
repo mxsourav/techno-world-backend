@@ -246,6 +246,14 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       res.status(400).json({ success: false, message: pricingResult.promotionError });
       return;
     }
+    // Techno Points Loyalty Calculation: 1 coin per ₹100 spent on books (excluding delivery charges)
+    const netBookPurchase = Math.max(
+      0,
+      Number(pricingResult.subtotal || 0) -
+        Number(pricingResult.itemDiscountTotal || 0) -
+        Number(pricingResult.promotionDiscount || 0)
+    );
+    const pointsEarned = Math.floor(netBookPurchase / 100);
 
     // Atomic Transaction: Stock decrement + Order Creation + Address Deduplication + Loyalty Points Increment
     const order = await prisma.$transaction(async (tx) => {
@@ -497,8 +505,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         }
       }
 
-      // Techno Points Loyalty Engine: 1 point/coin for every ₹100 spent (on remaining payable)
-      const pointsEarned = Math.floor(pricingResult.totalAmount / 100);
+      // Techno Points Loyalty Engine: 1 point/coin for every ₹100 spent on books (excluding delivery charges)
       if (pointsEarned > 0 && userId) {
         await tx.user.update({
           where: { id: userId },
@@ -644,6 +651,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         pointsDiscount: pricingResult.pointsDiscount || 0,
         walletUsed: pricingResult.walletUsed || 0,
         walletDiscount: pricingResult.walletDiscount || 0,
+        pointsEarned: pointsEarned,
       }
     });
   } catch (error: any) {

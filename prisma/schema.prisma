@@ -44,6 +44,7 @@ model User {
   savedPaymentMethods SavedPaymentMethod[]
   sessions            Session[]
   wishlistItems       WishlistItem[]
+  tickets             Ticket[]
 }
 
 model Session {
@@ -1075,3 +1076,66 @@ enum B2BEnquiryStatus {
   Quoted
   Closed
 }
+
+// ============================================================
+// HELPDESK & TICKETING CRM SYSTEM
+// ============================================================
+
+enum TicketDepartment {
+  SUPPORT
+  TEAM
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  SOLVED
+  DISCARDED
+}
+
+enum TicketSender {
+  CUSTOMER
+  ADMIN
+}
+
+model Ticket {
+  id             String           @id @default(uuid())
+  ticketId       String           @unique // e.g. "TKT-20261008-5481"
+  customerId     String?
+  customerEmail  String
+  customerName   String?
+  department     TicketDepartment @default(SUPPORT)
+  subject        String
+  status         TicketStatus     @default(OPEN)
+  closureReason  String?          @db.Text
+  orderNumber    String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  customer       User?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  messages       TicketMessage[]
+
+  @@index([customerId])
+  @@index([customerEmail])
+  @@index([status])
+  @@index([department])
+  @@index([ticketId])
+  @@index([createdAt])
+}
+
+model TicketMessage {
+  id          String       @id @default(uuid())
+  ticketId    String
+  sender      TicketSender
+  body        String       @db.Text
+  htmlBody    String?      @db.Text
+  messageId   String?      @unique // RFC 822 Message-ID for deduplication
+  adminUserId String?
+  timestamp   DateTime     @default(now())
+
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([messageId])
+  @@index([timestamp])
+}

@@ -27,6 +27,12 @@ const envSchema = z.object({
   SMTP_ORDERS_USER: z.string().default('orders@technoworldbooks.in'),
   SMTP_TEAM_USER: z.string().default('team@technoworldbooks.in'),
   SMTP_SUPPORT_USER: z.string().default('support@technoworldbooks.in'),
+  // IMAP Helpdesk Settings
+  IMAP_HOST: z.string().default('imap.hostinger.com'),
+  IMAP_PORT: z.coerce.number().default(993),
+  IMAP_PASS_SUPPORT: z.string().optional(),
+  IMAP_PASS_TEAM: z.string().optional(),
+  IMAP_POLL_INTERVAL_MS: z.coerce.number().default(120000), // 2 minutes
   WHATSAPP_META_ACCESS_TOKEN: z.string().optional(),
   WHATSAPP_META_PHONE_NUMBER_ID: z.string().optional(),
   WHATSAPP_ADMIN_PHONE_NUMBER: z.string().optional(),

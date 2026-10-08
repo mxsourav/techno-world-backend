@@ -1601,6 +1601,7 @@ export const getCustomerDetails = async (req: Request, res: Response, next: Next
                     isbn10: true,
                     price: true,
                     mrp: true,
+                    coverUrl: true,
                     images: {
                       where: { isCover: true },
                       take: 1,
@@ -1656,7 +1657,7 @@ export const getCustomerDetails = async (req: Request, res: Response, next: Next
             slug: it.book.slug,
             edition: it.book.edition,
             isbn: it.book.isbn13 || it.book.isbn10 || 'N/A',
-            coverImage: it.book.images?.[0]?.secureUrl || '',
+            coverImage: it.book.coverUrl || it.book.images?.[0]?.secureUrl || '',
             unitPrice: Number(it.priceAtPurchase || 0),
             totalQuantity: it.quantity,
             totalSpent: it.quantity * Number(it.priceAtPurchase || 0),

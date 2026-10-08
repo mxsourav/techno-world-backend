@@ -130,7 +130,7 @@ export class EmailService {
   public getTierConfig(tier: EmailTier = 'ORDERS'): TierConfig {
     const host = env.SMTP_HOST || 'smtp.hostinger.com';
     const port = Number(env.SMTP_PORT) || 465;
-    const pass = (env.SMTP_PASSWORD || env.SMTP_PASS || 'Aksad@301206').trim();
+    const pass = (env.SMTP_PASSWORD || env.SMTP_PASS || '').trim();
     const secure = port === 465;
 
     switch (tier) {
@@ -1366,6 +1366,65 @@ export class EmailService {
         userId,
       };
     });
+  }
+
+  /**
+   * Dispatches an outbound Helpdesk Ticket reply from support@ or team@
+   * with proper RFC 822 In-Reply-To and References headers to maintain the email thread.
+   */
+  public async sendTicketReply(params: {
+    toEmail: string;
+    department: 'SUPPORT' | 'TEAM';
+    ticketId: string;
+    subject: string;
+    bodyText: string;
+    bodyHtml?: string;
+    inReplyTo?: string;
+    references?: string[];
+  }): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    try {
+      const tier: EmailTier = params.department === 'TEAM' ? 'TEAM' : 'SUPPORT';
+      const config = this.getTierConfig(tier);
+      const transporter = this.getTransporter(tier);
+
+      const cleanSubject = params.subject.includes(`[${params.ticketId}]`)
+        ? params.subject
+        : `[${params.ticketId}] ${params.subject}`;
+
+      const headers: Record<string, string> = {};
+      if (params.inReplyTo) {
+        headers['In-Reply-To'] = params.inReplyTo;
+      }
+      if (params.references && params.references.length > 0) {
+        headers['References'] = params.references.join(' ');
+      }
+
+      const formattedHtml = params.bodyHtml || `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.6; color: #1c1917; max-width: 600px;">
+          <div style="white-space: pre-wrap;">${params.bodyText}</div>
+          <hr style="border: 0; border-top: 1px solid #e7e5e4; margin: 24px 0 16px 0;" />
+          <p style="font-size: 11px; color: #78716c; margin: 0;">
+            Ticket Reference: <strong>${params.ticketId}</strong> &bull; Techno World Books Helpdesk<br />
+            Replies to this email will be automatically appended to your support ticket.
+          </p>
+        </div>
+      `;
+
+      const result = await transporter.sendMail({
+        from: `"${config.fromName}" <${config.fromEmail}>`,
+        to: params.toEmail,
+        subject: cleanSubject,
+        text: params.bodyText,
+        html: formattedHtml,
+        replyTo: config.replyTo,
+        headers,
+      });
+
+      return { success: true, messageId: result.messageId };
+    } catch (err: any) {
+      logger.error(`Failed to dispatch ticket reply for ${params.ticketId}: ${err.message}`);
+      return { success: false, error: err.message };
+    }
   }
 }
 

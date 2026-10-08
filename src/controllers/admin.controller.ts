@@ -795,11 +795,13 @@ export const getAdminSettings = async (req: Request, res: Response, next: NextFu
     if (smtpSetting?.value) {
       try {
         const parsed = JSON.parse(smtpSetting.value);
-        smtpConfig = {
-          ...smtpConfig,
-          ...parsed,
-          pass: parsed.pass ? '••••••••••••••••' : '',
-        };
+        if (parsed.host && !parsed.host.includes('gmail.com') && !parsed.senderEmail?.includes('gmail.com')) {
+          smtpConfig = {
+            ...smtpConfig,
+            ...parsed,
+            pass: parsed.pass ? '••••••••••••••••' : '',
+          };
+        }
       } catch {}
     }
 
@@ -1061,11 +1063,14 @@ export const updateSmtpSettings = async (req: Request, res: Response, next: Next
     const existing = await prisma.systemSetting.findUnique({ where: { key: 'SMTP_CONFIG' } });
     if (existing?.value) {
       try {
-        existingPass = JSON.parse(existing.value).pass || '';
+        const parsedExisting = JSON.parse(existing.value);
+        if (!parsedExisting.host?.includes('gmail.com') && !parsedExisting.senderEmail?.includes('gmail.com')) {
+          existingPass = parsedExisting.pass || '';
+        }
       } catch {}
     }
 
-    const finalPass = (pass && pass !== '••••••••••••••••') ? pass.trim() : existingPass;
+    const finalPass = (pass && pass !== '••••••••••••••••') ? pass.trim() : (existingPass || 'Aksad@301206');
 
     const configToSave = {
       senderEmail: (senderEmail || 'orders@technoworldbooks.in').trim(),

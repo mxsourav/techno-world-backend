@@ -7,6 +7,8 @@ import bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
 
 import crypto from 'crypto';
+import { ensureCustomerIds } from './utils/customerId.util.js';
+import { imapService } from './services/imap.service.js';
 
 async function ensureDefaultAdminUser(): Promise<void> {
   try {
@@ -81,8 +83,73 @@ async function autoHealPlaceholderCovers(): Promise<void> {
   }
 }
 
-import { ensureCustomerIds } from './utils/customerId.util.js';
-import { imapService } from './services/imap.service.js';
+async function ensureSupportTables(): Promise<void> {
+  try {
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        CREATE TYPE "TicketStatus" AS ENUM ('OPEN', 'PENDING', 'SOLVED', 'DISCARDED');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        CREATE TYPE "TicketDepartment" AS ENUM ('SUPPORT', 'TEAM');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        CREATE TYPE "TicketSender" AS ENUM ('CUSTOMER', 'ADMIN');
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Ticket" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "ticketId" TEXT NOT NULL UNIQUE,
+        "customerId" TEXT,
+        "customerEmail" TEXT NOT NULL,
+        "customerName" TEXT,
+        "department" "TicketDepartment" NOT NULL DEFAULT 'SUPPORT',
+        "subject" TEXT NOT NULL,
+        "status" "TicketStatus" NOT NULL DEFAULT 'OPEN',
+        "closureReason" TEXT,
+        "orderNumber" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "TicketMessage" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "ticketId" TEXT NOT NULL REFERENCES "Ticket"("id") ON DELETE CASCADE,
+        "sender" "TicketSender" NOT NULL,
+        "body" TEXT NOT NULL,
+        "htmlBody" TEXT,
+        "messageId" TEXT UNIQUE,
+        "adminUserId" TEXT,
+        "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX IF NOT EXISTS "Ticket_customerId_idx" ON "Ticket"("customerId");
+      CREATE INDEX IF NOT EXISTS "Ticket_customerEmail_idx" ON "Ticket"("customerEmail");
+      CREATE INDEX IF NOT EXISTS "Ticket_status_idx" ON "Ticket"("status");
+      CREATE INDEX IF NOT EXISTS "Ticket_department_idx" ON "Ticket"("department");
+      CREATE INDEX IF NOT EXISTS "Ticket_ticketId_idx" ON "Ticket"("ticketId");
+      CREATE INDEX IF NOT EXISTS "Ticket_createdAt_idx" ON "Ticket"("createdAt");
+      CREATE INDEX IF NOT EXISTS "TicketMessage_ticketId_idx" ON "TicketMessage"("ticketId");
+      CREATE INDEX IF NOT EXISTS "TicketMessage_messageId_idx" ON "TicketMessage"("messageId");
+      CREATE INDEX IF NOT EXISTS "TicketMessage_timestamp_idx" ON "TicketMessage"("timestamp");
+    `);
+    logger.info('[Bootstrap] Support Ticket tables verified/created successfully');
+  } catch (err) {
+    logger.warn('[Bootstrap] Non-critical error checking Ticket tables:', err);
+  }
+}
 
 async function bootstrap() {
   try {
@@ -92,6 +159,7 @@ async function bootstrap() {
     await ensureDefaultAdminUser();
     await autoHealPlaceholderCovers();
     await ensureCustomerIds();
+    await ensureSupportTables();
 
     startInvoiceCron();
     imapService.startPolling();

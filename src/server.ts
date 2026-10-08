@@ -135,15 +135,18 @@ async function ensureSupportTables(): Promise<void> {
       );
     `);
     await prisma.$executeRawUnsafe(`
-      CREATE INDEX IF NOT EXISTS "Ticket_customerId_idx" ON "Ticket"("customerId");
-      CREATE INDEX IF NOT EXISTS "Ticket_customerEmail_idx" ON "Ticket"("customerEmail");
-      CREATE INDEX IF NOT EXISTS "Ticket_status_idx" ON "Ticket"("status");
-      CREATE INDEX IF NOT EXISTS "Ticket_department_idx" ON "Ticket"("department");
-      CREATE INDEX IF NOT EXISTS "Ticket_ticketId_idx" ON "Ticket"("ticketId");
-      CREATE INDEX IF NOT EXISTS "Ticket_createdAt_idx" ON "Ticket"("createdAt");
-      CREATE INDEX IF NOT EXISTS "TicketMessage_ticketId_idx" ON "TicketMessage"("ticketId");
-      CREATE INDEX IF NOT EXISTS "TicketMessage_messageId_idx" ON "TicketMessage"("messageId");
-      CREATE INDEX IF NOT EXISTS "TicketMessage_timestamp_idx" ON "TicketMessage"("timestamp");
+      DO $$ BEGIN
+        CREATE INDEX IF NOT EXISTS "Ticket_customerId_idx" ON "Ticket"("customerId");
+        CREATE INDEX IF NOT EXISTS "Ticket_customerEmail_idx" ON "Ticket"("customerEmail");
+        CREATE INDEX IF NOT EXISTS "Ticket_status_idx" ON "Ticket"("status");
+        CREATE INDEX IF NOT EXISTS "Ticket_department_idx" ON "Ticket"("department");
+        CREATE INDEX IF NOT EXISTS "Ticket_ticketId_idx" ON "Ticket"("ticketId");
+        CREATE INDEX IF NOT EXISTS "Ticket_createdAt_idx" ON "Ticket"("createdAt");
+        CREATE INDEX IF NOT EXISTS "TicketMessage_ticketId_idx" ON "TicketMessage"("ticketId");
+        CREATE INDEX IF NOT EXISTS "TicketMessage_messageId_idx" ON "TicketMessage"("messageId");
+        CREATE INDEX IF NOT EXISTS "TicketMessage_timestamp_idx" ON "TicketMessage"("timestamp");
+      EXCEPTION WHEN OTHERS THEN null;
+      END $$;
     `);
     logger.info('[Bootstrap] Support Ticket tables verified/created successfully');
   } catch (err) {

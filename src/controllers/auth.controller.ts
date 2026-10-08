@@ -694,4 +694,63 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
+/**
+ * Initiates an email-based Two-Factor Authentication challenge for an Admin session
+ */
+export const requestAdminMfaOtp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+    const { AdminMfaService } = await import('../services/adminMfa.service.js');
+    const result = await AdminMfaService.requestMfaOtp(userId);
+    res.status(result.success ? 200 : 400).json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'MFA request failed' });
+  }
+};
+
+/**
+ * Validates the 6-digit MFA verification code for an Admin session
+ */
+export const verifyAdminMfaOtp = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    const { code } = req.body;
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+    if (!code || typeof code !== 'string') {
+      res.status(400).json({ success: false, message: '6-digit verification code is required' });
+      return;
+    }
+    const { AdminMfaService } = await import('../services/adminMfa.service.js');
+    const result = AdminMfaService.verifyMfaOtp(userId, code);
+    res.status(result.success ? 200 : 400).json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'MFA verification failed' });
+  }
+};
+
+/**
+ * Checks if the current admin session is elevated with 2FA
+ */
+export const getAdminMfaStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+    const { AdminMfaService } = await import('../services/adminMfa.service.js');
+    const verified = AdminMfaService.isSessionVerified(userId);
+    res.status(200).json({ success: true, verified });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message || 'Failed to check MFA status' });
+  }
+};
+
 

@@ -6,6 +6,8 @@ import { startInvoiceCron, stopInvoiceCron } from './cron/invoice.cron.js';
 import bcrypt from 'bcrypt';
 import { Role } from '@prisma/client';
 
+import crypto from 'crypto';
+
 async function ensureDefaultAdminUser(): Promise<void> {
   try {
     const adminCount = await prisma.user.count({
@@ -13,35 +15,11 @@ async function ensureDefaultAdminUser(): Promise<void> {
     });
 
     if (adminCount === 0) {
-      logger.info('No admin user found. Creating default Super Admin...');
-      const hashedPassword = await bcrypt.hash('admin123', 10);
-      await prisma.user.upsert({
-        where: { email: 'admin' },
-        update: {
-          password: hashedPassword,
-          role: Role.SUPER_ADMIN,
-          isActive: true,
-          failedLogins: 0,
-          lockedUntil: null,
-        },
-        create: {
-          email: 'admin',
-          name: 'Super Admin',
-          password: hashedPassword,
-          role: Role.SUPER_ADMIN,
-          isActive: true,
-        },
-      });
-      await prisma.user.upsert({
-        where: { email: 'admin@technoworldbooks.in' },
-        update: {
-          password: hashedPassword,
-          role: Role.SUPER_ADMIN,
-          isActive: true,
-          failedLogins: 0,
-          lockedUntil: null,
-        },
-        create: {
+      logger.info('No admin user found. Initializing Super Admin...');
+      const initialPassword = process.env.INITIAL_ADMIN_PASSWORD || crypto.randomBytes(16).toString('hex');
+      const hashedPassword = await bcrypt.hash(initialPassword, 10);
+      await prisma.user.create({
+        data: {
           email: 'admin@technoworldbooks.in',
           name: 'Super Admin',
           password: hashedPassword,
@@ -49,7 +27,12 @@ async function ensureDefaultAdminUser(): Promise<void> {
           isActive: true,
         },
       });
-      logger.info('Default Super Admin successfully initialized');
+      if (!process.env.INITIAL_ADMIN_PASSWORD) {
+        logger.warn(`[SECURITY NOTICE] Initial Super Admin created with one-time generated password: ${initialPassword}`);
+        logger.warn('[SECURITY NOTICE] Please log in and change this password immediately.');
+      } else {
+        logger.info('Initial Super Admin created using INITIAL_ADMIN_PASSWORD.');
+      }
     } else {
       // If admin user exists, unlock any potential DB-level lockouts
       await prisma.user.updateMany({

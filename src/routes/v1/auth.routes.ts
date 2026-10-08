@@ -1,5 +1,18 @@
 import { Router } from 'express';
-import { login, refresh, logout, devGoogleOAuthBypass, googleAuthCallback, googleAuth, sendOtp, verifyOtp } from '../../controllers/auth.controller.js';
+import {
+  login,
+  refresh,
+  logout,
+  devGoogleOAuthBypass,
+  googleAuthCallback,
+  googleAuth,
+  sendOtp,
+  verifyOtp,
+  requestAdminMfaOtp,
+  verifyAdminMfaOtp,
+  getAdminMfaStatus,
+} from '../../controllers/auth.controller.js';
+import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
 import { validateRequest } from '../../middlewares/validate.middleware.js';
 import { authLimiter } from '../../middlewares/rateLimiter.js';
 import { loginSchema, devGoogleOAuthBypassSchema, googleAuthSchema } from '../../schemas/auth.schema.js';
@@ -21,5 +34,10 @@ router.post('/google', authLimiter, validateRequest(googleAuthSchema), googleAut
 // Google OAuth Scaffolding & Developer Bypass
 router.post('/google/dev-bypass', authLimiter, validateRequest(devGoogleOAuthBypassSchema), devGoogleOAuthBypass);
 router.get('/google/callback', googleAuthCallback);
+
+// Admin Multi-Factor Authentication (MFA / 2FA)
+router.post('/admin/mfa/request', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), requestAdminMfaOtp);
+router.post('/admin/mfa/verify', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), verifyAdminMfaOtp);
+router.get('/admin/mfa/status', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), getAdminMfaStatus);
 
 export default router;

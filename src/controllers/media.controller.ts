@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database.js';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 
 
 export const listMedia = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -32,7 +33,9 @@ export const uploadMedia = async (req: Request, res: Response, next: NextFunctio
     }
     if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
     
-    const filename = `${Date.now()}-${file.originalname.replace(/\s/g, '_')}`;
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '');
+    const safeHex = crypto.randomBytes(8).toString('hex');
+    const filename = `${Date.now()}-${safeHex}${ext}`;
     const filepath = path.join(uploadsDir, filename);
     fs.writeFileSync(filepath, file.buffer);
     

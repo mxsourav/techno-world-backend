@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database.js';
+import { logger } from '../config/logger.js';
 
 const BASE_URL = 'https://technoworldbooks.in';
 const DEFAULT_OG_IMAGE = `${BASE_URL}/og-cover.png`;
@@ -254,7 +255,7 @@ async function renderBook(slug: string): Promise<string | null> {
       brand: { '@type': 'Organization', name: SITE_NAME },
       offers: {
         '@type': 'Offer',
-        price: book.price,
+        price: Number(book.price),
         priceCurrency: 'INR',
         availability:
           (book.stock ?? 0) > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
@@ -450,15 +451,8 @@ export async function botSeoMiddleware(
     }
 
     return next();
-  } catch (_err) {
-    if (isCatalogRoute || pathname === '/' || pathname === '') {
-      res.set('Content-Type', 'text/html; charset=utf-8');
-      res.set('Retry-After', '30');
-      res.status(503).send(
-        '<!DOCTYPE html><html lang="en"><head><title>Service Temporarily Unavailable</title><meta name="robots" content="noindex, nofollow" /></head><body style="font-family:sans-serif;padding:40px;text-align:center;"><h1>Service Temporarily Unavailable</h1><p>Our server is currently experiencing high load. Please retry in 30 seconds.</p></body></html>'
-      );
-      return;
-    }
+  } catch (err) {
+    logger.warn('[BotSeo] Error rendering bot SEO page, falling back to client SPA:', err);
     return next();
   }
 }

@@ -820,12 +820,20 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
 
     const updatedNotes = existing.notes ? `${existing.notes}\n${noteEntry}` : noteEntry;
 
+    const orderData: any = {
+      status,
+      notes: updatedNotes,
+    };
+    if (status === 'DELIVERED' && !existing.deliveredAt) {
+      orderData.deliveredAt = new Date();
+    }
+    if (status === 'DELIVERED' && !existing.reviewEmailSentAt) {
+      orderData.reviewEmailSentAt = new Date();
+    }
+
     const order = await prisma.order.update({
       where: { id },
-      data: {
-        status,
-        notes: updatedNotes
-      },
+      data: orderData,
       include: { items: { include: { book: true } }, user: true, address: true },
     });
 
@@ -898,6 +906,9 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
           quantity: it.quantity,
           price: Number(it.priceAtPurchase),
           sku: it.book?.sku || it.book?.bookCode || undefined,
+          slug: it.book?.slug || it.book?.id || undefined,
+          coverUrl: it.book?.coverUrl || undefined,
+          author: it.book?.author || it.book?.authors?.[0]?.name || undefined,
         }));
 
         let invoiceAttachment: any = undefined;
@@ -1093,12 +1104,17 @@ export const batchUpdateOrderStatus = async (req: Request, res: Response, next: 
 
       const updatedNotes = existing.notes ? `${existing.notes}\n${noteEntry}` : noteEntry;
 
+      const batchOrderData: any = {
+        status,
+        notes: updatedNotes,
+      };
+      if (status === 'DELIVERED' && !existing.deliveredAt) {
+        batchOrderData.deliveredAt = new Date();
+      }
+
       const order = await prisma.order.update({
         where: { id },
-        data: {
-          status,
-          notes: updatedNotes,
-        },
+        data: batchOrderData,
         include: { items: { include: { book: true } }, user: true, address: true },
       });
 
@@ -1110,23 +1126,23 @@ export const batchUpdateOrderStatus = async (req: Request, res: Response, next: 
           let notifType = 'order_status';
 
           if (status === 'CONFIRMED') {
-            notifTitle = `✅ Order Confirmed: #${order.orderNumber}`;
+            notifTitle = `Order Confirmed: #${order.orderNumber}`;
             notifMsg = `Your order #${order.orderNumber} (₹${order.totalAmount}) has been approved by the bookstore and is confirmed!`;
             notifType = 'order_confirmed';
           } else if (status === 'PROCESSING') {
-            notifTitle = `📦 Packing Order: #${order.orderNumber}`;
+            notifTitle = `Packing Order: #${order.orderNumber}`;
             notifMsg = `Order #${order.orderNumber} is being packed and prepared for dispatch.`;
             notifType = 'order_processing';
           } else if (status === 'SHIPPED') {
-            notifTitle = `🚚 Dispatched: #${order.orderNumber}`;
+            notifTitle = `Dispatched: #${order.orderNumber}`;
             notifMsg = `Order #${order.orderNumber} has been dispatched via India Post Speed Post. Tracking: ${order.trackingNumber || 'Active'}`;
             notifType = 'order_shipped';
           } else if (status === 'DELIVERED') {
-            notifTitle = `🎉 Order Delivered: #${order.orderNumber}`;
-            notifMsg = `Your package for order #${order.orderNumber} has been delivered.`;
+            notifTitle = `Order Delivered: #${order.orderNumber}`;
+            notifMsg = `Your package for order #${order.orderNumber} has been delivered. Enjoy your reading!`;
             notifType = 'order_delivered';
           } else if (status === 'CANCELLED') {
-            notifTitle = `❌ Order Cancelled: #${order.orderNumber}`;
+            notifTitle = `Order Cancelled: #${order.orderNumber}`;
             notifMsg = `Order #${order.orderNumber} was cancelled. Reason: ${reason || 'Fulfillment unavailable'}.`;
             notifType = 'order_cancelled';
           }

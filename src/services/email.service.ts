@@ -486,7 +486,7 @@ export class EmailService {
     status: 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED' | 'PENDING';
     orderNumber: string;
     customerName: string;
-    items: Array<{ title: string; quantity: number; price: number; sku?: string }>;
+    items: Array<{ title: string; quantity: number; price: number; sku?: string; slug?: string; coverUrl?: string; author?: string }>;
     totalAmount: number;
     subtotal?: number;
     shippingCharge?: number;
@@ -645,18 +645,52 @@ export class EmailService {
         break;
 
       case 'DELIVERED':
-        subject = `Delivered: Order #${orderNumber} — Enjoy Your Reading!`;
-        headline = `Your order has been delivered, ${safeName}!`;
+        subject = `Delivered: Order #${orderNumber} — Please Review Your Books!`;
+        headline = `Your books have arrived, ${safeName}!`;
+
+        const reviewCardsHtml = (items || []).map((it) => {
+          const bookUrl = it.slug ? `https://technoworldbooks.in/book/${it.slug}?review=true#reviews` : `https://technoworldbooks.in/`;
+          return `
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #FFFFFF; border: 1px solid #EAE8E2; border-radius: 8px; margin: 10px 0; padding: 12px 14px;">
+              <tr>
+                ${it.coverUrl ? `
+                  <td width="55" valign="top" style="padding-right: 12px;">
+                    <img src="${it.coverUrl}" alt="${it.title}" width="55" height="75" style="border-radius: 4px; object-fit: cover; display: block; border: 1px solid #EAE8E2;" />
+                  </td>
+                ` : ''}
+                <td valign="top" style="vertical-align: middle;">
+                  <div style="font-size: 13px; font-weight: 700; color: #1E293B; line-height: 1.3;">${it.title}</div>
+                  ${it.author ? `<div style="font-size: 11.5px; color: #6E6D68; margin-top: 2px;">By ${it.author}</div>` : ''}
+                  <div style="margin-top: 8px;">
+                    <a href="${bookUrl}" target="_blank" style="display: inline-block; background-color: #047857; color: #FFFFFF; font-size: 11.5px; font-weight: 700; padding: 6px 14px; text-decoration: none; border-radius: 6px;">
+                      Write a Review &rarr;
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            </table>
+          `;
+        }).join('');
+
         messageBody = `
           <p style="margin: 0 0 14px; color: #262524; line-height: 1.6;">
-            We are pleased to inform you that your order <b>#${orderNumber}</b> has been successfully delivered. We hope you enjoy reading your new books!
+            We are pleased to inform you that your package for order <b>#${orderNumber}</b> has been successfully delivered. We hope you enjoy reading your new titles!
           </p>
-          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="card" style="background-color: #FFFFFF; border: 1px solid #EAE8E2; border-radius: 8px; margin: 16px 0;">
+
+          <div style="margin: 18px 0;">
+            <h4 style="margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #1E293B;">How was your experience?</h4>
+            <p style="margin: 0 0 12px; font-size: 12px; color: #6E6D68; line-height: 1.5;">
+              Your feedback helps other students and book lovers across India find the right academic titles. Please take a moment to share your review:
+            </p>
+            ${reviewCardsHtml}
+          </div>
+
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="card" style="background-color: #FAF9F5; border: 1px solid #EAE8E2; border-radius: 8px; margin: 16px 0;">
             <tr>
               <td style="padding: 14px 16px;">
-                <h4 class="text-primary" style="margin: 0 0 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; color: #1E293B;">Any concern with your parcel?</h4>
-                <p class="text-muted" style="margin: 0; font-size: 12px; color: #6E6D68; line-height: 1.5;">
-                  If any title arrived damaged or missing, please write directly to our helpdesk at <b>support@technoworldbooks.in</b> or message on WhatsApp: <b>+91 747 913 5626</b> with your order reference.
+                <h4 class="text-primary" style="margin: 0 0 6px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 12.5px; font-weight: 700; color: #1E293B;">Official 7-Day Replacement Guarantee</h4>
+                <p class="text-muted" style="margin: 0; font-size: 11.5px; color: #6E6D68; line-height: 1.5;">
+                  If any book arrived damaged, misprinted, or defective, you qualify for a free replacement within <b>7 calendar days of delivery</b>. Please record an uninterrupted unboxing video and contact us at <b>support@technoworldbooks.in</b> or WhatsApp <b>+91 747 913 5626</b>.
                 </p>
               </td>
             </tr>
@@ -668,7 +702,7 @@ export class EmailService {
           ` : ''}
         `;
         actionBadge = this.renderStatusPill('Status: Successfully Delivered', '#DEF7EC', '#03543F');
-        plainTextMessage = `Hello ${safeName},\n\nOrder #${orderNumber} has been delivered. If you have any questions, reach our helpdesk at support@technoworldbooks.in or WhatsApp: +91 747 913 5626.`;
+        plainTextMessage = `Hello ${safeName},\n\nYour order #${orderNumber} has been delivered! Please visit our website to share your review on the books you received. If you need a replacement for damaged or misprinted titles, our 7-day replacement window is active. Contact: support@technoworldbooks.in or WhatsApp +91 747 913 5626.`;
         break;
 
       case 'CANCELLED':

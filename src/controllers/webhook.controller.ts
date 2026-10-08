@@ -5,6 +5,7 @@ import { prisma } from '../config/database.js';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
 import { indiaPostWebhookPayloadSchema } from '../schemas/indiapost.schema.js';
+import { emailService } from '../services/email.service.js';
 
 
 export const handleRazorpayWebhook = async (req: Request, res: Response): Promise<void> => {
@@ -141,19 +142,101 @@ export const handleIndiaPostWebhook = async (req: Request, res: Response): Promi
 
     if (matchedOrder) {
       const updateData: any = {};
+      const isDelivering = newStatus === OrderStatus.DELIVERED && matchedOrder.status !== OrderStatus.DELIVERED;
+
       if (newStatus && matchedOrder.status !== OrderStatus.DELIVERED) {
         updateData.status = newStatus;
+      }
+      if (newStatus === OrderStatus.DELIVERED && !matchedOrder.deliveredAt) {
+        updateData.deliveredAt = new Date();
       }
       
       const eventNote = '[' + (payload.event_date || new Date().toISOString()) + '] ' + (payload.event_description || payload.event_code) + ' at ' + (payload.event_office_name || 'Postal Hub');
       updateData.notes = (matchedOrder.notes ? matchedOrder.notes + ' | ' : '') + eventNote;
 
-      await prisma.order.update({
+      const updatedOrder = await prisma.order.update({
         where: { id: matchedOrder.id },
         data: updateData,
+        include: {
+          items: { include: { book: true } },
+          user: true,
+          address: true,
+        },
       });
 
       logger.info('Order ' + matchedOrder.orderNumber + ' updated to status ' + (newStatus || matchedOrder.status));
+
+      // When India Post pings that the order is DELIVERED, trigger customer in-app notification & book review request email
+      if (isDelivering && !matchedOrder.reviewEmailSentAt) {
+        try {
+          await prisma.order.update({
+            where: { id: matchedOrder.id },
+            data: { reviewEmailSentAt: new Date() },
+          });
+
+          // In-app Notification
+          if (updatedOrder.userId) {
+            await prisma.notification.create({
+              data: {
+                userId: updatedOrder.userId,
+                title: `Order Delivered: #${updatedOrder.orderNumber}`,
+                message: `Your package for order #${updatedOrder.orderNumber} has arrived via India Post. Enjoy your reading!`,
+                type: 'order_delivered',
+                link: '/profile?tab=orders',
+              },
+            }).catch(() => {});
+          }
+
+          // Customer Review Request Email
+          const recipientEmail = (updatedOrder.address?.email && !updatedOrder.address.email.includes('@mail.com') && !updatedOrder.address.email.includes('@example.com'))
+            ? updatedOrder.address.email
+            : (updatedOrder.user?.email && !updatedOrder.user.email.includes('@mail.com') && !updatedOrder.user.email.includes('@example.com'))
+            ? updatedOrder.user.email
+            : null;
+          const recipientName = updatedOrder.address?.fullName || updatedOrder.user?.name || 'Valued Customer';
+
+          if (recipientEmail && recipientEmail.includes('@') && !recipientEmail.includes('@technoworld.com')) {
+            const itemsSummary = (updatedOrder.items || []).map((it: any) => ({
+              title: it.book?.title || 'Academic Book',
+              quantity: it.quantity,
+              price: Number(it.priceAtPurchase),
+              sku: it.book?.sku || it.book?.bookCode || undefined,
+              slug: it.book?.slug || it.book?.id || undefined,
+              coverUrl: it.book?.coverUrl || undefined,
+              author: it.book?.author || it.book?.authors?.[0]?.name || undefined,
+            }));
+
+            const emailContent = emailService.generateLifecycleEmailHtml({
+              status: 'DELIVERED',
+              orderNumber: updatedOrder.orderNumber,
+              customerName: recipientName,
+              items: itemsSummary,
+              totalAmount: Number(updatedOrder.totalAmount),
+              subtotal: Number(updatedOrder.subtotal),
+              shippingCharge: Number(updatedOrder.shippingCharge),
+              discountAmount: Number(updatedOrder.discountAmount),
+              trackingNumber: updatedOrder.trackingNumber,
+              shippingCarrier: updatedOrder.shippingCarrier || 'India Post',
+              shippingMethod: updatedOrder.shippingMethod,
+              paymentMethod: updatedOrder.paymentMethod,
+            });
+
+            emailService.sendOrderNotification({
+              recipientEmail,
+              recipientName,
+              orderNumber: updatedOrder.orderNumber,
+              customerId: updatedOrder.user?.customerId || updatedOrder.userId || undefined,
+              customerPhone: updatedOrder.address?.phone || updatedOrder.user?.phone || undefined,
+              subject: emailContent.subject,
+              message: emailContent.text,
+            }, emailContent.html).catch((err: any) => {
+              logger.warn(`[INDIA_POST_DELIVERY_EMAIL_WARN] ${err.message}`);
+            });
+          }
+        } catch (deliveryPostErr: any) {
+          logger.warn(`[INDIA_POST_DELIVERY_TRIGGER_ERR] ${deliveryPostErr.message}`);
+        }
+      }
     } else {
       logger.warn('India Post webhook: No matching order found for article ' + payload.article_number);
     }

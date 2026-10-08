@@ -340,6 +340,25 @@ export const trackShipment = async (req: Request, res: Response, next: NextFunct
     const trackingResults = await indiaPostService.trackArticles([trackingBarcode]);
     const trackingData = trackingResults[0] || null;
 
+    if (order && order.status === 'SHIPPED' && trackingData) {
+      const delStatus = (trackingData.tracking?.del_status?.del_status || '').toUpperCase();
+      const hasDeliveredEvent = trackingData.tracking?.tracking_details?.some(
+        (ev: any) => (ev.event || ev.description || '').toUpperCase().includes('DELIVER')
+      );
+      if (delStatus.includes('DELIVER') || hasDeliveredEvent) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            status: 'DELIVERED',
+            deliveredAt: order.deliveredAt || new Date(),
+            reviewEmailSentAt: order.reviewEmailSentAt || new Date(),
+          },
+        });
+        order.status = 'DELIVERED';
+        logger.info(`Auto-updated order #${order.orderNumber} to DELIVERED via India Post tracking sync`);
+      }
+    }
+
     res.json({
       success: true,
       data: {

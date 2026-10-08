@@ -69,7 +69,7 @@ export const submitContactMessage = async (req: Request, res: Response, next: Ne
     const ackSubject = `We've received your message — Techno World Books`;
     const ackMessage = `Hello ${trimmedName},\n\nThank you for reaching out to Techno World Books! Our customer support team has received your message.\n\n${
       trimmedOrderNumber ? `Order Reference: #${trimmedOrderNumber}\n\n` : ''
-    }Your Message:\n"${trimmedMessage}"\n\nWe typically review and reply to all queries within business hours (Monday to Saturday, 10:00 AM – 8:00 PM).\n\nWarm regards,\nTechno World Books Team\n90/6A Mahatma Gandhi Rd, College Street, Kolkata 700007\nWhatsApp: +91 747 913 5626`;
+    }Your Message:\n"${trimmedMessage}"\n\nWe typically review and reply to all queries within business hours (Monday to Saturday, 10:00 AM – 8:00 PM).\n\nWarm regards,\nTechno World Books Team\n90/6A Mahatma Gandhi Rd, Kolkata 700007\nWhatsApp: +91 747 913 5626`;
 
     emailService
       .sendOrderNotification({

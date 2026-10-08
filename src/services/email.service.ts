@@ -311,7 +311,7 @@ export class EmailService {
         <td align="center" style="padding: 18px 20px 14px 20px; border-top: 1px solid #F1F0EA; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
           ${replyNoteHtml}
           <div style="font-size: 11px; color: #64748B; line-height: 1.5; margin-top: 6px;">
-            <strong style="color: #334155;">Techno World Books</strong> &bull; College Street, Kolkata 700007<br/>
+            <strong style="color: #334155;">Techno World Books</strong> &bull; Kolkata 700007<br/>
             Store: <a href="https://technoworldbooks.in" style="color: #15803D; font-weight: 600; text-decoration: none;">technoworldbooks.in</a>
           </div>
         </td>
@@ -383,7 +383,7 @@ export class EmailService {
                       Techno World Books
                     </div>
                     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 11.5px; color: #A7F3D0; font-weight: 500; margin-top: 4px; font-variant-numeric: lining-nums tabular-nums;">
-                      ${subtitle} &bull; College Street, Kolkata
+                      ${subtitle} &bull; Kolkata
                     </div>
                   </td>
                 </tr>

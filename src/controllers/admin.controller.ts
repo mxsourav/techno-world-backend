@@ -803,11 +803,29 @@ export const getAdminSettings = async (req: Request, res: Response, next: NextFu
       } catch {}
     }
 
+    const maxSessionsSetting = await prisma.systemSetting.findUnique({
+      where: { key: 'ADMIN_MAX_ACTIVE_SESSIONS' },
+    });
+    const maxActiveSessions = maxSessionsSetting?.value !== undefined ? parseInt(maxSessionsSetting.value, 10) : 2;
+
+    const activeSessionsCount = adminUser
+      ? await prisma.session.count({
+          where: {
+            userId: adminUser.id,
+            expiresAt: { gt: new Date() },
+          },
+        })
+      : 0;
+
     res.status(200).json({
       success: true,
       data: {
         admin: adminUser,
         smtp: smtpConfig,
+        sessionConfig: {
+          maxActiveSessions,
+          activeSessionsCount,
+        },
       },
     });
   } catch (error) {
@@ -837,12 +855,27 @@ export const updateAdminProfile = async (req: Request, res: Response, next: Next
 
     const data: any = {};
     if (name) data.name = name.trim();
-    if (email) data.email = email.trim().toLowerCase();
+    if (email) {
+      const normalizedEmail = email.trim().toLowerCase();
+      // Check if email/username already taken by another user
+      const existingUser = await prisma.user.findFirst({
+        where: {
+          email: normalizedEmail,
+          id: { not: adminId },
+        },
+      });
+      if (existingUser) {
+        res.status(400).json({ success: false, message: 'This username or email is already taken by another account' });
+        return;
+      }
+      data.email = normalizedEmail;
+    }
     if (phone !== undefined) data.phone = phone ? phone.trim() : null;
     
     if (password && password.trim().length >= 6) {
       const argon2 = await import('argon2');
       data.password = await argon2.default.hash(password.trim());
+      data.tokenVersion = { increment: 1 };
     }
 
     const updated = await prisma.user.update({
@@ -855,6 +888,164 @@ export const updateAdminProfile = async (req: Request, res: Response, next: Next
       success: true,
       message: 'Admin profile updated successfully',
       data: updated,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// GET /api/v1/admin/sessions
+export const getAdminSessions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const adminId = (req as any).user?.userId || (req as any).user?.id;
+    const currentSessionId = (req as any).sessionId;
+
+    if (!adminId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+
+    const maxSessionsSetting = await prisma.systemSetting.findUnique({
+      where: { key: 'ADMIN_MAX_ACTIVE_SESSIONS' },
+    });
+    const maxActiveSessions = maxSessionsSetting?.value !== undefined ? parseInt(maxSessionsSetting.value, 10) : 2;
+
+    const sessions = await prisma.session.findMany({
+      where: {
+        userId: adminId,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        userAgent: true,
+        ipAddress: true,
+        createdAt: true,
+        expiresAt: true,
+      },
+    });
+
+    const formattedSessions = sessions.map((s) => ({
+      ...s,
+      isCurrent: currentSessionId ? s.id === currentSessionId : false,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        maxActiveSessions,
+        totalActive: sessions.length,
+        sessions: formattedSessions,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/v1/admin/sessions/limit
+export const updateMaxSessionsLimit = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const adminId = (req as any).user?.userId || (req as any).user?.id;
+    if (!adminId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+
+    const { limit } = req.body;
+    const parsedLimit = parseInt(String(limit), 10);
+    if (isNaN(parsedLimit) || parsedLimit < 0 || parsedLimit > 20) {
+      res.status(400).json({ success: false, message: 'Limit must be a valid number between 0 (unlimited) and 20' });
+      return;
+    }
+
+    await prisma.systemSetting.upsert({
+      where: { key: 'ADMIN_MAX_ACTIVE_SESSIONS' },
+      update: { value: String(parsedLimit) },
+      create: { key: 'ADMIN_MAX_ACTIVE_SESSIONS', value: String(parsedLimit) },
+    });
+
+    // If new limit is > 0, evict excess active sessions immediately for the current admin
+    if (parsedLimit > 0) {
+      const activeSessions = await prisma.session.findMany({
+        where: {
+          userId: adminId,
+          expiresAt: { gt: new Date() },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (activeSessions.length > parsedLimit) {
+        const toEvict = activeSessions.slice(parsedLimit);
+        await prisma.session.deleteMany({
+          where: { id: { in: toEvict.map((s) => s.id) } },
+        });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Maximum active devices set to ${parsedLimit === 0 ? 'Unlimited' : parsedLimit}`,
+      data: { maxActiveSessions: parsedLimit },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// DELETE /api/v1/admin/sessions/:id
+export const terminateSession = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const adminId = (req as any).user?.userId || (req as any).user?.id;
+    const sessionId = req.params.id;
+
+    if (!adminId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+
+    const session = await prisma.session.findFirst({
+      where: { id: sessionId, userId: adminId },
+    });
+
+    if (!session) {
+      res.status(404).json({ success: false, message: 'Session not found' });
+      return;
+    }
+
+    await prisma.session.delete({ where: { id: sessionId } });
+
+    res.status(200).json({
+      success: true,
+      message: 'Device session terminated successfully',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// POST /api/v1/admin/sessions/terminate-others
+export const terminateOtherSessions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const adminId = (req as any).user?.userId || (req as any).user?.id;
+    const currentSessionId = (req as any).sessionId;
+
+    if (!adminId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+
+    const deleted = await prisma.session.deleteMany({
+      where: {
+        userId: adminId,
+        ...(currentSessionId ? { id: { not: currentSessionId } } : {}),
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Logged out ${deleted.count} other session(s) successfully`,
+      data: { terminatedCount: deleted.count },
     });
   } catch (error) {
     next(error);

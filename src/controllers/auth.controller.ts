@@ -13,16 +13,74 @@ import { generateNextCustomerId } from '../utils/customerId.util.js';
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME_MS = 15 * 60 * 1000; // 15 minutes
 
+/**
+ * Enforces concurrent active session limits for a user and creates a new session.
+ */
+export async function createBoundedSession(
+  userId: string,
+  role: Role,
+  refreshToken: string,
+  userAgent: string,
+  ipAddress: string,
+  customSessionId?: string
+): Promise<string> {
+  const sessionId = customSessionId || (await import('crypto')).randomUUID();
+
+  // Enforce session concurrency limits for ADMIN and SUPER_ADMIN
+  if (role === Role.ADMIN || role === Role.SUPER_ADMIN) {
+    const maxSessionsSetting = await prisma.systemSetting.findUnique({
+      where: { key: 'ADMIN_MAX_ACTIVE_SESSIONS' },
+    });
+    // Default: 2 devices. If 0, unlimited.
+    const maxSessions = maxSessionsSetting?.value !== undefined ? parseInt(maxSessionsSetting.value, 10) : 2;
+
+    if (maxSessions > 0) {
+      const activeSessions = await prisma.session.findMany({
+        where: {
+          userId,
+          expiresAt: { gt: new Date() },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (activeSessions.length >= maxSessions) {
+        // Evict oldest sessions so total active count including the new one stays <= maxSessions
+        const keepCount = Math.max(0, maxSessions - 1);
+        const toEvict = activeSessions.slice(keepCount);
+        if (toEvict.length > 0) {
+          await prisma.session.deleteMany({
+            where: { id: { in: toEvict.map((s) => s.id) } },
+          });
+        }
+      }
+    }
+  }
+
+  await prisma.session.create({
+    data: {
+      id: sessionId,
+      userId,
+      refreshToken,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+      userAgent: userAgent || 'Unknown',
+      ipAddress: ipAddress || 'Unknown',
+    },
+  });
+
+  return sessionId;
+}
+
 export const login = async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    res.status(400).json({ success: false, message: 'Email and password are required' });
+    res.status(400).json({ success: false, message: 'Email/username and password are required' });
     return;
   }
 
   const rawInput = String(email).trim();
   const normalized = rawInput.toLowerCase();
+  const cleanPhone = rawInput.replace(/\D/g, '');
 
   try {
     let user = await prisma.user.findFirst({
@@ -30,6 +88,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         OR: [
           { email: rawInput },
           { email: normalized },
+          ...(cleanPhone.length >= 10 ? [{ phone: cleanPhone }, { phone: rawInput }] : []),
           ...(normalized === 'admin' ? [
             { role: Role.SUPER_ADMIN },
             { role: Role.ADMIN }
@@ -97,18 +156,18 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       data: { failedLogins: 0, lockedUntil: null } 
     });
 
-    const { accessToken, refreshToken } = generateTokens(user.id, user.role);
+    const sessionId = (await import('crypto')).randomUUID();
+    const { accessToken, refreshToken } = generateTokens(user.id, user.role, sessionId);
 
-    // Save refresh token to database
-    await prisma.session.create({
-      data: {
-        userId: user.id,
-        refreshToken,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-        userAgent: req.headers['user-agent'] || 'Unknown',
-        ipAddress: req.ip || 'Unknown'
-      }
-    });
+    // Save refresh token & bounded active session to database
+    await createBoundedSession(
+      user.id,
+      user.role,
+      refreshToken,
+      (req.headers['user-agent'] as string) || 'Unknown',
+      req.ip || 'Unknown',
+      sessionId
+    );
 
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
@@ -188,17 +247,19 @@ export const refresh = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user.id, user.role);
+    const newSessionId = (await import('crypto')).randomUUID();
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user.id, user.role, newSessionId);
 
     await prisma.$transaction([
       prisma.session.delete({ where: { id: session.id } }),
       prisma.session.create({
         data: {
+          id: newSessionId,
           userId: user.id,
           refreshToken: newRefreshToken,
           expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-          userAgent: req.headers['user-agent'] || 'Unknown',
-          ipAddress: req.ip || 'Unknown'
+          userAgent: (req.headers['user-agent'] as string) || session.userAgent || 'Unknown',
+          ipAddress: req.ip || session.ipAddress || 'Unknown'
         }
       })
     ]);
@@ -311,18 +372,18 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
       }
     }
 
-    const { accessToken, refreshToken } = generateTokens(user.id, user.role);
+    const sessionId = (await import('crypto')).randomUUID();
+    const { accessToken, refreshToken } = generateTokens(user.id, user.role, sessionId);
 
-    // Save refresh session
-    await prisma.session.create({
-      data: {
-        userId: user.id,
-        refreshToken,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-        userAgent: req.headers['user-agent'] || 'Google OAuth Bypass Agent',
-        ipAddress: req.ip || '127.0.0.1',
-      },
-    });
+    // Save refresh session with device limiting
+    await createBoundedSession(
+      user.id,
+      user.role,
+      refreshToken,
+      (req.headers['user-agent'] as string) || 'Google OAuth Bypass Agent',
+      req.ip || '127.0.0.1',
+      sessionId
+    );
 
     // Exact Cookie Parity with standard login
     res.cookie('accessToken', accessToken, {
@@ -502,18 +563,18 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
     }
 
     // Generate standard application JWT tokens
-    const { accessToken, refreshToken } = generateTokens(user.id, user.role);
+    const sessionId = (await import('crypto')).randomUUID();
+    const { accessToken, refreshToken } = generateTokens(user.id, user.role, sessionId);
 
-    // Save refresh session in database
-    await prisma.session.create({
-      data: {
-        userId: user.id,
-        refreshToken,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-        userAgent: req.headers['user-agent'] || 'Google GIS Client',
-        ipAddress: req.ip || '127.0.0.1',
-      },
-    });
+    // Save refresh session in database with device limiting
+    await createBoundedSession(
+      user.id,
+      user.role,
+      refreshToken,
+      (req.headers['user-agent'] as string) || 'Google GIS Client',
+      req.ip || '127.0.0.1',
+      sessionId
+    );
 
     // Set HTTP-only secure cookies with matching parity
     res.cookie('accessToken', accessToken, {
@@ -637,17 +698,17 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       });
     }
 
-    const { accessToken, refreshToken } = generateTokens(user.id, user.role);
+    const sessionId = (await import('crypto')).randomUUID();
+    const { accessToken, refreshToken } = generateTokens(user.id, user.role, sessionId);
 
-    await prisma.session.create({
-      data: {
-        userId: user.id,
-        refreshToken,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
-        userAgent: req.headers['user-agent'] || 'Unknown',
-        ipAddress: req.ip || 'Unknown',
-      },
-    });
+    await createBoundedSession(
+      user.id,
+      user.role,
+      refreshToken,
+      (req.headers['user-agent'] as string) || 'Unknown',
+      req.ip || 'Unknown',
+      sessionId
+    );
 
     res.cookie('accessToken', accessToken, {
       httpOnly: true,

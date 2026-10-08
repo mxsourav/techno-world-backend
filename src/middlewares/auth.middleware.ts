@@ -9,7 +9,9 @@ declare global {
       user?: {
         userId: string;
         role: string;
+        sessionId?: string;
       };
+      sessionId?: string;
     }
   }
 }
@@ -53,9 +55,9 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
           if (session && session.expiresAt > new Date()) {
             const user = await prisma.user.findUnique({ where: { id: refDecoded.userId } });
             if (user && user.isActive) {
-              const { accessToken: freshAccess } = generateTokens(user.id, user.role);
+              const { accessToken: freshAccess } = generateTokens(user.id, user.role, session.id);
               res.setHeader('x-new-access-token', freshAccess);
-              decoded = { userId: user.id, role: user.role };
+              decoded = { userId: user.id, role: user.role, sessionId: session.id };
             }
           }
         }
@@ -70,7 +72,25 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     return;
   }
 
+  // Active Session / Device Limit Verification for Admins
+  if (decoded && (decoded.role === 'ADMIN' || decoded.role === 'SUPER_ADMIN') && decoded.sessionId) {
+    const activeSession = await prisma.session.findUnique({
+      where: { id: decoded.sessionId },
+      select: { id: true, expiresAt: true }
+    });
+
+    if (!activeSession || activeSession.expiresAt <= new Date()) {
+      res.status(401).json({
+        success: false,
+        code: 'SESSION_REVOKED',
+        message: 'Your active session has ended because this account logged in on another device or the active session limit was exceeded.'
+      });
+      return;
+    }
+  }
+
   req.user = decoded;
+  req.sessionId = decoded.sessionId;
   next();
 };
 
@@ -117,9 +137,9 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
             if (session && session.expiresAt > new Date()) {
               const user = await prisma.user.findUnique({ where: { id: refDecoded.userId } });
               if (user && user.isActive) {
-                const { accessToken: freshAccess } = generateTokens(user.id, user.role);
+                const { accessToken: freshAccess } = generateTokens(user.id, user.role, session.id);
                 res.setHeader('x-new-access-token', freshAccess);
-                decoded = { userId: user.id, role: user.role };
+                decoded = { userId: user.id, role: user.role, sessionId: session.id };
               }
             }
           }
@@ -128,6 +148,7 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
     }
     if (decoded) {
       req.user = decoded;
+      req.sessionId = decoded.sessionId;
     }
   }
   next();

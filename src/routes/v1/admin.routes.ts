@@ -17,6 +17,10 @@ import {
   deleteCustomerAccount,
   getAdminSettings,
   updateAdminProfile,
+  getAdminSessions,
+  updateMaxSessionsLimit,
+  terminateSession,
+  terminateOtherSessions,
   updateSmtpSettings,
   testSmtpSettings,
   getEmailLogs,
@@ -89,6 +93,10 @@ router.get('/settings', getAdminSettings);
 router.get('/settings/auto-accept', getAutoAcceptSetting);
 router.post('/settings/auto-accept', updateAutoAcceptSetting);
 router.patch('/profile', updateAdminProfile);
+router.get('/sessions', getAdminSessions);
+router.post('/sessions/limit', updateMaxSessionsLimit);
+router.delete('/sessions/:id', terminateSession);
+router.post('/sessions/terminate-others', terminateOtherSessions);
 router.put('/smtp', updateSmtpSettings);
 router.post('/smtp/test', testSmtpSettings);
 router.get('/emails', getEmailLogs);

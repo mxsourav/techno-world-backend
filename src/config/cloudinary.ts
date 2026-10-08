@@ -1,5 +1,14 @@
 import { v2 as cloudinary } from 'cloudinary';
-import { env } from './env.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const getCloudName = (): string =>
+  process.env.CLOUDINARY_CLOUD_NAME || '';
+const getApiKey = (): string =>
+  process.env.CLOUDINARY_API_KEY || '';
+const getApiSecret = (): string =>
+  process.env.CLOUDINARY_API_SECRET || '';
 
 export const isCloudinaryConfigured = (): boolean => {
   return Boolean(
@@ -17,6 +26,8 @@ export const configureCloudinary = () => {
       api_secret: env.CLOUDINARY_API_SECRET,
       secure: true,
     });
+  } else {
+    console.warn('[Cloudinary] Notice: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, or CLOUDINARY_API_SECRET not provided in environment variables.');
   }
 };
 

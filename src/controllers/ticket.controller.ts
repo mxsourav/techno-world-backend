@@ -102,7 +102,30 @@ export const listTickets = async (req: Request, res: Response, next: NextFunctio
         stats,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error && (error.code === 'P2021' || String(error.message).includes('does not exist') || String(error).includes('Ticket'))) {
+      logger.warn('[TicketController] Ticket table not initialized in database, returning empty list');
+      res.json({
+        success: true,
+        data: {
+          tickets: [],
+          pagination: {
+            page: 1,
+            limit: 20,
+            total: 0,
+            totalPages: 0,
+          },
+          stats: {
+            all: 0,
+            open: 0,
+            pending: 0,
+            solved: 0,
+            discarded: 0,
+          },
+        },
+      });
+      return;
+    }
     next(error);
   }
 };
@@ -170,7 +193,11 @@ export const getTicket = async (req: Request, res: Response, next: NextFunction)
         recentOrders,
       },
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error && (error.code === 'P2021' || String(error.message).includes('does not exist'))) {
+      res.status(404).json({ success: false, message: 'Support desk not yet initialized in database' });
+      return;
+    }
     next(error);
   }
 };

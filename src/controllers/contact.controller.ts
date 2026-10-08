@@ -67,21 +67,24 @@ export const submitContactMessage = async (req: Request, res: Response, next: Ne
 
     // 3. Send automated customer receipt acknowledgment email asynchronously
     const ackSubject = `We've received your message — Techno World Books`;
-    const ackMessage = `Hello ${trimmedName},\n\nThank you for reaching out to Techno World Books! Our College Street customer service team has received your message.\n\n${
+    const ackMessage = `Hello ${trimmedName},\n\nThank you for reaching out to Techno World Books! Our customer support team has received your message.\n\n${
       trimmedOrderNumber ? `Order Reference: #${trimmedOrderNumber}\n\n` : ''
-    }Your Message:\n"${trimmedMessage}"\n\nWe typically review and reply to all queries within business hours (Monday to Saturday, 10:00 AM – 8:00 PM).\n\nWarm regards,\nTechno World Books Team\n90/6A Mahatma Gandhi Rd, College Street, Kolkata 700007\nWhatsApp: +91 747 913 5626`;
+    }Your Message:\n"${trimmedMessage}"\n\nWe typically review and reply to all queries within business hours (Monday to Saturday, 10:00 AM – 8:00 PM).\n\nWarm regards,\nTechno World Books Team\n90/6A Mahatma Gandhi Rd, Kolkata 700007\nWhatsApp: +91 747 913 5626`;
 
     emailService
       .sendOrderNotification({
         recipientEmail: trimmedEmail,
+        recipientName: trimmedName,
         orderNumber: trimmedOrderNumber || 'INQUIRY',
         subject: ackSubject,
         message: ackMessage,
+        tier: 'SUPPORT',
+        replyTo: 'support@technoworldbooks.in',
       })
       .catch((err) => logger.warn(`Failed to dispatch customer contact ack email: ${err.message}`));
 
     // 4. Send alert email to store support inbox
-    const supportAlertSubject = `📩 New Website Inquiry from ${trimmedName}${trimmedOrderNumber ? ` (Order #${trimmedOrderNumber})` : ''}`;
+    const supportAlertSubject = `New Website Inquiry from ${trimmedName}${trimmedOrderNumber ? ` (Order #${trimmedOrderNumber})` : ''}`;
     const supportAlertMessage = `New message received from the website contact form:\n\nName: ${trimmedName}\nEmail: ${trimmedEmail}\nOrder Number: ${trimmedOrderNumber || 'N/A'}\nIP: ${ipAddress || 'Unknown'}\nTime: ${new Date().toLocaleString('en-IN')}\n\nMessage:\n${trimmedMessage}`;
 
     emailService
@@ -90,12 +93,13 @@ export const submitContactMessage = async (req: Request, res: Response, next: Ne
         orderNumber: trimmedOrderNumber || 'INQUIRY',
         subject: supportAlertSubject,
         message: supportAlertMessage,
+        tier: 'SUPPORT',
       })
       .catch((err) => logger.warn(`Failed to dispatch admin contact alert email: ${err.message}`));
 
     res.status(201).json({
       success: true,
-      message: 'Your message has been received! Our College Street team will reply within 24 hours.',
+      message: 'Your message has been received! Our customer support team will reply within 24 hours.',
       data: {
         id: contactMessage.id,
         createdAt: contactMessage.createdAt,
@@ -175,6 +179,16 @@ export const updateContactMessageStatus = async (req: Request, res: Response, ne
       where: { id },
       data: updateData,
     });
+
+    if (reply && typeof reply === 'string' && reply.trim() && updated.email) {
+      emailService.sendSupportEmail({
+        recipientEmail: updated.email,
+        recipientName: updated.name,
+        subject: `Response to your inquiry #${updated.orderNumber || updated.id.slice(0, 8)} — Techno World Books Support`,
+        message: reply.trim(),
+        orderNumber: updated.orderNumber || updated.id.slice(0, 8),
+      }).catch((e: any) => logger.warn(`Failed to send contact reply email: ${e.message}`));
+    }
 
     res.status(200).json({
       success: true,

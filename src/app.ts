@@ -42,8 +42,6 @@ const trustedProductionDomains = [
   'https://technoworldbooks.in',
   'https://www.technoworldbooks.in',
   'https://admin.technoworldbooks.in',
-  'https://techno-world-books.vercel.app',
-  'https://techno-world-admin.vercel.app',
 ];
 
 app.use(

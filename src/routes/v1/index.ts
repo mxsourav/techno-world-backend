@@ -26,6 +26,7 @@ import siteMediaRoutes from './siteMedia.routes.js';
 import cartRoutes from './cart.routes.js';
 import wishlistRoutes from './wishlist.routes.js';
 import b2bEnquiryRoutes from './b2bEnquiry.routes.js';
+import ticketRoutes from './ticket.routes.js';
 
 const router = Router();
 
@@ -68,5 +69,6 @@ router.use('/site-media', siteMediaRoutes);
 router.use('/cart', cartRoutes);
 router.use('/wishlist', wishlistRoutes);
 router.use('/b2b-quotes', b2bEnquiryRoutes);
+router.use('/support', ticketRoutes);
 
 export default router;

@@ -171,6 +171,8 @@ async function sendDispatchEmail(orderId: string, trackingNumber?: string | null
         recipientEmail,
         recipientName,
         orderNumber: fullOrder.orderNumber,
+        customerId: fullOrder.user?.customerId || fullOrder.userId || undefined,
+        customerPhone: fullOrder.address?.phone || fullOrder.user?.phone || undefined,
         subject: emailContent.subject,
         message: emailContent.text,
         attachments: invoiceAttachment,
@@ -184,7 +186,7 @@ async function sendDispatchEmail(orderId: string, trackingNumber?: string | null
       await prisma.notification.create({
         data: {
           userId: fullOrder.userId,
-          title: `🚚 Dispatched: #${fullOrder.orderNumber}`,
+          title: `Dispatched: #${fullOrder.orderNumber}`,
           message: `Order #${fullOrder.orderNumber} has been dispatched via ${carrier || 'India Post'}.${trackingNumber ? ` Tracking No: ${trackingNumber}` : ''}`,
           type: 'order_shipped',
           link: '/profile?tab=orders',
@@ -337,6 +339,25 @@ export const trackShipment = async (req: Request, res: Response, next: NextFunct
     const trackingBarcode = order?.trackingNumber || cleanId;
     const trackingResults = await indiaPostService.trackArticles([trackingBarcode]);
     const trackingData = trackingResults[0] || null;
+
+    if (order && order.status === 'SHIPPED' && trackingData) {
+      const delStatus = (trackingData.tracking?.del_status?.del_status || '').toUpperCase();
+      const hasDeliveredEvent = trackingData.tracking?.tracking_details?.some(
+        (ev: any) => (ev.event || ev.description || '').toUpperCase().includes('DELIVER')
+      );
+      if (delStatus.includes('DELIVER') || hasDeliveredEvent) {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            status: 'DELIVERED',
+            deliveredAt: order.deliveredAt || new Date(),
+            reviewEmailSentAt: order.reviewEmailSentAt || new Date(),
+          },
+        });
+        order.status = 'DELIVERED';
+        logger.info(`Auto-updated order #${order.orderNumber} to DELIVERED via India Post tracking sync`);
+      }
+    }
 
     res.json({
       success: true,

@@ -20,6 +20,7 @@ import {
   updateSmtpSettings,
   testSmtpSettings,
   getEmailLogs,
+  sendManualAdminEmail,
   analyzeImportBookCatalog, 
   executeImportBookCatalog,
   getBookPreview,
@@ -91,6 +92,7 @@ router.patch('/profile', updateAdminProfile);
 router.put('/smtp', updateSmtpSettings);
 router.post('/smtp/test', testSmtpSettings);
 router.get('/emails', getEmailLogs);
+router.post('/emails/send', sendManualAdminEmail);
 
 // Abandoned Carts, RTO, and Tax Reports
 router.get('/abandoned-carts', getAbandonedCarts);

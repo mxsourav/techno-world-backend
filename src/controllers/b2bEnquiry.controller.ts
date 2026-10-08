@@ -116,19 +116,22 @@ export const submitB2BEnquiry = async (req: Request, res: Response, next: NextFu
       : '';
 
     const ackSubject = `Institutional Quote Request Received — ${trimmedOrg} | Techno World Books`;
-    const ackMessage = `Dear ${trimmedRep},\n\nThank you for reaching out to Techno World Books College Street for institutional bulk purchasing.\n\nWe have received your quotation request for:\nOrganization: ${trimmedOrg}\nRepresentative: ${trimmedRep}\nPhone / WhatsApp: ${trimmedPhone}\nExpected Timeline: ${trimmedTimeline || 'Standard Requisition'}\n\nRequirements:\n"${trimmedRequirements}"\n${cartSummaryText}\n\nOur Institutional Sales Team (headed by Md. Washim Akram) is reviewing your requirements and will contact you with a formal quotation and institutional discount tier within 2–4 business hours.\n\nFor urgent queries:\nDirect Sales Desk: +91 747 913 5626\nOfficial Quotation Desk: team@technoworldbooks.in\n\nWarm regards,\nTechno World Books\nCollege Street, Kolkata 700007`;
+    const ackMessage = `Dear ${trimmedRep},\n\nThank you for reaching out to Techno World Books for institutional bulk purchasing.\n\nWe have received your quotation request for:\nOrganization: ${trimmedOrg}\nRepresentative: ${trimmedRep}\nPhone / WhatsApp: ${trimmedPhone}\nExpected Timeline: ${trimmedTimeline || 'Standard Requisition'}\n\nRequirements:\n"${trimmedRequirements}"\n${cartSummaryText}\n\nOur Institutional Sales Team (headed by Md. Washim Akram) is reviewing your requirements and will contact you with a formal quotation and institutional discount tier within 2–4 business hours.\n\nFor urgent queries:\nDirect Sales Desk: +91 747 913 5626\nOfficial Quotation Desk: team@technoworldbooks.in\n\nWarm regards,\nTechno World Books\nKolkata 700007`;
 
     emailService
       .sendOrderNotification({
         recipientEmail: trimmedEmail,
+        recipientName: trimmedRep,
         orderNumber: `B2B-${enquiry.id.slice(0, 8).toUpperCase()}`,
         subject: ackSubject,
         message: ackMessage,
+        tier: 'TEAM',
+        replyTo: 'team@technoworldbooks.in',
       })
       .catch((err) => logger.warn(`Failed to dispatch B2B customer ack email: ${err.message}`));
 
     // 4. Send Alert Email to Institutional Sales Inbox
-    const alertSubject = `🏛️ New B2B Quote Request: ${trimmedOrg} (${trimmedRep})`;
+    const alertSubject = `New B2B Quote Request: ${trimmedOrg} (${trimmedRep})`;
     const alertMessage = `A new institutional quote request has been submitted:\n\nOrganization: ${trimmedOrg}\nRepresentative: ${trimmedRep}\nEmail: ${trimmedEmail}\nPhone: ${trimmedPhone}\nTimeline: ${trimmedTimeline || 'None'}\n\nRequirements:\n${trimmedRequirements}\n${cartSummaryText}\n\nSubmitted At: ${new Date().toLocaleString('en-IN')}`;
 
     emailService
@@ -137,6 +140,7 @@ export const submitB2BEnquiry = async (req: Request, res: Response, next: NextFu
         orderNumber: `B2B-${enquiry.id.slice(0, 8).toUpperCase()}`,
         subject: alertSubject,
         message: alertMessage,
+        tier: 'TEAM',
       })
       .catch((err) => logger.warn(`Failed to dispatch B2B internal alert email: ${err.message}`));
 

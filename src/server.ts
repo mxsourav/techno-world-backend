@@ -99,6 +99,7 @@ async function autoHealPlaceholderCovers(): Promise<void> {
 }
 
 import { ensureCustomerIds } from './utils/customerId.util.js';
+import { imapService } from './services/imap.service.js';
 
 async function bootstrap() {
   try {
@@ -110,6 +111,7 @@ async function bootstrap() {
     await ensureCustomerIds();
 
     startInvoiceCron();
+    imapService.startPolling();
 
     app.listen(env.PORT, () => {
       logger.info(`Server is running on port ${env.PORT}`);
@@ -124,6 +126,7 @@ async function bootstrap() {
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received. Shutting down gracefully...');
   stopInvoiceCron();
+  imapService.stopPolling();
   await prisma.$disconnect();
   process.exit(0);
 });
@@ -131,6 +134,7 @@ process.on('SIGTERM', async () => {
 process.on('SIGINT', async () => {
   logger.info('SIGINT received. Shutting down gracefully...');
   stopInvoiceCron();
+  imapService.stopPolling();
   await prisma.$disconnect();
   process.exit(0);
 });

@@ -246,6 +246,14 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
       res.status(400).json({ success: false, message: pricingResult.promotionError });
       return;
     }
+    // Techno Points Loyalty Calculation: 1 coin per ₹100 spent on books (excluding delivery charges)
+    const netBookPurchase = Math.max(
+      0,
+      Number(pricingResult.subtotal || 0) -
+        Number(pricingResult.itemDiscountTotal || 0) -
+        Number(pricingResult.promotionDiscount || 0)
+    );
+    const pointsEarned = Math.floor(netBookPurchase / 100);
 
     // Atomic Transaction: Stock decrement + Order Creation + Address Deduplication + Loyalty Points Increment
     const order = await prisma.$transaction(async (tx) => {
@@ -497,8 +505,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         }
       }
 
-      // Techno Points Loyalty Engine: 1 point/coin for every ₹100 spent (on remaining payable)
-      const pointsEarned = Math.floor(pricingResult.totalAmount / 100);
+      // Techno Points Loyalty Engine: 1 point/coin for every ₹100 spent on books (excluding delivery charges)
       if (pointsEarned > 0 && userId) {
         await tx.user.update({
           where: { id: userId },
@@ -644,6 +651,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
         pointsDiscount: pricingResult.pointsDiscount || 0,
         walletUsed: pricingResult.walletUsed || 0,
         walletDiscount: pricingResult.walletDiscount || 0,
+        pointsEarned: pointsEarned,
       }
     });
   } catch (error: any) {
@@ -812,12 +820,20 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
 
     const updatedNotes = existing.notes ? `${existing.notes}\n${noteEntry}` : noteEntry;
 
+    const orderData: any = {
+      status,
+      notes: updatedNotes,
+    };
+    if (status === 'DELIVERED' && !existing.deliveredAt) {
+      orderData.deliveredAt = new Date();
+    }
+    if (status === 'DELIVERED' && !existing.reviewEmailSentAt) {
+      orderData.reviewEmailSentAt = new Date();
+    }
+
     const order = await prisma.order.update({
       where: { id },
-      data: {
-        status,
-        notes: updatedNotes
-      },
+      data: orderData,
       include: { items: { include: { book: true } }, user: true, address: true },
     });
 
@@ -829,23 +845,23 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
         let notifType = 'order_status';
 
         if (status === 'CONFIRMED') {
-          notifTitle = `✅ Order Confirmed: #${order.orderNumber}`;
+          notifTitle = `Order Confirmed: #${order.orderNumber}`;
           notifMsg = `Your order #${order.orderNumber} (₹${order.totalAmount}) has been approved by the bookstore and is confirmed!`;
           notifType = 'order_confirmed';
         } else if (status === 'PROCESSING') {
-          notifTitle = `📦 Packing Order: #${order.orderNumber}`;
+          notifTitle = `Packing Order: #${order.orderNumber}`;
           notifMsg = `Order #${order.orderNumber} is being carefully packed and prepared for India Post dispatch.`;
           notifType = 'order_processing';
         } else if (status === 'SHIPPED') {
-          notifTitle = `🚚 Dispatched: #${order.orderNumber}`;
+          notifTitle = `Dispatched: #${order.orderNumber}`;
           notifMsg = `Order #${order.orderNumber} has been dispatched via India Post Speed Post. Tracking: ${order.trackingNumber || 'Active'}`;
           notifType = 'order_shipped';
         } else if (status === 'DELIVERED') {
-          notifTitle = `🎉 Order Delivered: #${order.orderNumber}`;
+          notifTitle = `Order Delivered: #${order.orderNumber}`;
           notifMsg = `Your package for order #${order.orderNumber} has been successfully delivered. Enjoy your reading!`;
           notifType = 'order_delivered';
         } else if (status === 'CANCELLED') {
-          notifTitle = `❌ Order Cancelled: #${order.orderNumber}`;
+          notifTitle = `Order Cancelled: #${order.orderNumber}`;
           notifMsg = `Order #${order.orderNumber} was cancelled. Reason: ${reason || 'Fulfillment unavailable'}. Any deducted payment will be refunded.`;
           notifType = 'order_cancelled';
         }
@@ -890,6 +906,9 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
           quantity: it.quantity,
           price: Number(it.priceAtPurchase),
           sku: it.book?.sku || it.book?.bookCode || undefined,
+          slug: it.book?.slug || it.book?.id || undefined,
+          coverUrl: it.book?.coverUrl || undefined,
+          author: it.book?.author || it.book?.authors?.[0]?.name || undefined,
         }));
 
         let invoiceAttachment: any = undefined;
@@ -936,6 +955,8 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
           recipientEmail,
           recipientName,
           orderNumber: order.orderNumber,
+          customerId: order.user?.customerId || order.userId || undefined,
+          customerPhone: order.address?.phone || order.user?.phone || undefined,
           subject: emailContent.subject,
           message: emailContent.text,
           attachments: invoiceAttachment,
@@ -984,15 +1005,35 @@ export const sendOrderCustomEmail = async (req: Request, res: Response, next: Ne
       return;
     }
 
-    const dispatchResult = await emailService.sendOrderEmail({
-      orderId: order.id,
-      orderNumber: order.orderNumber,
-      recipientEmail: emailTo,
-      recipientName: nameTo,
-      subject,
-      message,
-      templateType: templateType || 'CUSTOM',
-    });
+    let dispatchResult;
+    if (templateType === 'ADDRESS_CLARIFICATION') {
+      const addrSummary = order.address ? `${order.address.fullName}, ${order.address.addressLine1}${order.address.addressLine2 ? ', ' + order.address.addressLine2 : ''}, ${order.address.city}, ${order.address.state} - ${order.address.pincode}, Ph: ${order.address.phone}` : undefined;
+      dispatchResult = await emailService.sendAddressClarificationEmail({
+        recipientEmail: emailTo,
+        recipientName: nameTo,
+        orderNumber: order.orderNumber,
+        customerId: order.user?.customerId || order.userId || undefined,
+        customerPhone: order.address?.phone || order.user?.phone || undefined,
+        subject: subject || `Urgent: Delivery Address Clarification for Order #${order.orderNumber}`,
+        message: addrSummary ? `${message}\n\nCurrent Address on File:\n${addrSummary}` : message,
+      });
+    } else {
+      const isTeam = ['DELAY_NOTICE', 'ADDRESS_ISSUE', 'QUERY', 'B2B'].includes(templateType);
+      dispatchResult = await emailService.sendOrderEmail({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        recipientEmail: emailTo,
+        recipientName: nameTo,
+        customerId: order.user?.customerId || order.userId || undefined,
+        customerPhone: order.address?.phone || order.user?.phone || undefined,
+        subject,
+        message,
+        templateType: templateType || 'CUSTOM',
+        tier: isTeam ? 'TEAM' : 'ORDERS',
+        replyTo: isTeam ? 'team@technoworldbooks.in' : undefined,
+        canReply: isTeam,
+      });
+    }
 
     // Create in-app Customer Notification for Admin Delay Notice or Custom message
     try {
@@ -1012,7 +1053,7 @@ export const sendOrderCustomEmail = async (req: Request, res: Response, next: Ne
     }
 
     // Append email record into order notes
-    const emailLogEntry = `[${new Date().toISOString()}] Admin Email Sent (${templateType || 'CUSTOM'}): "${subject}" -> ${emailTo}`;
+    const emailLogEntry = `[${new Date().toISOString()}] Admin Email Sent (${templateType || 'CUSTOM'} via orders@technoworldbooks.in): "${subject}" -> ${emailTo}`;
     const updatedNotes = order.notes ? `${order.notes}\n${emailLogEntry}` : emailLogEntry;
 
     await prisma.order.update({
@@ -1063,12 +1104,17 @@ export const batchUpdateOrderStatus = async (req: Request, res: Response, next: 
 
       const updatedNotes = existing.notes ? `${existing.notes}\n${noteEntry}` : noteEntry;
 
+      const batchOrderData: any = {
+        status,
+        notes: updatedNotes,
+      };
+      if (status === 'DELIVERED' && !existing.deliveredAt) {
+        batchOrderData.deliveredAt = new Date();
+      }
+
       const order = await prisma.order.update({
         where: { id },
-        data: {
-          status,
-          notes: updatedNotes,
-        },
+        data: batchOrderData,
         include: { items: { include: { book: true } }, user: true, address: true },
       });
 
@@ -1080,23 +1126,23 @@ export const batchUpdateOrderStatus = async (req: Request, res: Response, next: 
           let notifType = 'order_status';
 
           if (status === 'CONFIRMED') {
-            notifTitle = `✅ Order Confirmed: #${order.orderNumber}`;
+            notifTitle = `Order Confirmed: #${order.orderNumber}`;
             notifMsg = `Your order #${order.orderNumber} (₹${order.totalAmount}) has been approved by the bookstore and is confirmed!`;
             notifType = 'order_confirmed';
           } else if (status === 'PROCESSING') {
-            notifTitle = `📦 Packing Order: #${order.orderNumber}`;
+            notifTitle = `Packing Order: #${order.orderNumber}`;
             notifMsg = `Order #${order.orderNumber} is being packed and prepared for dispatch.`;
             notifType = 'order_processing';
           } else if (status === 'SHIPPED') {
-            notifTitle = `🚚 Dispatched: #${order.orderNumber}`;
+            notifTitle = `Dispatched: #${order.orderNumber}`;
             notifMsg = `Order #${order.orderNumber} has been dispatched via India Post Speed Post. Tracking: ${order.trackingNumber || 'Active'}`;
             notifType = 'order_shipped';
           } else if (status === 'DELIVERED') {
-            notifTitle = `🎉 Order Delivered: #${order.orderNumber}`;
-            notifMsg = `Your package for order #${order.orderNumber} has been delivered.`;
+            notifTitle = `Order Delivered: #${order.orderNumber}`;
+            notifMsg = `Your package for order #${order.orderNumber} has been delivered. Enjoy your reading!`;
             notifType = 'order_delivered';
           } else if (status === 'CANCELLED') {
-            notifTitle = `❌ Order Cancelled: #${order.orderNumber}`;
+            notifTitle = `Order Cancelled: #${order.orderNumber}`;
             notifMsg = `Order #${order.orderNumber} was cancelled. Reason: ${reason || 'Fulfillment unavailable'}.`;
             notifType = 'order_cancelled';
           }
@@ -1175,6 +1221,8 @@ export const batchSendOrderEmail = async (req: Request, res: Response, next: Nex
         subject,
         message,
         templateType: templateType || 'DELAY_NOTICE',
+        replyTo: 'orders@technoworldbooks.in',
+        canReply: true,
       });
 
       try {

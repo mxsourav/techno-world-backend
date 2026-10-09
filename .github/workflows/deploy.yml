@@ -20,11 +20,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check deploy configuration
+        if: ${{ secrets.GCP_VM_HOST == '' || secrets.GCP_SSH_PRIVATE_KEY == '' }}
+        run: |
+          echo "::warning::Skipping deployment because GCP_VM_HOST or GCP_SSH_PRIVATE_KEY is not configured."
+
       - name: Deploy backend
+        if: ${{ secrets.GCP_VM_HOST != '' && secrets.GCP_SSH_PRIVATE_KEY != '' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.GCP_VM_HOST }}
-          username: ${{ secrets.GCP_VM_USERNAME }}
+          username: ${{ secrets.GCP_VM_USERNAME || 'technoworldbookswebsite' }}
           key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
           port: 22
 

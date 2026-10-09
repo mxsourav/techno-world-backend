@@ -6,8 +6,8 @@ const router = Router();
 
 router.get('/', (req, res) => {
   res.json({
-    message: 'Welcome to Techno World Books API',
-    status: 'active',
+    message: 'Welcome to the Techno World Books API',
+    status: 'Active',
     documentation: '/docs',
     api: '/api/v1',
   });

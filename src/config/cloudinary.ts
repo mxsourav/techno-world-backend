@@ -1,6 +1,7 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { env } from './env.js';
 
+
 const getCloudName = (): string =>
   process.env.CLOUDINARY_CLOUD_NAME || env.CLOUDINARY_CLOUD_NAME || '';
 const getApiKey = (): string =>
@@ -8,12 +9,14 @@ const getApiKey = (): string =>
 const getApiSecret = (): string =>
   process.env.CLOUDINARY_API_SECRET || env.CLOUDINARY_API_SECRET || '';
 
+
 export const isCloudinaryConfigured = (): boolean => {
   return Boolean(
     getCloudName() &&
     getApiKey() &&
     getApiSecret()
   );
+  
 };
 
 export const configureCloudinary = () => {

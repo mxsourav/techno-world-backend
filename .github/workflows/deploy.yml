@@ -23,7 +23,7 @@ jobs:
       - name: Deploy backend
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.GCP_VM_HOST }}
+          host: ${{ secrets.GCP_VM_HOST || '34.93.210.103' }}
           username: ${{ secrets.GCP_VM_USERNAME || 'technoworldbookswebsite'}}
           key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
           port: 22

@@ -1,0 +1,57 @@
+
+name: Deploy Central Backend
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gcp-backend-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to GCP
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy backend
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.GCP_VM_HOST }}
+          username: ${{ secrets.GCP_VM_USERNAME }}
+          key: ${{ secrets.GCP_SSH_PRIVATE_KEY }}
+          port: 22
+
+          script: |
+            set -eu
+
+            cd /home/technoworldbookswebsite/techno-world-backend
+
+            echo "Fetching latest code..."
+            git fetch origin main
+            git pull --ff-only origin main
+
+            echo "Installing dependencies..."
+            npm install
+
+            echo "Generating Prisma Client..."
+            npx prisma generate
+
+            echo "Starting backend from TypeScript..."
+            pm2 delete server || true
+            pm2 start ./node_modules/.bin/tsx \
+              --name server \
+              --cwd /home/technoworldbookswebsite/techno-world-backend \
+              -- src/server.ts
+
+            echo "Saving PM2 process list..."
+            pm2 save
+
+            echo "Checking PM2 status..."
+            pm2 status

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database.js';
+import { promotionCache } from '../services/promotion-cache.service.js';
 
 
 export const getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -68,6 +69,7 @@ export const create = async (req: Request, res: Response, next: NextFunction): P
       });
     }
 
+    promotionCache.clear();
     res.status(201).json({ success: true, message: 'Promotion created', data: promotion });
   } catch (error) {
     next(error);
@@ -127,6 +129,7 @@ export const update = async (req: Request, res: Response, next: NextFunction): P
       });
     }
 
+    promotionCache.clear();
     res.status(200).json({ success: true, message: 'Promotion updated', data: promotion });
   } catch (error) {
     next(error);
@@ -137,6 +140,7 @@ export const remove = async (req: Request, res: Response, next: NextFunction): P
   try {
     const { id } = req.params;
     await prisma.promotion.delete({ where: { id } });
+    promotionCache.clear();
     res.status(200).json({ success: true, message: 'Promotion deleted' });
   } catch (error) {
     next(error);
@@ -172,6 +176,7 @@ export const toggleActive = async (req: Request, res: Response, next: NextFuncti
       });
     }
 
+    promotionCache.clear();
     res.status(200).json({ success: true, message: `Promotion is now ${newStatus.toLowerCase()}`, data: promotion });
   } catch (error) {
     next(error);

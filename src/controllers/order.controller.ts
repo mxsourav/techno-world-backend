@@ -611,10 +611,10 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
           ? `${order.address.addressLine1}${order.address.city ? `, ${order.address.city}` : ''}${order.address.pincode ? ` - ${order.address.pincode}` : ''}`
           : null;
 
-        const emailContent = emailService.generateLifecycleEmailHtml({
-          status: order.status === 'CONFIRMED' ? 'CONFIRMED' : 'PENDING',
+        emailService.sendOrderConfirmation({
+          recipientEmail,
+          recipientName,
           orderNumber: order.orderNumber,
-          customerName: recipientName,
           items: itemsSummary,
           totalAmount: Number(order.totalAmount),
           subtotal: Number(order.subtotal),
@@ -623,16 +623,9 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
           deliveryAddress: addrStr,
           paymentMethod: order.paymentMethod,
           shippingMethod: order.shippingMethod,
-        });
-
-        emailService.sendOrderNotification({
-          recipientEmail,
-          recipientName,
-          orderNumber: order.orderNumber,
-          subject: emailContent.subject,
-          message: emailContent.text,
-        }, emailContent.html).catch((e: any) => {
-          logger.warn(`[CREATE_ORDER_EMAIL_WARN] Failed to send order receipt email: ${e.message}`);
+          status: order.status === 'CONFIRMED' ? 'CONFIRMED' : 'PENDING',
+        }).catch((e: any) => {
+          logger.warn(`[CREATE_ORDER_EMAIL_WARN] Failed to enqueue order confirmation email: ${e.message}`);
         });
       }
     } catch (mailErr: any) {

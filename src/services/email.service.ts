@@ -117,10 +117,28 @@ export interface SendManualEmailParams {
   customerPhone?: string;
 }
 
+export interface QueuedEmail {
+  id: string;
+  emailLogId?: string;
+  tier: EmailTier;
+  targetEmail: string;
+  subject: string;
+  mailOptions: any;
+  attempts: number;
+  maxAttempts: number;
+  enqueuedAt: number;
+}
+
 export class EmailService {
   private static instance: EmailService;
   // Multi-transporter cache keyed by tier
   private transporters: Map<EmailTier, Transporter> = new Map();
+
+  // Async queue for outbound emails to prevent SMTP rate-limiting
+  private emailQueue: QueuedEmail[] = [];
+  private isProcessingQueue = false;
+  private readonly THROTTLE_INTERVAL_MS = 2000; // 2000ms delay between dispatches (max 30 emails/min)
+  private readonly MAX_RETRIES = 2; // At least 2 retries (up to 3 total attempts)
 
   private constructor() {}
 
@@ -129,6 +147,100 @@ export class EmailService {
       EmailService.instance = new EmailService();
     }
     return EmailService.instance;
+  }
+
+  /**
+   * Enqueues an email item and initiates background rate-limited processing if idle.
+   */
+  private enqueueEmail(item: QueuedEmail): void {
+    this.emailQueue.push(item);
+    logger.info(`[EMAIL_QUEUE] Enqueued email for ${item.targetEmail} - Subject: "${item.subject}" (Queue size: ${this.emailQueue.length})`);
+    this.triggerQueueWorker();
+  }
+
+  private triggerQueueWorker(): void {
+    if (this.isProcessingQueue) {
+      return;
+    }
+    this.processQueue();
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.emailQueue.length === 0) {
+      this.isProcessingQueue = false;
+      return;
+    }
+
+    this.isProcessingQueue = true;
+    const item = this.emailQueue.shift();
+    if (!item) {
+      this.isProcessingQueue = false;
+      return;
+    }
+
+    item.attempts += 1;
+    let isSuccess = false;
+    let messageId: string | undefined;
+    let errorMessage: string | null = null;
+
+    try {
+      const transporter = this.getTransporter(item.tier);
+      const info = await transporter.sendMail(item.mailOptions);
+      isSuccess = true;
+      messageId = info.messageId;
+      logger.info(`[EMAIL_QUEUE] Dispatched email to ${item.targetEmail} on attempt ${item.attempts} (MessageId: ${messageId})`);
+    } catch (err: any) {
+      errorMessage = err.message;
+      logger.warn(`[EMAIL_QUEUE_WARN] SMTP send failure on attempt ${item.attempts}/${item.maxAttempts} for ${item.targetEmail}: ${err.message}`);
+    }
+
+    if (isSuccess) {
+      if (item.emailLogId) {
+        try {
+          await prisma.emailLog.update({
+            where: { id: item.emailLogId },
+            data: {
+              status: 'DELIVERED',
+              errorMessage: null,
+            },
+          });
+        } catch (dbErr: any) {
+          logger.warn(`[EMAIL_QUEUE] Could not update EmailLog to DELIVERED: ${dbErr.message}`);
+        }
+      }
+    } else {
+      if (item.attempts < item.maxAttempts) {
+        logger.info(`[EMAIL_QUEUE] Re-enqueueing email for ${item.targetEmail} for retry attempt ${item.attempts + 1}/${item.maxAttempts}`);
+        this.emailQueue.push(item);
+      } else {
+        logger.error(`[EMAIL_QUEUE_DROP] Permanently dropping email for ${item.targetEmail} after ${item.attempts} attempts: ${errorMessage}`);
+        if (item.emailLogId) {
+          try {
+            await prisma.emailLog.update({
+              where: { id: item.emailLogId },
+              data: {
+                status: 'FAILED',
+                errorMessage: `Exceeded ${item.maxAttempts} attempts: ${errorMessage}`,
+              },
+            });
+          } catch (dbErr: any) {
+            logger.warn(`[EMAIL_QUEUE] Could not update EmailLog to FAILED: ${dbErr.message}`);
+          }
+        }
+      }
+    }
+
+    // Always enforce rate limit delay (2000ms = 30 emails/min max)
+    setTimeout(() => {
+      this.processQueue();
+    }, this.THROTTLE_INTERVAL_MS);
+  }
+
+  public getQueueStats(): { pending: number; isProcessing: boolean } {
+    return {
+      pending: this.emailQueue.length,
+      isProcessing: this.isProcessingQueue,
+    };
   }
 
   /**
@@ -850,10 +962,12 @@ export class EmailService {
   /**
    * Core multi-tier sendNotification implementation.
    * Dynamically selects Tier 1 (ORDERS), Tier 2 (TEAM), or Tier 3 (SUPPORT).
+   * Defaults to asynchronous queue dispatch (max 30 emails/min) to prevent SMTP rate-limiting.
    */
   public async sendOrderNotification(
     params: SendOrderEmailParams,
-    customHtml?: string
+    customHtml?: string,
+    options?: { immediate?: boolean }
   ): Promise<{ success: boolean; messageId: string; timestamp: string; status: string; note?: string }> {
     const targetEmail = (params.recipientEmail || '').trim();
     if (!targetEmail || !targetEmail.includes('@') || targetEmail.includes('@example.com') || targetEmail.includes('@technoworld.com')) {
@@ -918,50 +1032,83 @@ export class EmailService {
 
     const sender = `"${config.fromName}" <${config.fromEmail}>`;
 
-    let deliveryStatus = 'DISPATCHED_TO_OUTBOX';
-    let messageId = `outbox_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-    let errorMessage: string | null = null;
-    let note: string | undefined = undefined;
-
     const mailAttachments = (params.attachments || []).map((att) => ({
       filename: att.filename,
       content: att.content,
       contentType: att.contentType || 'application/pdf',
     }));
 
-    // Dispatch via the dedicated Tier Transporter
-    try {
-      const transporter = this.getTransporter(tier);
-      const mailOptions: any = {
-        from: sender,
-        to: targetEmail,
-        subject: finalSubject,
-        text: params.message,
-        html,
-        attachments: mailAttachments,
-        headers: {
-          'Auto-Submitted': 'auto-generated',
-          'X-Auto-Response-Suppress': 'OOF',
-        },
-      };
+    const mailOptions: any = {
+      from: sender,
+      to: targetEmail,
+      subject: finalSubject,
+      text: params.message,
+      html,
+      attachments: mailAttachments,
+      headers: {
+        'Auto-Submitted': 'auto-generated',
+        'X-Auto-Response-Suppress': 'OOF',
+      },
+    };
 
-      if (config.replyTo) {
-        mailOptions.replyTo = config.replyTo;
-      }
-
-      const info = await transporter.sendMail(mailOptions);
-      deliveryStatus = 'DELIVERED';
-      messageId = info.messageId;
-      note = `Delivered via Tier ${tier} (${config.fromEmail} on ${config.host}:${config.port})`;
-    } catch (err: any) {
-      errorMessage = err.message;
-      note = `Direct SMTP delivery error on Tier ${tier}: ${err.message}. Email saved to Admin Outbox.`;
-      logger.warn(`[SMTP_TIER_FAIL: ${tier}] ${note}`);
+    if (config.replyTo) {
+      mailOptions.replyTo = config.replyTo;
     }
 
-    // Always log to EmailLog table in DB with provider tier tag
+    // If immediate is explicitly requested, bypass the background queue
+    if (options?.immediate) {
+      let deliveryStatus = 'DISPATCHED_TO_OUTBOX';
+      let messageId = `immediate_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      let errorMessage: string | null = null;
+      let note: string | undefined = undefined;
+
+      try {
+        const transporter = this.getTransporter(tier);
+        const info = await transporter.sendMail(mailOptions);
+        deliveryStatus = 'DELIVERED';
+        messageId = info.messageId;
+        note = `Delivered immediately via Tier ${tier} (${config.fromEmail} on ${config.host}:${config.port})`;
+      } catch (err: any) {
+        errorMessage = err.message;
+        deliveryStatus = 'FAILED';
+        note = `Direct SMTP delivery error on Tier ${tier}: ${err.message}`;
+        logger.warn(`[SMTP_TIER_FAIL: ${tier}] ${note}`);
+      }
+
+      try {
+        await prisma.emailLog.create({
+          data: {
+            toEmail: targetEmail,
+            senderEmail: config.fromEmail,
+            senderName: config.fromName,
+            subject: finalSubject,
+            message: params.message,
+            htmlContent: html,
+            orderNumber: params.orderNumber || null,
+            provider: `SMTP:${tier}`,
+            status: deliveryStatus,
+            errorMessage,
+          },
+        });
+      } catch (dbErr: any) {
+        logger.warn(`Failed to log immediate email to DB: ${dbErr.message}`);
+      }
+
+      return {
+        success: deliveryStatus === 'DELIVERED',
+        messageId,
+        timestamp,
+        status: deliveryStatus,
+        note,
+      };
+    }
+
+    // Default: Asynchronous Queued Dispatch (throttled at max 30 emails/min)
+    const queueMessageId = `queued_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    let emailLogId: string | undefined;
+
     try {
-      await prisma.emailLog.create({
+      const logRecord = await prisma.emailLog.create({
         data: {
           toEmail: targetEmail,
           senderEmail: config.fromEmail,
@@ -971,22 +1118,78 @@ export class EmailService {
           htmlContent: html,
           orderNumber: params.orderNumber || null,
           provider: `SMTP:${tier}`,
-          status: deliveryStatus,
-          errorMessage,
+          status: 'QUEUED',
+          errorMessage: null,
         },
       });
+      emailLogId = logRecord.id;
     } catch (dbErr: any) {
-      logger.warn(`Failed to log email to DB: ${dbErr.message}`);
+      logger.warn(`Failed to log queued email to DB: ${dbErr.message}`);
     }
 
+    this.enqueueEmail({
+      id: queueMessageId,
+      emailLogId,
+      tier,
+      targetEmail,
+      subject: finalSubject,
+      mailOptions,
+      attempts: 0,
+      maxAttempts: 3, // initial attempt + 2 retries
+      enqueuedAt: Date.now(),
+    });
+
     return {
-      success: deliveryStatus === 'DELIVERED',
-      messageId,
+      success: true,
+      messageId: queueMessageId,
       timestamp,
-      status: deliveryStatus,
-      note,
+      status: 'QUEUED',
+      note: `Email enqueued for rate-limited dispatch via Tier ${tier} (max 30 emails/min).`,
     };
   }
+
+  /**
+   * Dedicated non-blocking Order Confirmation lifecycle email dispatch.
+   * Formats lifecycle HTML and enqueues to the rate-limited outbox queue.
+   */
+  public async sendOrderConfirmation(params: {
+    recipientEmail: string;
+    recipientName?: string;
+    orderNumber: string;
+    items: Array<{ title: string; quantity: number; price: number; sku?: string; slug?: string; coverUrl?: string; author?: string }>;
+    totalAmount: number;
+    subtotal?: number;
+    shippingCharge?: number;
+    discountAmount?: number;
+    deliveryAddress?: string | null;
+    paymentMethod?: string | null;
+    shippingMethod?: string | null;
+    status?: 'CONFIRMED' | 'PENDING';
+  }): Promise<{ success: boolean; messageId: string; timestamp: string; status: string; note?: string }> {
+    const emailContent = this.generateLifecycleEmailHtml({
+      status: params.status || 'CONFIRMED',
+      orderNumber: params.orderNumber,
+      customerName: params.recipientName || 'Valued Customer',
+      items: params.items,
+      totalAmount: params.totalAmount,
+      subtotal: params.subtotal,
+      shippingCharge: params.shippingCharge,
+      discountAmount: params.discountAmount,
+      deliveryAddress: params.deliveryAddress,
+      paymentMethod: params.paymentMethod,
+      shippingMethod: params.shippingMethod,
+    });
+
+    return this.sendOrderNotification({
+      recipientEmail: params.recipientEmail,
+      recipientName: params.recipientName,
+      orderNumber: params.orderNumber,
+      subject: emailContent.subject,
+      message: emailContent.text,
+      tier: 'ORDERS',
+    }, emailContent.html);
+  }
+
 
   /**
    * Dedicated Address Clarification Dispatch (Tier 2: TEAM)

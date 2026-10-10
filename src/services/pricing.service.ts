@@ -1,5 +1,6 @@
 import { prisma } from '../config/database.js';
 import { ensureUserTestingBonus } from './loyalty.service.js';
+import { promotionCache } from './promotion-cache.service.js';
 
 
 export function getDispatchBatchCutoff(date: Date): Date {
@@ -197,7 +198,7 @@ export class PricingEngine {
     // 2. Promotions & Coupons
     const code = input.promotionCode ? input.promotionCode.trim().toUpperCase() : null;
     if (code) {
-      const promotion = await prisma.promotion.findUnique({ where: { code } });
+      const promotion = await promotionCache.getByCode(code);
       if (!promotion || promotion.status !== 'ACTIVE') {
         result.promotionError = 'Invalid or inactive promotion code';
       } else {
@@ -561,7 +562,7 @@ export class PricingEngine {
 
       // Check if Free Shipping Coupon applied (overrides selected method charge)
       if (result.promotionId) {
-        const promotion = await prisma.promotion.findUnique({ where: { id: result.promotionId } });
+        const promotion = await promotionCache.getById(result.promotionId);
         if (promotion?.discountType === 'FREE_SHIPPING') {
           shippingCharge = 0;
           shippingMessage = 'FREE Shipping Coupon Applied';

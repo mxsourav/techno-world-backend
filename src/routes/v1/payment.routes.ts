@@ -5,6 +5,7 @@ import {
   updatePaymentStatus,
   verifyPayment,
   razorpayWebhook,
+  syncOrderPaymentWithRazorpay,
 } from '../../controllers/payment.controller.js';
 import { requireAuth, requireRole } from '../../middlewares/auth.middleware.js';
 
@@ -12,6 +13,9 @@ const router = Router();
 
 // Customer & Admin payment verification
 router.post('/verify', requireAuth, verifyPayment);
+
+// Active Razorpay status sync for order (Customer or Admin)
+router.post('/:orderId/sync', requireAuth, syncOrderPaymentWithRazorpay);
 
 // Admin routes
 router.get('/overview', requireAuth, requireRole(['ADMIN', 'SUPER_ADMIN']), getPaymentOverview);

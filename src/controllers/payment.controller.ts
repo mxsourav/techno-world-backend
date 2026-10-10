@@ -1,9 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
-import { PaymentStatus } from '@prisma/client';
+import { PaymentStatus, OrderStatus } from '@prisma/client';
 import { prisma } from '../config/database.js';
 import crypto from 'crypto';
+import Razorpay from 'razorpay';
 import { env } from '../config/env.js';
 import { logger } from '../config/logger.js';
+import { emailService } from '../services/email.service.js';
 
 
 // Helper to normalize payment method display
@@ -588,38 +590,118 @@ export const razorpayWebhook = async (req: Request, res: Response, next: NextFun
 
     logger.info(`Razorpay Webhook Event received: ${event}`);
 
-    if (event === 'payment.captured' && payload?.payment?.entity) {
-      const p = payload.payment.entity;
-      const orderId = p.notes?.order_id || p.order_id;
-      const paymentId = p.id;
-      const method = p.method ? String(p.method).toUpperCase() : 'ONLINE';
+    if ((event === 'payment.captured' || event === 'order.paid') && (payload?.payment?.entity || payload?.order?.entity)) {
+      const p = payload?.payment?.entity;
+      const o = payload?.order?.entity;
+      const rzpOrderId = p?.order_id || o?.id;
+      const orderId = p?.notes?.order_id || o?.notes?.order_id || rzpOrderId;
+      const paymentId = p?.id || (o ? `PAY_${o.id}` : null);
+      const method = p?.method ? String(p.method).toUpperCase() : 'ONLINE';
 
-      if (orderId) {
+      if (orderId || rzpOrderId) {
         const existingOrder = await prisma.order.findFirst({
           where: {
             OR: [
-              { id: orderId },
-              { orderNumber: orderId },
-              { razorpayOrderId: p.order_id },
-              { paymentId: paymentId },
+              ...(orderId ? [{ id: orderId }, { orderNumber: orderId }] : []),
+              ...(rzpOrderId ? [{ razorpayOrderId: rzpOrderId }] : []),
+              ...(paymentId ? [{ paymentId }, { razorpayPaymentId: paymentId }] : []),
             ],
+          },
+          include: {
+            address: true,
+            user: true,
+            items: { include: { book: true } },
           },
         });
 
         if (existingOrder) {
-          await prisma.order.update({
-            where: { id: existingOrder.id },
-            data: {
-              paymentStatus: PaymentStatus.PAID,
-              paymentId,
-              razorpayPaymentId: paymentId,
-              razorpayOrderId: p.order_id,
-              paymentMethod: method,
-              notes: existingOrder.notes
-                ? `${existingOrder.notes}\n[${new Date().toISOString()}] Razorpay Webhook captured: ${paymentId}`
-                : `[${new Date().toISOString()}] Razorpay Webhook captured: ${paymentId}`,
-            },
-          });
+          if (existingOrder.paymentStatus !== PaymentStatus.PAID) {
+            let isAutoAccept = true;
+            try {
+              const autoSetting = await prisma.systemSetting.findUnique({ where: { key: 'AUTO_ACCEPT_ORDERS' } });
+              if (autoSetting) {
+                isAutoAccept = autoSetting.value === 'true';
+              }
+            } catch {
+              isAutoAccept = true;
+            }
+
+            const newStatus = isAutoAccept ? OrderStatus.CONFIRMED : existingOrder.status;
+
+            const updatedOrder = await prisma.order.update({
+              where: { id: existingOrder.id },
+              data: {
+                paymentStatus: PaymentStatus.PAID,
+                status: newStatus,
+                paymentId: paymentId || existingOrder.paymentId,
+                razorpayPaymentId: paymentId || existingOrder.razorpayPaymentId,
+                razorpayOrderId: rzpOrderId || existingOrder.razorpayOrderId,
+                razorpayVerifiedAt: new Date(),
+                paymentMethod: method,
+                notes: existingOrder.notes
+                  ? `${existingOrder.notes}\n[${new Date().toISOString()}] Razorpay Webhook captured (${event}): ${paymentId || rzpOrderId}`
+                  : `[${new Date().toISOString()}] Razorpay Webhook captured (${event}): ${paymentId || rzpOrderId}`,
+              },
+              include: {
+                address: true,
+                user: true,
+                items: { include: { book: true } },
+              },
+            });
+
+            logger.info(`Order #${existingOrder.orderNumber} successfully marked as PAID via Razorpay Webhook (${event})`);
+
+            // Send in-app notification to customer
+            if (newStatus === OrderStatus.CONFIRMED && updatedOrder.userId) {
+              try {
+                await prisma.notification.create({
+                  data: {
+                    userId: updatedOrder.userId,
+                    title: `Payment Received: Order #${updatedOrder.orderNumber}`,
+                    message: `Your payment of ₹${updatedOrder.totalAmount} has been verified and your order is confirmed for packing!`,
+                    type: 'order_confirmed',
+                    link: `/account?order=${updatedOrder.id}`,
+                  },
+                });
+              } catch (notifErr) {
+                logger.warn('Failed to send customer notification on webhook payment capture:', notifErr);
+              }
+            }
+
+            // Send email confirmation
+            try {
+              const recipientEmail = updatedOrder.user?.email || updatedOrder.pickupEmail;
+              const recipientName = updatedOrder.user?.name || updatedOrder.pickupName || 'Valued Customer';
+              if (recipientEmail) {
+                const itemsSummary = updatedOrder.items.map((it) => ({
+                  title: it.book?.title || 'Book',
+                  quantity: it.quantity,
+                  price: Number(it.priceAtPurchase),
+                }));
+                const addrStr = updatedOrder.address
+                  ? `${updatedOrder.address.addressLine1}${updatedOrder.address.city ? `, ${updatedOrder.address.city}` : ''}${updatedOrder.address.pincode ? ` - ${updatedOrder.address.pincode}` : ''}`
+                  : null;
+                emailService.sendOrderConfirmation({
+                  recipientEmail,
+                  recipientName,
+                  orderNumber: updatedOrder.orderNumber,
+                  items: itemsSummary,
+                  totalAmount: Number(updatedOrder.totalAmount),
+                  subtotal: Number(updatedOrder.subtotal),
+                  shippingCharge: Number(updatedOrder.shippingCharge),
+                  discountAmount: Number(updatedOrder.discountAmount),
+                  deliveryAddress: addrStr,
+                  paymentMethod: updatedOrder.paymentMethod,
+                });
+              }
+            } catch (emailErr) {
+              logger.warn('Failed to send confirmation email on webhook payment capture:', emailErr);
+            }
+          } else {
+            logger.info(`Order #${existingOrder.orderNumber} was already marked as PAID, ignoring duplicate webhook (${event})`);
+          }
+        } else {
+          logger.warn(`Razorpay Webhook: No matching order found for rzpOrderId=${rzpOrderId}, orderId=${orderId}`);
         }
       }
     } else if (event === 'refund.processed' && payload?.refund?.entity) {
@@ -646,6 +728,202 @@ export const razorpayWebhook = async (req: Request, res: Response, next: NextFun
     res.status(200).json({ status: 'ok' });
   } catch (error) {
     logger.error('Error handling Razorpay webhook:', error);
+    next(error);
+  }
+};
+
+/**
+ * POST /api/v1/payments/:orderId/sync
+ * Active payment status synchronization with Razorpay API.
+ * Solves customer drops, internet timeouts, or delayed webhooks by querying Razorpay API directly.
+ */
+export const syncOrderPaymentWithRazorpay = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const { orderId } = req.params;
+    const userId = (req as any).user?.userId || (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+
+    if (!orderId) {
+      res.status(400).json({ success: false, message: 'Missing order ID parameter.' });
+      return;
+    }
+
+    const order = await prisma.order.findFirst({
+      where: {
+        OR: [{ id: orderId }, { orderNumber: orderId }],
+      },
+      include: {
+        address: true,
+        user: true,
+        items: { include: { book: true } },
+      },
+    });
+
+    if (!order) {
+      res.status(404).json({ success: false, message: 'Order not found.' });
+      return;
+    }
+
+    // Access control
+    if (order.userId && order.userId !== userId && userRole !== 'ADMIN' && userRole !== 'SUPER_ADMIN') {
+      res.status(403).json({ success: false, message: 'Unauthorized to sync payment for this order.' });
+      return;
+    }
+
+    // Already paid
+    if (order.paymentStatus === PaymentStatus.PAID) {
+      res.status(200).json({
+        success: true,
+        message: 'Order payment is already confirmed as PAID.',
+        data: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          paymentId: order.paymentId,
+        },
+      });
+      return;
+    }
+
+    if (!order.razorpayOrderId) {
+      res.status(400).json({
+        success: false,
+        message: 'Order does not have an associated Razorpay Order ID. Cannot query Razorpay gateway.',
+      });
+      return;
+    }
+
+    const razorpayKeyId = env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID;
+    const razorpayKeySecret = env.RAZORPAY_KEY_SECRET || process.env.RAZORPAY_KEY_SECRET;
+
+    if (!razorpayKeyId || !razorpayKeySecret) {
+      res.status(500).json({
+        success: false,
+        message: 'Razorpay API credentials are not configured on server.',
+      });
+      return;
+    }
+
+    const razorpay = new Razorpay({
+      key_id: razorpayKeyId,
+      key_secret: razorpayKeySecret,
+    });
+
+    // Fetch all payments for this Razorpay order
+    const paymentsResponse: any = await razorpay.orders.fetchPayments(order.razorpayOrderId);
+    const paymentsList = paymentsResponse?.items || [];
+
+    const capturedPayment = paymentsList.find(
+      (pay: any) => pay.status === 'captured' || pay.status === 'authorized'
+    );
+
+    if (capturedPayment) {
+      let isAutoAccept = true;
+      try {
+        const autoSetting = await prisma.systemSetting.findUnique({ where: { key: 'AUTO_ACCEPT_ORDERS' } });
+        if (autoSetting) {
+          isAutoAccept = autoSetting.value === 'true';
+        }
+      } catch {
+        isAutoAccept = true;
+      }
+
+      const newStatus = isAutoAccept ? OrderStatus.CONFIRMED : order.status;
+      const paymentMethod = capturedPayment.method ? String(capturedPayment.method).toUpperCase() : 'ONLINE';
+
+      const updatedOrder = await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          paymentStatus: PaymentStatus.PAID,
+          status: newStatus,
+          paymentId: capturedPayment.id,
+          razorpayPaymentId: capturedPayment.id,
+          razorpayVerifiedAt: new Date(),
+          paymentMethod,
+          notes: order.notes
+            ? `${order.notes}\n[${new Date().toISOString()}] Synced with Razorpay Gateway: ${capturedPayment.id} (${capturedPayment.status})`
+            : `[${new Date().toISOString()}] Synced with Razorpay Gateway: ${capturedPayment.id} (${capturedPayment.status})`,
+        },
+        include: {
+          address: true,
+          user: true,
+          items: { include: { book: true } },
+        },
+      });
+
+      logger.info(`Order #${order.orderNumber} synced with Razorpay and marked PAID (${capturedPayment.id})`);
+
+      if (newStatus === OrderStatus.CONFIRMED && updatedOrder.userId) {
+        try {
+          await prisma.notification.create({
+            data: {
+              userId: updatedOrder.userId,
+              title: `Payment Received: Order #${updatedOrder.orderNumber}`,
+              message: `Your payment of ₹${updatedOrder.totalAmount} has been verified and your order is confirmed for packing!`,
+              type: 'order_confirmed',
+              link: `/account?order=${updatedOrder.id}`,
+            },
+          });
+        } catch {}
+      }
+
+      try {
+        const recipientEmail = updatedOrder.user?.email || updatedOrder.pickupEmail;
+        const recipientName = updatedOrder.user?.name || updatedOrder.pickupName || 'Valued Customer';
+        if (recipientEmail) {
+          const itemsSummary = updatedOrder.items.map((it) => ({
+            title: it.book?.title || 'Book',
+            quantity: it.quantity,
+            price: Number(it.priceAtPurchase),
+          }));
+          const addrStr = updatedOrder.address
+            ? `${updatedOrder.address.addressLine1}${updatedOrder.address.city ? `, ${updatedOrder.address.city}` : ''}${updatedOrder.address.pincode ? ` - ${updatedOrder.address.pincode}` : ''}`
+            : null;
+          emailService.sendOrderConfirmation({
+            recipientEmail,
+            recipientName,
+            orderNumber: updatedOrder.orderNumber,
+            items: itemsSummary,
+            totalAmount: Number(updatedOrder.totalAmount),
+            subtotal: Number(updatedOrder.subtotal),
+            shippingCharge: Number(updatedOrder.shippingCharge),
+            discountAmount: Number(updatedOrder.discountAmount),
+            deliveryAddress: addrStr,
+            paymentMethod: updatedOrder.paymentMethod,
+          });
+        }
+      } catch {}
+
+      res.status(200).json({
+        success: true,
+        message: 'Payment successfully verified and synced from Razorpay.',
+        data: {
+          orderId: updatedOrder.id,
+          orderNumber: updatedOrder.orderNumber,
+          status: updatedOrder.status,
+          paymentStatus: updatedOrder.paymentStatus,
+          paymentId: updatedOrder.paymentId,
+          razorpayStatus: capturedPayment.status,
+        },
+      });
+      return;
+    }
+
+    res.status(200).json({
+      success: false,
+      message: paymentsList.length === 0
+        ? 'No payments found on Razorpay for this order.'
+        : `Payment on Razorpay is currently in status: ${paymentsList[0]?.status || 'pending'}. Not captured yet.`,
+      data: {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        paymentStatus: order.paymentStatus,
+        recentRazorpayAttempt: paymentsList[0] || null,
+      },
+    });
+  } catch (error: any) {
+    logger.error('Error syncing order payment with Razorpay:', error);
     next(error);
   }
 };

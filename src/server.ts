@@ -154,6 +154,25 @@ async function ensureSupportTables(): Promise<void> {
   }
 }
 
+async function ensureTrigramIndexes() {
+  try {
+    await prisma.$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS pg_trgm;`);
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        CREATE INDEX IF NOT EXISTS "Book_title_trgm_idx" ON "Book" USING GIN ("title" gin_trgm_ops);
+        CREATE INDEX IF NOT EXISTS "Author_name_trgm_idx" ON "Author" USING GIN ("name" gin_trgm_ops);
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Book' AND column_name='author') THEN
+          CREATE INDEX IF NOT EXISTS "Book_author_trgm_idx" ON "Book" USING GIN ("author" gin_trgm_ops);
+        END IF;
+      EXCEPTION WHEN OTHERS THEN null;
+      END $$;
+    `);
+    logger.info('[Bootstrap] Trigram GIN indexes verified/created successfully');
+  } catch (err) {
+    logger.warn('[Bootstrap] Non-critical error checking Trigram GIN indexes:', err);
+  }
+}
+
 async function bootstrap() {
   try {
     await prisma.$connect();
@@ -163,6 +182,7 @@ async function bootstrap() {
     await autoHealPlaceholderCovers();
     await ensureCustomerIds();
     await ensureSupportTables();
+    await ensureTrigramIndexes();
 
     startInvoiceCron();
     imapService.startPolling();

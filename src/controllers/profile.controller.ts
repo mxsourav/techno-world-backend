@@ -122,6 +122,33 @@ export const getAddresses = async (req: Request, res: Response, next: NextFuncti
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
     });
 
+    // Invariant enforcement & auto-repair: Exactly zero or one default address
+    if (addresses && addresses.length > 0) {
+      const defaultAddresses = addresses.filter((a) => a.isDefault);
+      if (defaultAddresses.length > 1) {
+        // Keep the most recent default address, unset all others
+        const primaryDefault = defaultAddresses[0];
+        const extraDefaultIds = defaultAddresses.slice(1).map((a) => a.id);
+
+        await prisma.address.updateMany({
+          where: { id: { in: extraDefaultIds } },
+          data: { isDefault: false },
+        });
+
+        // Mutate local array so client receives corrected state immediately
+        for (let i = 1; i < defaultAddresses.length; i++) {
+          defaultAddresses[i].isDefault = false;
+        }
+      } else if (defaultAddresses.length === 0) {
+        // If addresses exist but none is marked default, set the first one as default
+        await prisma.address.update({
+          where: { id: addresses[0].id },
+          data: { isDefault: true },
+        });
+        addresses[0].isDefault = true;
+      }
+    }
+
     res.status(200).json({
       success: true,
       data: addresses || [],
@@ -305,6 +332,49 @@ export const deleteAddress = async (req: Request, res: Response, next: NextFunct
     });
   } catch (error) {
     logger.error('Error deleting address:', error);
+    next(error);
+  }
+};
+
+// PATCH /api/v1/profile/address/:id/default
+export const setDefaultAddress = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const userId = (req as any).user?.userId || (req as any).user?.id;
+    const { id } = req.params;
+
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Authentication required' });
+      return;
+    }
+
+    const existing = await prisma.address.findFirst({
+      where: { id, userId },
+    });
+
+    if (!existing) {
+      res.status(404).json({ success: false, message: 'Address not found or unauthorized' });
+      return;
+    }
+
+    // Atomically reset all other addresses for this user to isDefault: false
+    await prisma.address.updateMany({
+      where: { userId, id: { not: id } },
+      data: { isDefault: false },
+    });
+
+    // Set this address as the single default
+    const updated = await prisma.address.update({
+      where: { id },
+      data: { isDefault: true },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Address set as primary default successfully',
+      data: updated,
+    });
+  } catch (error) {
+    logger.error('Error setting default address:', error);
     next(error);
   }
 };

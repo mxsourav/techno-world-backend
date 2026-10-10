@@ -5,6 +5,7 @@ import {
   getAddresses,
   createAddress,
   updateAddress,
+  setDefaultAddress,
   deleteAddress,
   getSavedPaymentMethods,
   savePaymentMethod,
@@ -41,6 +42,7 @@ router.patch('/notifications/:id/read', markNotificationRead);
 // Address Management & Deduplication
 router.get('/address', getAddresses);
 router.post('/address', validateRequest(createAddressSchema), createAddress);
+router.patch('/address/:id/default', setDefaultAddress);
 router.patch('/address/:id', validateRequest(updateAddressSchema), updateAddress);
 router.delete('/address/:id', deleteAddress);
 

@@ -324,6 +324,9 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
             },
           });
         } else {
+          const userExistingAddressCount = await tx.address.count({ where: { userId } });
+          const shouldBeDefault = userExistingAddressCount === 0;
+
           const createdAddr = await tx.address.create({
             data: {
               userId,
@@ -339,7 +342,7 @@ export const createOrder = async (req: Request, res: Response, next: NextFunctio
               pincode: pin || '700001',
               type: address.type || 'HOME',
               country: 'India',
-              isDefault: true,
+              isDefault: shouldBeDefault,
             },
           });
           finalAddressId = createdAddr.id;

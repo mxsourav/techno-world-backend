@@ -552,6 +552,7 @@ export const updateBook = async (req: Request, res: Response, next: NextFunction
     if (body.bookCode !== undefined) data.bookCode = sanitizeUniqueField(body.bookCode);
     if (body.description !== undefined) data.description = body.description;
     if (body.shortDescription !== undefined) data.shortDescription = body.shortDescription;
+    if (body.volume !== undefined) data.volume = body.volume ? String(body.volume).trim() : null;
     if (body.edition !== undefined) data.edition = body.edition ? String(body.edition).trim() : '1st Edition';
     if (body.language !== undefined) data.language = body.language ? String(body.language).trim() : 'English';
     if (body.bindingType !== undefined) data.bindingType = body.bindingType ? String(body.bindingType).trim() : 'Paperback';
@@ -689,6 +690,7 @@ export const createBook = async (req: Request, res: Response, next: NextFunction
       bookCode: sanitizeUniqueField(body.bookCode),
       description: body.description ? String(body.description) : 'No description provided.',
       shortDescription: body.shortDescription ? String(body.shortDescription) : null,
+      volume: body.volume ? String(body.volume).trim() : null,
       edition: body.edition ? String(body.edition).trim() : '1st Edition',
       language: body.language ? String(body.language).trim() : 'English',
       bindingType: body.bindingType ? String(body.bindingType).trim() : 'Paperback',

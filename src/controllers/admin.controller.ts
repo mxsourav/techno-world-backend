@@ -2301,6 +2301,7 @@ export const getAutoAcceptSetting = async (req: Request, res: Response, next: Ne
     res.status(200).json({
       success: true,
       enabled,
+      data: { enabled },
       message: `Auto-accept orders is currently ${enabled ? 'ENABLED (ON)' : 'DISABLED (OFF)'}`,
     });
   } catch (error) {
@@ -2323,6 +2324,7 @@ export const updateAutoAcceptSetting = async (req: Request, res: Response, next:
     res.status(200).json({
       success: true,
       enabled: isEnabled,
+      data: { enabled: isEnabled },
       message: `Auto-accept orders successfully turned ${isEnabled ? 'ON' : 'OFF'}`,
     });
   } catch (error) {

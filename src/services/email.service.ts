@@ -730,7 +730,7 @@ export class EmailService {
         headline = `Good news! Your order #${orderNumber} is on its way.`;
         messageBody = `
           <p style="margin: 0 0 14px; color: #262524; line-height: 1.6;">
-            Your book parcel has been handed over to <b>${shippingCarrier || 'India Post Speed Post'}</b> for fast and secure delivery across India.
+            Your book parcel has been handed over to <b>${shippingCarrier || 'our logistics delivery partner'}</b> for fast and secure delivery across India.
           </p>
           ${trackingNumber ? `
             <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 8px; margin: 16px 0;">
@@ -741,7 +741,7 @@ export class EmailService {
                     ${trackingNumber}
                   </div>
                   <div style="font-size: 12px; color: #15803D; margin-top: 6px;">
-                    Carrier: <b>${shippingCarrier || 'India Post Speed Post'}</b> ${shippingMethod ? `(${shippingMethod})` : ''}
+                    Carrier: <b>${shippingCarrier || 'Delivery Partner'}</b> ${shippingMethod ? `(${shippingMethod})` : ''}
                   </div>
                 </td>
               </tr>
@@ -749,8 +749,8 @@ export class EmailService {
             <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin: 14px 0;">
               <tr>
                 <td align="center" style="background-color: #14432B; border-radius: 6px;">
-                  <a href="https://www.indiapost.gov.in/_layouts/15/dop.portal.tracking/trackconsignment.aspx" target="_blank" style="display: inline-block; padding: 10px 22px; font-size: 13px; font-weight: 700; color: #FFFFFF; text-decoration: none; border-radius: 6px;">
-                    Track Consignment on India Post &rarr;
+                  <a href="${shippingCarrier && shippingCarrier.toLowerCase().includes('india post') ? 'https://www.indiapost.gov.in/_layouts/15/dop.portal.tracking/trackconsignment.aspx' : `https://technoworldbooks.in/track?tracking=${encodeURIComponent(trackingNumber)}`}" target="_blank" style="display: inline-block; padding: 10px 22px; font-size: 13px; font-weight: 700; color: #FFFFFF; text-decoration: none; border-radius: 6px;">
+                    Track Consignment (${shippingCarrier || 'Delivery Partner'}) &rarr;
                   </a>
                 </td>
               </tr>

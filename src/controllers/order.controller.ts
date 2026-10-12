@@ -796,7 +796,7 @@ export const getOrderNotifications = async (req: Request, res: Response, next: N
 export const updateOrderStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { id } = req.params;
-    const { status, notes, reason } = req.body;
+    const { status, notes, reason, shippingCarrier, trackingNumber, shippingMethod } = req.body;
 
     const existing = await prisma.order.findUnique({
       where: { id },
@@ -819,6 +819,9 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
     const orderData: any = {
       status,
       notes: updatedNotes,
+      ...(shippingCarrier ? { shippingCarrier } : {}),
+      ...(trackingNumber ? { trackingNumber } : {}),
+      ...(shippingMethod ? { shippingMethod } : {}),
     };
     if (status === 'DELIVERED' && !existing.deliveredAt) {
       orderData.deliveredAt = new Date();

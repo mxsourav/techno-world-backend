@@ -3,6 +3,27 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database.js';
 
 
+const splitAuthorString = (raw: string): string[] => {
+  if (!raw || !raw.trim()) return [];
+  const normalized = raw.replace(/\)\s*(?=[A-Z])/g, '), ');
+  const parts: string[] = [];
+  let current = '';
+  let depth = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    const ch = normalized[i];
+    if (ch === '(') depth++;
+    else if (ch === ')' && depth > 0) depth--;
+    if ((ch === ',' || ch === ';') && depth === 0) {
+      if (current.trim()) parts.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+};
+
 // Map Prisma Book to Frontend Book shape
 const mapBookToFrontendShape = (book: any) => {
   let galleryUrls: string[] = [];
@@ -33,10 +54,14 @@ const mapBookToFrontendShape = (book: any) => {
     }
   }
 
+  const cleanedAuthorsList = (book.authors || [])
+    .flatMap((a: any) => splitAuthorString(a?.name || ''))
+    .filter((name: string) => name && name.toLowerCase() !== 'unknown author');
+
   return {
     ...book,
-    author: book.authors?.length ? book.authors.map((a: any) => a.name).join(', ') : 'Unknown Author',
-    authorsList: book.authors?.map((a: any) => a.name) || [],
+    author: cleanedAuthorsList.length ? cleanedAuthorsList.join(', ') : '',
+    authorsList: cleanedAuthorsList,
     publisher: book.publisher?.name || 'Unknown Publisher',
     category: book.category?.slug || 'uncategorized',
     bookType: book.bookType?.name,
@@ -91,8 +116,17 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
 
     if (search) {
       const searchStr = (search as string).trim();
-      const stopWords = new Set(['and', 'of', 'the', 'for', 'in', 'a', 'an', 'to', 'with', 'on', 'by']);
-      const words = searchStr.split(/\s+/).filter(w => w.length >= 2 && !stopWords.has(w.toLowerCase()));
+      const cleanWithoutParens = searchStr.replace(/\s*\([^)]*\)/g, '').trim();
+      const splitParts = splitAuthorString(searchStr);
+      const stopWords = new Set([
+        'and', 'of', 'the', 'for', 'in', 'a', 'an', 'to', 'with', 'on', 'by',
+        'dr', 'mr', 'mrs', 'ms', 'prof', 'chief', 'editor', 'co-author', 'co', 'author'
+      ]);
+      const words = searchStr
+        .replace(/[(),.;:[\]/]+/g, ' ')
+        .split(/\s+/)
+        .map(w => w.trim())
+        .filter(w => w.length >= 2 && !stopWords.has(w.toLowerCase()));
       
       const orList: any[] = [
         { title: { contains: searchStr } },
@@ -107,12 +141,31 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
         { subjects: { some: { name: { contains: searchStr } } } }
       ];
 
+      if (cleanWithoutParens && cleanWithoutParens !== searchStr) {
+        orList.push(
+          { authors: { some: { name: { contains: cleanWithoutParens } } } },
+          { title: { contains: cleanWithoutParens } }
+        );
+      }
+
+      if (splitParts.length > 1) {
+        for (const part of splitParts) {
+          orList.push({ authors: { some: { name: { contains: part } } } });
+          const partWithoutParens = part.replace(/\s*\([^)]*\)/g, '').trim();
+          if (partWithoutParens && partWithoutParens !== part) {
+            orList.push({ authors: { some: { name: { contains: partWithoutParens } } } });
+          }
+        }
+      }
+
       if (words.length > 1) {
         const andClauses = words.map(w => ({
           OR: [
             { title: { contains: w } },
             { seoKeywords: { contains: w } },
-            { tags: { contains: w } }
+            { tags: { contains: w } },
+            { authors: { some: { name: { contains: w } } } },
+            { publisher: { name: { contains: w } } }
           ]
         }));
         orList.push({ AND: andClauses });
@@ -124,7 +177,14 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
       where.category = { slug: category as string };
     }
     if (author) {
-      where.authors = { some: { slug: author as string } };
+      where.authors = {
+        some: {
+          OR: [
+            { slug: author as string },
+            { name: { contains: author as string } }
+          ]
+        }
+      };
     }
     if (publisher) {
       where.publisher = {

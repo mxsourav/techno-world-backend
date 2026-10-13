@@ -361,19 +361,69 @@ const normalizeEntitySlug = (name: string): string => {
   return clean || `entity-${Date.now()}`;
 };
 
+// Helper: Split multi-author strings while respecting parentheses and adjacent ")Dr." boundaries
+const splitAuthorString = (raw: string): string[] => {
+  if (!raw || !raw.trim()) return [];
+  const normalized = raw.replace(/\)\s*(?=[A-Z])/g, '), ');
+  const parts: string[] = [];
+  let current = '';
+  let depth = 0;
+  for (let i = 0; i < normalized.length; i++) {
+    const ch = normalized[i];
+    if (ch === '(') depth++;
+    else if (ch === ')' && depth > 0) depth--;
+    if ((ch === ',' || ch === ';') && depth === 0) {
+      if (current.trim()) parts.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+};
+
+// Helper: Sanitize rich HTML description/shortDescription, stripping --tw-* inline styles and empty tags
+const sanitizeRichHtml = (raw: any): string => {
+  if (raw === null || raw === undefined) return '';
+  let s = String(raw);
+  if (!s.trim()) return '';
+
+  s = s.replace(
+    /<(span|font)\b[^>]*style\s*=\s*(?:"[^"]*background(?:-color)?\s*:\s*(?!transparent|rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)|inherit|none)[^"]*"|'[^']*background(?:-color)?\s*:\s*(?!transparent|rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)|inherit|none)[^']*')[^>]*>([\s\S]*?)<\/\1>/gi,
+    '<mark>$2</mark>'
+  );
+  s = s.replace(
+    /<span\b[^>]*style\s*=\s*(?:"[^"]*font-weight\s*:\s*(?:bold|[6-9]00)[^"]*"|'[^']*font-weight\s*:\s*(?:bold|[6-9]00)[^']*')[^>]*>([\s\S]*?)<\/span>/gi,
+    '<strong>$1</strong>'
+  );
+  s = s.replace(/<(\/?)(p|div|h[1-6]|ul|ol|li|strong|b|em|i|u|mark|br)\b[^>]*>/gi, '<$1$2>');
+  s = s.replace(/<\/?(?:span|font)\b[^>]*>/gi, '');
+  s = s.replace(/(<(p|div|h[1-6])>(\s|<br\s*\/?>|&nbsp;)*<\/\2>\s*)+$/gi, '');
+
+  const plainText = s
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!plainText) return '';
+  return s.trim();
+};
+
 // Helper: Resolve / upsert Author records
 const resolveAuthors = async (authorsInput: any): Promise<{ id: string }[]> => {
   const authorNames: string[] = [];
   if (Array.isArray(authorsInput)) {
     for (const a of authorsInput) {
       if (typeof a === 'string') {
-        authorNames.push(...a.split(',').map((s) => s.trim()).filter(Boolean));
+        authorNames.push(...splitAuthorString(a));
       } else if (a && typeof a === 'object' && a.name) {
-        authorNames.push(String(a.name).trim());
+        authorNames.push(...splitAuthorString(String(a.name)));
       }
     }
   } else if (typeof authorsInput === 'string' && authorsInput.trim()) {
-    authorNames.push(...authorsInput.split(',').map((s) => s.trim()).filter(Boolean));
+    authorNames.push(...splitAuthorString(authorsInput));
   }
 
   const connectedIds: string[] = [];
@@ -550,8 +600,8 @@ export const updateBook = async (req: Request, res: Response, next: NextFunction
     if (body.isbn10 !== undefined) data.isbn10 = sanitizeUniqueField(body.isbn10);
     if (body.sku !== undefined) data.sku = sanitizeUniqueField(body.sku);
     if (body.bookCode !== undefined) data.bookCode = sanitizeUniqueField(body.bookCode);
-    if (body.description !== undefined) data.description = body.description;
-    if (body.shortDescription !== undefined) data.shortDescription = body.shortDescription;
+    if (body.description !== undefined) data.description = sanitizeRichHtml(body.description);
+    if (body.shortDescription !== undefined) data.shortDescription = sanitizeRichHtml(body.shortDescription) || null;
     if (body.volume !== undefined) data.volume = body.volume ? String(body.volume).trim() : null;
     if (body.edition !== undefined) data.edition = body.edition ? String(body.edition).trim() : '1st Edition';
     if (body.language !== undefined) data.language = body.language ? String(body.language).trim() : 'English';
@@ -688,8 +738,8 @@ export const createBook = async (req: Request, res: Response, next: NextFunction
       isbn10: sanitizeUniqueField(body.isbn10),
       sku: sanitizeUniqueField(body.sku),
       bookCode: sanitizeUniqueField(body.bookCode),
-      description: body.description ? String(body.description).trim() : '',
-      shortDescription: body.shortDescription ? String(body.shortDescription).trim() : null,
+      description: sanitizeRichHtml(body.description),
+      shortDescription: sanitizeRichHtml(body.shortDescription) || null,
       volume: body.volume ? String(body.volume).trim() : null,
       edition: body.edition ? String(body.edition).trim() : '1st Edition',
       language: body.language ? String(body.language).trim() : 'English',

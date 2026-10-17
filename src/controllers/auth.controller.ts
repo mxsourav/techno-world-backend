@@ -201,6 +201,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       email: user.email,
       role: user.role,
       name: user.name,
+      avatarKey: user.avatarKey,
+      age: user.age,
       technoPoints: bonus.technoPoints,
       technoWallet: bonus.technoWallet,
     };
@@ -416,6 +418,8 @@ export const devGoogleOAuthBypass = async (req: Request, res: Response): Promise
           role: user.role,
           name: user.name,
           avatarUrl: user.avatarUrl,
+          avatarKey: user.avatarKey,
+          age: user.age,
           technoPoints: bonus.technoPoints,
           technoWallet: bonus.technoWallet,
         },
@@ -607,6 +611,8 @@ export const googleAuth = async (req: Request, res: Response): Promise<void> => 
           role: user.role,
           name: user.name,
           avatarUrl: user.avatarUrl,
+          avatarKey: user.avatarKey,
+          age: user.age,
           technoPoints: bonus.technoPoints,
           technoWallet: bonus.technoWallet,
         },
@@ -641,7 +647,7 @@ export const sendOtp = async (req: Request, res: Response): Promise<void> => {
  */
 export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { phone, otp, name } = req.body;
+    const { phone, otp, name, email, avatarKey, age } = req.body;
     if (!phone || !otp) {
       res.status(400).json({ success: false, message: 'Phone number and OTP are required' });
       return;
@@ -671,31 +677,48 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const validEmail = (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+      ? email.trim().toLowerCase()
+      : `${cleanPhone}@technoworldbooks.in`;
+    const parsedAge = age ? Math.min(90, Math.max(10, parseInt(String(age), 10))) : null;
+
     if (!user) {
       const customerId = await generateNextCustomerId();
       const defaultName = name?.trim() || `Reader ${cleanPhone.slice(-4)}`;
-      const defaultEmail = `${cleanPhone}@technoworldbooks.in`;
       const dummyHash = await argon2.hash(`OTP_AUTH_${cleanPhone}_${Date.now()}`);
       user = await prisma.user.create({
         data: {
           customerId,
           name: defaultName,
-          email: defaultEmail,
+          email: validEmail,
           phone: cleanPhone,
           password: dummyHash,
           role: Role.CUSTOMER,
           isActive: true,
+          avatarKey: avatarKey || null,
+          age: parsedAge,
         },
       });
     } else if (!user.isActive) {
       res.status(403).json({ success: false, message: 'Account is deactivated. Please contact support.' });
       return;
-    } else if (!user.customerId) {
-      const customerId = await generateNextCustomerId();
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { customerId },
-      });
+    } else {
+      const updates: any = {};
+      if (!user.customerId) updates.customerId = await generateNextCustomerId();
+      if (avatarKey && !user.avatarKey) updates.avatarKey = avatarKey;
+      if (parsedAge && !user.age) updates.age = parsedAge;
+      if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) && user.email.includes('@technoworldbooks.in')) {
+        updates.email = email.trim().toLowerCase();
+      }
+      if (name && name.trim() && user.name.startsWith('Reader ')) {
+        updates.name = name.trim();
+      }
+      if (Object.keys(updates).length > 0) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: updates,
+        });
+      }
     }
 
     const sessionId = (await import('crypto')).randomUUID();
@@ -735,6 +758,8 @@ export const verifyOtp = async (req: Request, res: Response): Promise<void> => {
       role: user.role,
       name: user.name,
       avatarUrl: user.avatarUrl,
+      avatarKey: user.avatarKey,
+      age: user.age,
       technoPoints: bonus.technoPoints,
       technoWallet: bonus.technoWallet,
     };

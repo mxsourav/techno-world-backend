@@ -4,6 +4,8 @@ export const updateProfileSchema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters').max(80).optional(),
   phone: z.string().trim().regex(/^[6-9]\d{9}$/, 'Invalid 10-digit mobile number').optional().nullable(),
   avatarUrl: z.string().url('Invalid avatar URL').optional().nullable(),
+  avatarKey: z.string().trim().max(50).optional().nullable(),
+  age: z.number().int().min(10, 'Age must be between 10 and 90').max(90, 'Age must be between 10 and 90').optional().nullable(),
 }).strict();
 
 export const createAddressSchema = z.object({

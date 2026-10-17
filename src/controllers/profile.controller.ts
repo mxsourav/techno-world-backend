@@ -24,6 +24,8 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
         name: true,
         phone: true,
         avatarUrl: true,
+        avatarKey: true,
+        age: true,
         role: true,
         technoPoints: true,
         pendingPoints: true,
@@ -74,7 +76,7 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
       return;
     }
 
-    const { name, phone, avatarUrl } = req.body;
+    const { name, phone, avatarUrl, avatarKey, age } = req.body;
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -82,6 +84,8 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
         ...(name ? { name } : {}),
         ...(phone !== undefined ? { phone } : {}),
         ...(avatarUrl !== undefined ? { avatarUrl } : {}),
+        ...(avatarKey !== undefined ? { avatarKey } : {}),
+        ...(age !== undefined ? { age: age !== null ? Number(age) : null } : {}),
       },
       select: {
         id: true,
@@ -89,6 +93,8 @@ export const updateProfile = async (req: Request, res: Response, next: NextFunct
         name: true,
         phone: true,
         avatarUrl: true,
+        avatarKey: true,
+        age: true,
         role: true,
         technoPoints: true,
         pendingPoints: true,

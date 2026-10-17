@@ -27,6 +27,7 @@ export const instantSearch = async (req: Request, res: Response, next: NextFunct
       { course: { contains: q } },
       { authors: { some: { name: { contains: q } } } },
       { category: { name: { contains: q } } },
+      { categories: { some: { name: { contains: q } } } },
       { publisher: { name: { contains: q } } },
     ];
 
@@ -56,6 +57,7 @@ export const instantSearch = async (req: Request, res: Response, next: NextFunct
         coverUrl: true,
         authors: { select: { name: true } },
         category: { select: { name: true } },
+        categories: { select: { name: true } },
       },
       take: 10,
       orderBy: { isFeatured: 'desc' },
@@ -69,7 +71,8 @@ export const instantSearch = async (req: Request, res: Response, next: NextFunct
       mrp: b.mrp,
       coverUrl: b.coverUrl,
       author: b.authors && b.authors.length > 0 ? b.authors.map((a: any) => a.name).join(', ') : 'Unknown',
-      category: b.category?.name || '',
+      category: b.category?.name || b.categories?.[0]?.name || '',
+      categories: b.categories?.map((c: any) => c.name) || (b.category ? [b.category.name] : []),
     }));
 
     // Asynchronously log search to SearchLog for admin analytics & exam season tracking

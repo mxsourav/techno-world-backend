@@ -310,35 +310,134 @@ async function sendDispatchEmail(orderId: string, trackingNumber?: string | null
   }
 };
 
+function maskName(name?: string | null): string {
+  if (!name || !name.trim()) return 'Customer';
+  const parts = name.trim().split(/\s+/);
+  return parts.map(p => {
+    if (p.length <= 2) return p[0] + '*';
+    return p[0] + '*'.repeat(Math.max(1, p.length - 2)) + p[p.length - 1];
+  }).join(' ');
+}
+
+function maskPhone(phone?: string | null): string {
+  if (!phone) return '******0000';
+  const clean = phone.replace(/\D/g, '');
+  if (clean.length < 4) return '******';
+  return '******' + clean.slice(-4);
+}
+
+function maskEmail(email?: string | null): string {
+  if (!email || !email.includes('@')) return '******@***.com';
+  const [user, domain] = email.split('@');
+  const maskedUser = user.length <= 2 ? user[0] + '*' : user[0] + '*'.repeat(Math.max(1, user.length - 2)) + user[user.length - 1];
+  const [dName, ...tld] = domain.split('.');
+  const maskedDomain = dName.length <= 2 ? dName[0] + '*' : dName[0] + '*'.repeat(Math.max(1, dName.length - 2)) + dName[dName.length - 1];
+  return `${maskedUser}@${maskedDomain}.${tld.join('.')}`;
+}
+
 /**
- * Track Consignment by Order Number or India Post AWB
+ * Track Consignment by Order Number, Tracking Token, or India Post AWB
  * GET /api/v1/shipping/track/:identifier
+ * GET /api/v1/shipping/track?token=...&id=...&phone=...&email=...
  */
 export const trackShipment = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { identifier } = req.params;
-    const cleanId = identifier.trim();
+    const rawIdentifier = (String(req.params.identifier || req.query.id || req.query.orderNumber || req.query.tracking || '')).trim();
+    const token = (String(req.query.token || (rawIdentifier.length > 20 && !rawIdentifier.startsWith('TW-') && !rawIdentifier.startsWith('EB') && !rawIdentifier.startsWith('BP') ? rawIdentifier : ''))).trim();
+    const cleanId = rawIdentifier.replace(/^#/, '');
 
-    // Check if identifier is an Order Number in our DB
-    const order = await prisma.order.findFirst({
-      where: {
-        OR: [
-          { orderNumber: cleanId },
-          { id: cleanId },
-          { trackingNumber: cleanId },
-        ],
-      },
-      include: {
-        address: true,
-        items: {
-          include: { book: true },
+    const phoneQuery = (req.query.phone as string || '').replace(/\D/g, '');
+    const emailQuery = (req.query.email as string || '').trim().toLowerCase();
+    const currentUser = (req as any).user;
+
+    // 1. Look up order
+    let order: any = null;
+    let lookupMethod: 'token' | 'orderNumber' | 'barcode' | 'none' = 'none';
+
+    if (token) {
+      order = await prisma.order.findUnique({
+        where: { trackingToken: token },
+        include: {
+          address: true,
+          user: { select: { id: true, name: true, email: true, phone: true } },
+          items: { include: { book: true } },
         },
-      },
-    });
+      });
+      if (order) lookupMethod = 'token';
+    }
 
-    const trackingBarcode = order?.trackingNumber || cleanId;
-    const trackingResults = await indiaPostService.trackArticles([trackingBarcode]);
-    const trackingData = trackingResults[0] || null;
+    if (!order && cleanId) {
+      order = await prisma.order.findFirst({
+        where: {
+          OR: [
+            { trackingToken: cleanId },
+            { orderNumber: { equals: cleanId, mode: 'insensitive' } },
+            { trackingNumber: { equals: cleanId, mode: 'insensitive' } },
+            { id: cleanId },
+          ],
+        },
+        include: {
+          address: true,
+          user: { select: { id: true, name: true, email: true, phone: true } },
+          items: { include: { book: true } },
+        },
+      });
+      if (order) {
+        if (cleanId === order.trackingToken) {
+          lookupMethod = 'token';
+        } else if (cleanId.toUpperCase() === (order.trackingNumber || '').toUpperCase() && (cleanId.startsWith('EB') || cleanId.startsWith('BP'))) {
+          lookupMethod = 'barcode';
+        } else {
+          lookupMethod = 'orderNumber';
+        }
+      }
+    }
+
+    // 2. Authorization & Identity Verification
+    let isFullAuthorized = false;
+    if (order) {
+      if (currentUser && (currentUser.userId === order.userId || currentUser.role === 'ADMIN' || currentUser.role === 'SUPER_ADMIN')) {
+        isFullAuthorized = true;
+      } else if (lookupMethod === 'orderNumber') {
+        // Must require entering both orderNumber + matching customerPhone or customerEmail
+        const orderPhones = [
+          order.address?.phone?.replace(/\D/g, ''),
+          order.pickupPhone?.replace(/\D/g, ''),
+          order.user?.phone?.replace(/\D/g, ''),
+        ].filter(Boolean) as string[];
+
+        const orderEmails = [
+          order.customerEmail?.toLowerCase().trim(),
+          order.pickupEmail?.toLowerCase().trim(),
+          order.address?.email?.toLowerCase().trim(),
+          order.user?.email?.toLowerCase().trim(),
+        ].filter(Boolean) as string[];
+
+        const phoneMatches = phoneQuery && orderPhones.some(p => p.endsWith(phoneQuery) || phoneQuery.endsWith(p));
+        const emailMatches = emailQuery && orderEmails.some(e => e === emailQuery);
+
+        if (!phoneMatches && !emailMatches) {
+          res.status(403).json({
+            success: false,
+            requiresVerification: true,
+            message: 'To protect customer privacy, please enter the registered mobile number or email address associated with this order.',
+          });
+          return;
+        }
+      }
+    }
+
+    // 3. Live India Post tracking lookup
+    const trackingBarcode = order?.trackingNumber || (cleanId.startsWith('EB') || cleanId.startsWith('BP') ? cleanId : null);
+    let trackingData: any = null;
+    if (trackingBarcode) {
+      try {
+        const trackingResults = await indiaPostService.trackArticles([trackingBarcode]);
+        trackingData = trackingResults[0] || null;
+      } catch (err) {
+        logger.warn('Live tracking fetch failed:', err);
+      }
+    }
 
     if (order && order.status === 'SHIPPED' && trackingData) {
       const delStatus = (trackingData.tracking?.del_status?.del_status || '').toUpperCase();
@@ -359,29 +458,59 @@ export const trackShipment = async (req: Request, res: Response, next: NextFunct
       }
     }
 
+    // 4. Sanitize Order PII
+    let sanitizedOrder: any = null;
+    if (order) {
+      const customerName = order.address?.fullName || order.pickupName || order.user?.name || 'Customer';
+      const customerPhone = order.address?.phone || order.pickupPhone || order.user?.phone || '';
+      const customerEmail = order.customerEmail || order.pickupEmail || order.user?.email || '';
+
+      const sanitizedAddress = order.address ? (
+        isFullAuthorized ? order.address : {
+          city: order.address.city,
+          state: order.address.state,
+          pincode: order.address.pincode,
+          country: order.address.country,
+          type: order.address.type,
+          fullName: maskName(order.address.fullName),
+          phone: maskPhone(order.address.phone),
+          addressLine1: '*** Masked for privacy ***',
+          addressLine2: null,
+          landmark: null,
+          postOffice: order.address.postOffice,
+        }
+      ) : null;
+
+      sanitizedOrder = {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        carrier: order.shippingCarrier || 'India Post Speed Post',
+        trackingNumber: order.trackingNumber,
+        totalAmount: order.totalAmount,
+        createdAt: order.createdAt,
+        trackingToken: order.trackingToken,
+        shareableTrackingUrl: `https://www.technoworldbooks.in/track/shipment?token=${order.trackingToken}`,
+        isMasked: !isFullAuthorized,
+        customerName: isFullAuthorized ? customerName : maskName(customerName),
+        customerPhone: isFullAuthorized ? customerPhone : maskPhone(customerPhone),
+        customerEmail: isFullAuthorized ? customerEmail : maskEmail(customerEmail),
+        address: sanitizedAddress,
+        items: order.items.map((i: any) => ({
+          id: i.id,
+          title: i.book?.title || 'Book Title',
+          slug: i.book?.slug || '',
+          coverUrl: i.book?.coverUrl || null,
+          quantity: i.quantity,
+          price: i.priceAtPurchase,
+        })),
+      };
+    }
+
     res.json({
       success: true,
       data: {
-        order: order
-          ? {
-              id: order.id,
-              orderNumber: order.orderNumber,
-              status: order.status,
-              carrier: order.shippingCarrier || 'India Post Speed Post',
-              trackingNumber: order.trackingNumber,
-              totalAmount: order.totalAmount,
-              createdAt: order.createdAt,
-              address: order.address,
-              items: order.items.map((i) => ({
-                id: i.id,
-                title: i.book.title,
-                slug: i.book.slug,
-                coverUrl: i.book.coverUrl,
-                quantity: i.quantity,
-                price: i.priceAtPurchase,
-              })),
-            }
-          : null,
+        order: sanitizedOrder,
         tracking: trackingData,
       },
     });

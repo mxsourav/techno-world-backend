@@ -63,7 +63,13 @@ const mapBookToFrontendShape = (book: any) => {
     author: cleanedAuthorsList.length ? cleanedAuthorsList.join(', ') : '',
     authorsList: cleanedAuthorsList,
     publisher: book.publisher?.name || 'Unknown Publisher',
-    category: book.category?.slug || 'uncategorized',
+    category: book.category?.slug || (book.categories?.[0]?.slug) || 'uncategorized',
+    categories: (book.categories && book.categories.length > 0)
+      ? book.categories.map((c: any) => ({ id: c.id, name: c.name, slug: c.slug }))
+      : (book.category ? [{ id: book.category.id, name: book.category.name, slug: book.category.slug }] : []),
+    categoryNames: (book.categories && book.categories.length > 0)
+      ? book.categories.map((c: any) => c.name)
+      : (book.category ? [book.category.name] : []),
     bookType: book.bookType?.name,
     subjects: book.subjects?.map((s: any) => s.name) || [],
     bestseller: book.isBestseller,
@@ -174,7 +180,22 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
       where.OR = orList;
     }
     if (category) {
-      where.category = { slug: category as string };
+      const catSlug = (category as string).trim();
+      const catCondition = {
+        OR: [
+          { category: { slug: catSlug } },
+          { categories: { some: { slug: catSlug } } },
+        ]
+      };
+      if (where.AND) {
+        if (Array.isArray(where.AND)) {
+          (where.AND as any[]).push(catCondition);
+        } else {
+          where.AND = [where.AND as any, catCondition];
+        }
+      } else {
+        where.AND = [catCondition];
+      }
     }
     if (author) {
       where.authors = {
@@ -231,6 +252,7 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
         authors: true,
         publisher: true,
         category: true,
+        categories: true,
         bookType: true,
         subjects: true,
       },
@@ -308,6 +330,7 @@ export const getBookBySlug = async (req: Request, res: Response, next: NextFunct
         authors: true,
         publisher: true,
         category: true,
+        categories: true,
         bookType: true,
         subjects: true,
         images: { orderBy: { sortOrder: 'asc' } },

@@ -6,7 +6,7 @@ import { prisma } from '../config/database.js';
 export const getAdminCatalog = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
+    const limit = parseInt(req.query.limit as string) || 100;
     const skip = (page - 1) * limit;
 
     const { search, tab, category, publisher } = req.query;
@@ -49,7 +49,22 @@ export const getAdminCatalog = async (req: Request, res: Response, next: NextFun
     }
     
     if (category) {
-      where.category = { slug: category as string };
+      const catSlug = (category as string).trim();
+      const catCondition = {
+        OR: [
+          { category: { slug: catSlug } },
+          { categories: { some: { slug: catSlug } } },
+        ]
+      };
+      if (where.AND) {
+        if (Array.isArray(where.AND)) {
+          (where.AND as any[]).push(catCondition);
+        } else {
+          where.AND = [where.AND as any, catCondition];
+        }
+      } else {
+        where.AND = [catCondition];
+      }
     }
     
     if (publisher) {
@@ -64,6 +79,7 @@ export const getAdminCatalog = async (req: Request, res: Response, next: NextFun
         orderBy: { updatedAt: 'desc' },
         include: {
           category: true,
+          categories: true,
           publisher: true,
           _count: {
             select: {
@@ -93,7 +109,9 @@ export const getAdminCatalog = async (req: Request, res: Response, next: NextFun
         ...book,
         health,
         healthScore: score,
-        categoryName: book.category?.name,
+        categoryName: book.category?.name || (book as any).categories?.[0]?.name,
+        categories: (book as any).categories?.length ? (book as any).categories : (book.category ? [book.category] : []),
+        categoryNames: (book as any).categories?.length ? (book as any).categories.map((c: any) => c.name) : (book.category ? [book.category.name] : []),
         publisherName: book.publisher?.name,
         inCartCount: (book as any)._count?.cartItems || 0,
         wishlistCount: (book as any)._count?.wishlistItems || 0,

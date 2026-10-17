@@ -21,6 +21,8 @@ model User {
   isActive            Boolean              @default(true)
   googleId            String?              @unique
   avatarUrl           String?
+  avatarKey           String?
+  age                 Int?
   phone               String?
   technoPoints        Int                  @default(0)
   pendingPoints       Int                  @default(0)
@@ -139,7 +141,7 @@ model Book {
   updatedAt              DateTime           @updatedAt
 
   bookType               BookType?          @relation(fields: [bookTypeId], references: [id])
-  category               Category?          @relation(fields: [categoryId], references: [id])
+  category               Category?          @relation("PrimaryCategory", fields: [categoryId], references: [id])
   publisher              Publisher?         @relation(fields: [publisherId], references: [id])
 
   cartItems              CartItem[]
@@ -152,6 +154,7 @@ model Book {
 
   authors                Author[]           @relation("AuthorToBook")
   subjects               Subject[]          @relation("BookToSubject")
+  categories             Category[]         @relation("BookToCategory")
 
   @@index([categoryId])
   @@index([bookTypeId])
@@ -164,7 +167,7 @@ model Book {
 
 model Category {
   id             String      @id @default(uuid())
-  name           String
+  name           String      @unique
   slug           String      @unique
   description    String?
   imageUrl       String?
@@ -178,7 +181,8 @@ model Category {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  books          Book[]
+  primaryBooks   Book[]      @relation("PrimaryCategory")
+  books          Book[]      @relation("BookToCategory")
   parent         Category?   @relation("CategoryTree", fields: [parentId], references: [id])
   children       Category[]  @relation("CategoryTree")
   promotions     Promotion[]
@@ -285,6 +289,7 @@ model Address {
 model Order {
   id                 String        @id @default(uuid())
   orderNumber        String        @unique
+  trackingToken      String        @unique @default(cuid())
   userId             String
   addressId          String?
 

@@ -624,9 +624,29 @@ export const updateBook = async (req: Request, res: Response, next: NextFunction
       }
     }
 
-    // Handle Category update
-    if (body.category !== undefined && typeof body.category === 'string') {
-      data.categoryId = body.category.trim() !== '' ? await resolveCategoryId(body.category) : null;
+    // Handle Category / Categories update
+    if (body.categories !== undefined || body.categoryIds !== undefined) {
+      const catInputs = Array.isArray(body.categories) ? body.categories : (Array.isArray(body.categoryIds) ? body.categoryIds : []);
+      const resolvedCatIds: { id: string }[] = [];
+      for (const c of catInputs) {
+        if (!c) continue;
+        const cid = typeof c === 'string' ? await resolveCategoryId(c) : (c.id || await resolveCategoryId(c.name || c.slug));
+        if (cid) resolvedCatIds.push({ id: cid });
+      }
+      data.categories = { set: resolvedCatIds };
+      if (resolvedCatIds.length > 0) {
+        data.categoryId = resolvedCatIds[0].id;
+      } else {
+        data.categoryId = null;
+      }
+    } else if (body.category !== undefined && typeof body.category === 'string') {
+      const cid = body.category.trim() !== '' ? await resolveCategoryId(body.category) : null;
+      data.categoryId = cid;
+      if (cid) {
+        data.categories = { set: [{ id: cid }] };
+      } else {
+        data.categories = { set: [] };
+      }
     }
 
     // Handle Publisher update
@@ -653,7 +673,7 @@ export const updateBook = async (req: Request, res: Response, next: NextFunction
 
     const diffs: string[] = [];
     for (const key of Object.keys(data)) {
-      if (key !== 'authors' && key !== 'subjects' && existingBook[key as keyof typeof existingBook] !== data[key]) {
+      if (key !== 'authors' && key !== 'subjects' && key !== 'categories' && existingBook[key as keyof typeof existingBook] !== data[key]) {
         diffs.push(`${key} changed from '${existingBook[key as keyof typeof existingBook]}' to '${data[key]}'`);
       }
     }
@@ -663,6 +683,7 @@ export const updateBook = async (req: Request, res: Response, next: NextFunction
       data,
       include: {
         category: true,
+        categories: true,
         publisher: true,
         bookType: true,
         authors: true,
@@ -709,12 +730,17 @@ export const createBook = async (req: Request, res: Response, next: NextFunction
       .replace(/^-+|-+$/g, '');
     const slug = (cleanTitleSlug || 'book') + '-' + Math.floor(1000 + Math.random() * 9000);
 
-    const [authors, subjects, categoryId, publisherId, bookTypeId] = await Promise.all([
+    const catInputs = Array.isArray(body.categories) ? body.categories : (Array.isArray(body.categoryIds) ? body.categoryIds : (body.category ? [body.category] : []));
+    const resolvedCatIds: { id: string }[] = [];
+    for (const c of catInputs) {
+      if (!c) continue;
+      const cid = typeof c === 'string' ? await resolveCategoryId(c) : (c.id || await resolveCategoryId(c.name || c.slug));
+      if (cid) resolvedCatIds.push({ id: cid });
+    }
+
+    const [authors, subjects, publisherId, bookTypeId] = await Promise.all([
       resolveAuthors(body.authorsList || body.authors || body.author),
       resolveSubjects(body.subjects),
-      body.category && typeof body.category === 'string' && body.category.trim() !== ''
-        ? resolveCategoryId(body.category)
-        : Promise.resolve(undefined),
       body.publisher && typeof body.publisher === 'string' && body.publisher.trim() !== ''
         ? resolvePublisherId(body.publisher)
         : Promise.resolve(undefined),
@@ -745,7 +771,7 @@ export const createBook = async (req: Request, res: Response, next: NextFunction
       language: body.language ? String(body.language).trim() : 'English',
       bindingType: body.bindingType ? String(body.bindingType).trim() : 'Paperback',
       publicationDate: parsePublicationDate(body.publicationDate),
-      categoryId,
+      categoryId: resolvedCatIds.length > 0 ? resolvedCatIds[0].id : undefined,
       publisherId,
       bookTypeId,
       seoKeywords: Array.isArray(body.seoKeywords) ? body.seoKeywords.join(', ') : (body.seoKeywords || ''),
@@ -754,6 +780,9 @@ export const createBook = async (req: Request, res: Response, next: NextFunction
       visibility: body.visibility !== undefined ? Boolean(body.visibility) : true,
     };
 
+    if (resolvedCatIds.length > 0) {
+      data.categories = { connect: resolvedCatIds };
+    }
     if (authors.length > 0) {
       data.authors = { connect: authors };
     }
@@ -765,6 +794,7 @@ export const createBook = async (req: Request, res: Response, next: NextFunction
       data,
       include: {
         category: true,
+        categories: true,
         publisher: true,
         bookType: true,
         authors: true,

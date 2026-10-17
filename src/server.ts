@@ -173,6 +173,64 @@ async function ensureTrigramIndexes() {
   }
 }
 
+async function ensureMultiCategoryAndTrackingSchema() {
+  try {
+    await prisma.$executeRawUnsafe(`
+      DO $$ BEGIN
+        -- 1. Ensure User columns
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='User' AND column_name='avatarKey') THEN
+          ALTER TABLE "User" ADD COLUMN "avatarKey" TEXT;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='User' AND column_name='age') THEN
+          ALTER TABLE "User" ADD COLUMN "age" INTEGER;
+        END IF;
+
+        -- 2. Ensure Order trackingToken
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='Order' AND column_name='trackingToken') THEN
+          ALTER TABLE "Order" ADD COLUMN "trackingToken" TEXT;
+          UPDATE "Order" SET "trackingToken" = md5(random()::text || clock_timestamp()::text) WHERE "trackingToken" IS NULL;
+          ALTER TABLE "Order" ALTER COLUMN "trackingToken" SET NOT NULL;
+          CREATE UNIQUE INDEX IF NOT EXISTS "Order_trackingToken_key" ON "Order"("trackingToken");
+        END IF;
+
+        -- 3. Ensure Many-to-Many _BookToCategory table
+        CREATE TABLE IF NOT EXISTS "_BookToCategory" (
+          "A" TEXT NOT NULL,
+          "B" TEXT NOT NULL,
+          CONSTRAINT "_BookToCategory_AB_pkey" PRIMARY KEY ("A","B")
+        );
+        CREATE INDEX IF NOT EXISTS "_BookToCategory_B_index" ON "_BookToCategory"("B");
+
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '_BookToCategory_A_fkey') THEN
+          ALTER TABLE "_BookToCategory" ADD CONSTRAINT "_BookToCategory_A_fkey" FOREIGN KEY ("A") REFERENCES "Book"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '_BookToCategory_B_fkey') THEN
+          ALTER TABLE "_BookToCategory" ADD CONSTRAINT "_BookToCategory_B_fkey" FOREIGN KEY ("B") REFERENCES "Category"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+        END IF;
+
+        -- 4. Backfill existing books categoryId into _BookToCategory
+        INSERT INTO "_BookToCategory" ("A", "B")
+        SELECT b."id", b."categoryId"
+        FROM "Book" b
+        WHERE b."categoryId" IS NOT NULL
+        ON CONFLICT DO NOTHING;
+
+        -- 5. Ensure Science and Techno World Publication categories
+        INSERT INTO "Category" ("id", "name", "slug", "description", "isActive", "createdAt", "updatedAt")
+        VALUES 
+          (md5(random()::text || clock_timestamp()::text), 'Science', 'science', 'Academic and scientific textbooks, reference manuals and research literature.', true, NOW(), NOW()),
+          (md5(random()::text || clock_timestamp()::text), 'Techno World Publication', 'techno-world-publication', 'Official in-house academic publications, study guides, and solutions by Techno World Books.', true, NOW(), NOW())
+        ON CONFLICT ("slug") DO UPDATE SET "name" = EXCLUDED."name";
+
+      EXCEPTION WHEN OTHERS THEN null;
+      END $$;
+    `);
+    logger.info('[Bootstrap] Multi-category relations, trackingToken, and categories verified/created successfully');
+  } catch (err) {
+    logger.warn('[Bootstrap] Non-critical error ensuring multi-category schema:', err);
+  }
+}
+
 async function bootstrap() {
   try {
     await prisma.$connect();
@@ -183,6 +241,7 @@ async function bootstrap() {
     await ensureCustomerIds();
     await ensureSupportTables();
     await ensureTrigramIndexes();
+    await ensureMultiCategoryAndTrackingSchema();
 
     startInvoiceCron();
     imapService.startPolling();

@@ -41,8 +41,12 @@
       "name": "Rare"
     },
     {
-      "slug": "techno-world",
-      "name": "Our Publications"
+      "slug": "science",
+      "name": "Science"
+    },
+    {
+      "slug": "techno-world-publication",
+      "name": "Techno World Publication"
     }
   ],
   "books": [

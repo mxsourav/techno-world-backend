@@ -1,6 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database.js';
+import {
+  extractTokens,
+  buildPrismaSearchWhere,
+  scoreBook,
+  fuzzyScoreBook
+} from '../utils/searchEngine.js';
 
 
 const splitAuthorString = (raw: string): string[] => {
@@ -122,62 +128,18 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
 
     if (search) {
       const searchStr = (search as string).trim();
-      const cleanWithoutParens = searchStr.replace(/\s*\([^)]*\)/g, '').trim();
-      const splitParts = splitAuthorString(searchStr);
-      const stopWords = new Set([
-        'and', 'of', 'the', 'for', 'in', 'a', 'an', 'to', 'with', 'on', 'by',
-        'dr', 'mr', 'mrs', 'ms', 'prof', 'chief', 'editor', 'co-author', 'co', 'author'
-      ]);
-      const words = searchStr
-        .replace(/[(),.;:[\]/]+/g, ' ')
-        .split(/\s+/)
-        .map(w => w.trim())
-        .filter(w => w.length >= 2 && !stopWords.has(w.toLowerCase()));
-      
-      const orList: any[] = [
-        { title: { contains: searchStr } },
-        { isbn13: { contains: searchStr } },
-        { isbn10: { contains: searchStr } },
-        { bookCode: { contains: searchStr } },
-        { sku: { contains: searchStr } },
-        { seoKeywords: { contains: searchStr } },
-        { tags: { contains: searchStr } },
-        { authors: { some: { name: { contains: searchStr } } } },
-        { publisher: { name: { contains: searchStr } } },
-        { subjects: { some: { name: { contains: searchStr } } } }
-      ];
-
-      if (cleanWithoutParens && cleanWithoutParens !== searchStr) {
-        orList.push(
-          { authors: { some: { name: { contains: cleanWithoutParens } } } },
-          { title: { contains: cleanWithoutParens } }
-        );
-      }
-
-      if (splitParts.length > 1) {
-        for (const part of splitParts) {
-          orList.push({ authors: { some: { name: { contains: part } } } });
-          const partWithoutParens = part.replace(/\s*\([^)]*\)/g, '').trim();
-          if (partWithoutParens && partWithoutParens !== part) {
-            orList.push({ authors: { some: { name: { contains: partWithoutParens } } } });
+      const searchWhere = buildPrismaSearchWhere(searchStr);
+      if (searchWhere?.OR) {
+        if (where.AND) {
+          if (Array.isArray(where.AND)) {
+            (where.AND as any[]).push({ OR: searchWhere.OR });
+          } else {
+            where.AND = [where.AND as any, { OR: searchWhere.OR }];
           }
+        } else {
+          where.OR = searchWhere.OR;
         }
       }
-
-      if (words.length > 1) {
-        const andClauses = words.map(w => ({
-          OR: [
-            { title: { contains: w } },
-            { seoKeywords: { contains: w } },
-            { tags: { contains: w } },
-            { authors: { some: { name: { contains: w } } } },
-            { publisher: { name: { contains: w } } }
-          ]
-        }));
-        orList.push({ AND: andClauses });
-      }
-
-      where.OR = orList;
     }
     if (category) {
       const catSlug = (category as string).trim();
@@ -202,7 +164,7 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
         some: {
           OR: [
             { slug: author as string },
-            { name: { contains: author as string } }
+            { name: { contains: author as string, mode: 'insensitive' } }
           ]
         }
       };
@@ -211,7 +173,7 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
       where.publisher = {
         OR: [
           { slug: publisher as string },
-          { name: { contains: publisher as string } }
+          { name: { contains: publisher as string, mode: 'insensitive' } }
         ]
       };
     }
@@ -261,19 +223,53 @@ export const getBooks = async (req: Request, res: Response, next: NextFunction) 
       take: limit,
     });
     
-    // Sort by exact match if search is active (pseudo ranking)
+    // Relevance scoring and typo fallback if search is active
+    let total = 0;
     if (search) {
-      const s = (search as string).toLowerCase();
-      books.sort((a, b) => {
-        const aExact = a.title.toLowerCase() === s || a.isbn13 === s || a.isbn10 === s || a.bookCode === s;
-        const bExact = b.title.toLowerCase() === s || b.isbn13 === s || b.isbn10 === s || b.bookCode === s;
-        if (aExact && !bExact) return -1;
-        if (!aExact && bExact) return 1;
-        return 0;
-      });
-    }
+      const searchStr = (search as string).trim();
+      const tokens = extractTokens(searchStr);
 
-    const total = await prisma.book.count({ where });
+      if (books.length === 0 && tokens.some(t => t.length >= 4)) {
+        try {
+          const candidates = await prisma.book.findMany({
+            where: { status: 'PUBLISHED' },
+            include: {
+              authors: true,
+              publisher: true,
+              category: true,
+              categories: true,
+              bookType: true,
+              subjects: true,
+            },
+            take: 600,
+          });
+
+          const fuzzyMatched: { book: any; score: number }[] = [];
+          for (const cand of candidates) {
+            const fScore = fuzzyScoreBook(cand, tokens);
+            if (fScore >= 30) {
+              fuzzyMatched.push({ book: cand, score: fScore });
+            }
+          }
+
+          fuzzyMatched.sort((a, b) => b.score - a.score);
+          total = fuzzyMatched.length;
+          books = fuzzyMatched.slice(skip, skip + limit).map(item => item.book);
+        } catch (fErr) {
+          console.error('Fuzzy search fallback error in getBooks:', fErr);
+          total = await prisma.book.count({ where });
+        }
+      } else {
+        books.sort((a, b) => {
+          const scoreA = scoreBook(a, searchStr, tokens);
+          const scoreB = scoreBook(b, searchStr, tokens);
+          return scoreB - scoreA;
+        });
+        total = await prisma.book.count({ where });
+      }
+    } else {
+      total = await prisma.book.count({ where });
+    }
 
     const totalPages = Math.ceil(total / limit);
 

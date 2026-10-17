@@ -1,6 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database.js';
-
+import {
+  extractTokens,
+  buildPrismaSearchWhere,
+  scoreBook,
+  fuzzyScoreBook
+} from '../utils/searchEngine.js';
 
 export const instantSearch = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -10,73 +15,120 @@ export const instantSearch = async (req: Request, res: Response, next: NextFunct
       return;
     }
 
-    // Split query into words and filter out common stop words
-    const stopWords = new Set(['and', 'of', 'the', 'for', 'in', 'a', 'an', 'to', 'with', 'on', 'by']);
-    const words = q.split(/\s+/).filter(w => w.length >= 2 && !stopWords.has(w.toLowerCase()));
+    const tokens = extractTokens(q);
+    const searchWhere = buildPrismaSearchWhere(q);
 
-    const orClauses: any[] = [
-      { title: { contains: q } },
-      { isbn13: { contains: q } },
-      { isbn10: { contains: q } },
-      { bookCode: { contains: q } },
-      { sku: { contains: q } },
-      { seoKeywords: { contains: q } },
-      { tags: { contains: q } },
-      { examination: { contains: q } },
-      { university: { contains: q } },
-      { course: { contains: q } },
-      { authors: { some: { name: { contains: q } } } },
-      { category: { name: { contains: q } } },
-      { categories: { some: { name: { contains: q } } } },
-      { publisher: { name: { contains: q } } },
-    ];
-
-    // Match books that contain ALL the significant words in their title/tags/seoKeywords
-    if (words.length > 1) {
-      const andClauses = words.map(w => ({
-        OR: [
-          { title: { contains: w } },
-          { seoKeywords: { contains: w } },
-          { tags: { contains: w } }
-        ]
-      }));
-      orClauses.push({ AND: andClauses });
-    }
-
-    const books = await prisma.book.findMany({
+    // 1. Primary DB query using case-insensitive contains across all relevant fields
+    const primaryBooks = await prisma.book.findMany({
       where: {
         status: 'PUBLISHED',
-        OR: orClauses,
+        ...searchWhere,
       },
       select: {
         id: true,
         title: true,
+        subtitle: true,
         slug: true,
         price: true,
         mrp: true,
         coverUrl: true,
+        galleryUrls: true,
+        seoKeywords: true,
+        tags: true,
+        isFeatured: true,
+        isBestseller: true,
         authors: { select: { name: true } },
         category: { select: { name: true } },
         categories: { select: { name: true } },
+        publisher: { select: { name: true } },
       },
-      take: 10,
-      orderBy: { isFeatured: 'desc' },
+      take: 40,
     });
 
-    const results = books.map((b: any) => ({
-      id: b.id,
-      title: b.title,
-      slug: b.slug,
-      price: b.price,
-      mrp: b.mrp,
-      coverUrl: b.coverUrl,
-      author: b.authors && b.authors.length > 0 ? b.authors.map((a: any) => a.name).join(', ') : 'Unknown',
-      category: b.category?.name || b.categories?.[0]?.name || '',
-      categories: b.categories?.map((c: any) => c.name) || (b.category ? [b.category.name] : []),
-    }));
+    const resultMap = new Map<string, any>();
 
-    // Asynchronously log search to SearchLog for admin analytics & exam season tracking
-    const bookIds = books.map((b: any) => b.id).slice(0, 10).join(',');
+    // Add and score primary matches
+    for (const book of primaryBooks) {
+      const score = scoreBook(book, q, tokens);
+      resultMap.set(book.id, { book, score });
+    }
+
+    // 2. If results are few (< 5) or tokens are long (e.g. potential typos like "bactriology"),
+    // perform typo-tolerant fuzzy fallback scan across published books
+    if (resultMap.size < 8 && tokens.some(t => t.length >= 4)) {
+      try {
+        const candidateBooks = await prisma.book.findMany({
+          where: { status: 'PUBLISHED' },
+          select: {
+            id: true,
+            title: true,
+            subtitle: true,
+            slug: true,
+            price: true,
+            mrp: true,
+            coverUrl: true,
+            galleryUrls: true,
+            seoKeywords: true,
+            tags: true,
+            isFeatured: true,
+            isBestseller: true,
+            authors: { select: { name: true } },
+            category: { select: { name: true } },
+            categories: { select: { name: true } },
+            publisher: { select: { name: true } },
+          },
+          take: 600, // fast in-memory comparison
+        });
+
+        for (const candidate of candidateBooks) {
+          if (resultMap.has(candidate.id)) continue;
+
+          const fuzzyScore = fuzzyScoreBook(candidate, tokens);
+          if (fuzzyScore >= 30) {
+            resultMap.set(candidate.id, { book: candidate, score: fuzzyScore });
+          }
+        }
+      } catch (fuzzyErr) {
+        console.error('Fuzzy search fallback error:', fuzzyErr);
+      }
+    }
+
+    // Sort descending by score
+    const sorted = Array.from(resultMap.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 15);
+
+    const results = sorted.map(({ book: b }) => {
+      let cover = b.coverUrl;
+      if (!cover && b.galleryUrls) {
+        try {
+          const parsed = typeof b.galleryUrls === 'string' ? JSON.parse(b.galleryUrls) : b.galleryUrls;
+          if (Array.isArray(parsed) && parsed[0]) cover = parsed[0];
+        } catch {}
+      }
+
+      const authorNames = b.authors && b.authors.length > 0
+        ? b.authors.map((a: any) => a.name).filter(Boolean).join(', ')
+        : '';
+
+      const categoryName = b.category?.name || b.categories?.[0]?.name || '';
+
+      return {
+        id: b.id,
+        title: b.title,
+        slug: b.slug,
+        price: b.price,
+        mrp: b.mrp,
+        coverUrl: cover,
+        author: authorNames || 'Techno World',
+        category: categoryName,
+        categories: b.categories?.map((c: any) => c.name) || (b.category ? [b.category.name] : []),
+        publisher: b.publisher?.name || 'Techno World',
+      };
+    });
+
+    // Asynchronously log search
+    const bookIds = results.map((b: any) => b.id).slice(0, 10).join(',');
     const userId = (req as any).user?.userId || (req as any).user?.id || null;
     prisma.searchLog.create({
       data: {
